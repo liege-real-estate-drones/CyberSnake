@@ -1238,19 +1238,19 @@ class Snake:
 
     # --- NOUVELLES MÉTHODES DE COMPÉTENCES ---
 
-    def activate_dash(self, current_time, obstacles, foods_list, powerups_list, mines_list, walls_list): # Ajout de mines_list et walls_list
+    def activate_dash(self, current_time, obstacles, foods_list, powerups_list, mines_list, walls_list):
         """Active la compétence Dash."""
         if not self.alive or not self.is_player or not self.dash_ready:
-            return {'died': False}
+            return {'died': False, 'collided': False, 'type': None}
 
-        # print(f"{self.name} activated Dash!") # Décommentez pour debug
+        print(f"{self.name} activated Dash!")
         self.dash_ready = False
         self.last_dash_time = current_time
         utils.play_sound("dash_sound")
 
         head_pos = self.get_head_position()
         if not head_pos:
-            return {'died': False}
+            return {'died': False, 'collided': False, 'type': None}
 
         start_px, start_py = self.get_head_center_px()
         if start_px is not None:
@@ -1316,7 +1316,7 @@ class Snake:
                 if not self.handle_damage(current_time, killer_snake=None, damage_source_pos=obs_center_px):
                     # Le joueur est mort
                     self.growing = temp_growing # Restaurer l'état avant de retourner
-                    return {'died': True, 'type': death_type_on_dash, 'position': next_head}
+                    return {'died': True, 'collided': True, 'type': death_type_on_dash, 'position': next_head}
                 else: # Le joueur a survécu grâce à armure/bouclier
                     self.growing = temp_growing
                     # Le dash s'arrête, mais le joueur n'est pas mort
@@ -1324,7 +1324,7 @@ class Snake:
 
 
             # Mouvement Si Pas de Collision fatale
-            self.positions.insert(0, new_head)
+            self.positions.insert(0, next_head)
             tail_pos_to_emit = None
             if len(self.positions) > self.length:
                 tail_pos_to_emit = self.positions.pop()
@@ -1813,7 +1813,7 @@ class EnemySnake(Snake):
                      if (adj_x, adj_y) in obstacles: score -= 2
 
             if d == self.current_direction: score += 1
-            data['score'] = score
+            data['score'] = score + random.uniform(-1, 1)
 
         best_score = -float('inf')
         best_dirs = []
@@ -1879,10 +1879,21 @@ class EnemySnake(Snake):
             p_head = p1_snake.get_head_position() if p1_snake and p1_snake.alive else None
             if p_head:
                 dist_to_player = abs(new_head[0] - p_head[0]) + abs(new_head[1] - p_head[1])
-                line_of_sight = (new_head[0] == p_head[0] or new_head[1] == p_head[1])
+                line = utils.bresenham_line(new_head, p_head)
+                line_of_sight = all(pos not in self.current_walls for pos in line)
+
+                # Check for friendly fire
+                for other_ai in all_active_enemies:
+                    if other_ai is not self and other_ai.alive:
+                        if any(pos in other_ai.positions for pos in line):
+                            line_of_sight = False
+                            break
+
+                logging.debug(f"AI {self.name} shooting check: p_head={p_head}, dist={dist_to_player}, LoS={line_of_sight}, ammo={self.ammo}, cooldown_ok={current_time - self.last_shot_time > self.shoot_cooldown}")
                 if self.ammo > 0 and line_of_sight and dist_to_player < config.ENEMY_AI_SIGHT and random.random() < 0.7:
                     if current_time - self.last_shot_time > self.shoot_cooldown:
                         should_shoot = True
+                        logging.info(f"AI {self.name} decided to shoot.")
 
             # --- Logique de Collision (similaire à Snake.move) ---
             died_in_move = False
