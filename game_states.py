@@ -3074,6 +3074,11 @@ def run_game_over(events, dt, screen, game_state):
                                 next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
                             else:
                                 reset_game(game_state); next_state = config.PLAYING
+                            # Ne pas réinitialiser les noms des joueurs
+                            if player_snake:
+                                game_state['player1_name_input'] = player_snake.name
+                            if player2_snake:
+                                game_state['player2_name_input'] = player2_snake.name
                             return next_state
                         elif selected_option == "Menu Principal":
                             utils.play_sound("combo_break")
@@ -3768,8 +3773,18 @@ def run_game(events, dt, screen, game_state):
                     if len(mines) >= config.MAX_MINES: break
                     spawn_pos = utils.get_random_empty_position(current_occupied)
                     if spawn_pos:
-                        heads = [s.get_head_position() for s in [player_snake, player2_snake, enemy_snake] if s and s.alive] + [baby.get_head_position() for baby in active_enemies if baby and baby.alive]
-                        too_close = any(h and abs(spawn_pos[0]-h[0]) + abs(spawn_pos[1]-h[1]) < 3 for h in heads)
+                        all_snake_bodies = []
+                        if player_snake and player_snake.alive:
+                            all_snake_bodies.extend(player_snake.positions)
+                        if player2_snake and player2_snake.alive:
+                            all_snake_bodies.extend(player2_snake.positions)
+                        if enemy_snake and enemy_snake.alive:
+                            all_snake_bodies.extend(enemy_snake.positions)
+                        for baby in active_enemies:
+                            if baby and baby.alive:
+                                all_snake_bodies.extend(baby.positions)
+
+                        too_close = any(abs(spawn_pos[0]-body_part[0]) + abs(spawn_pos[1]-body_part[1]) < 3 for body_part in all_snake_bodies)
                         if not too_close: mines.append(game_objects.Mine(spawn_pos)); current_occupied.add(spawn_pos); spawned_count += 1
                 if spawned_count > 0: game_state['last_mine_spawn_time'] = current_time
 
@@ -4106,6 +4121,20 @@ def run_game(events, dt, screen, game_state):
                                         logging.info(f"AI Kill: {shooter_ai.name} killed {player2_snake.name}")
                             break # Sort boucle segments P2
                     if hit_something_en: continue
+                 # Collision avec une autre IA
+                 if current_game_mode in [config.MODE_VS_AI, config.MODE_SURVIVAL]:
+                    for other_ai in active_enemies:
+                        if other_ai is not en_proj.owner_snake and other_ai.alive and not other_ai.ghost_active:
+                            for seg_pos_other_ai in other_ai.positions:
+                                seg_rect_other_ai = pygame.Rect(seg_pos_other_ai[0]*config.GRID_SIZE, seg_pos_other_ai[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
+                                if en_proj.rect.colliderect(seg_rect_other_ai):
+                                    en_rem_indices.add(l)
+                                    hit_something_en = True
+                                    break
+                            if hit_something_en:
+                                break
+                    if hit_something_en:
+                        continue
 
                  # Hors écran
                  if not hit_something_en and en_proj.is_off_screen(screen_width, screen_height):
