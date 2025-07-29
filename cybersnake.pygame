@@ -152,8 +152,7 @@ def main():
 
     # --- Configuration Fenêtre & Horloge ---
     try:
-        # screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
-        screen = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
         pygame.display.set_caption("Cyber Snake Duel - Fusion") # Titre simplifié
         clock = pygame.time.Clock()
         logging.info("Fenêtre et horloge créées.")
