@@ -800,6 +800,47 @@ def generate_random_walls(grid_width, grid_height):
     walls = []
     num_segments = random.randint(4, 8) # Nombre de segments de mur
     min_len, max_len = 3, 10 # Longueur min/max des segments
+def bresenham_line(start_pos, end_pos):
+    """Génère les points de la grille sur une ligne entre deux points (Algorithme de Bresenham).
+
+    Args:
+        start_pos (tuple): Coordonnées (x, y) du point de départ.
+        end_pos (tuple): Coordonnées (x, y) du point d'arrivée.
+
+    Returns:
+        list: Une liste de tuples (x, y) représentant les points de la grille sur la ligne.
+    """
+    x0, y0 = start_pos
+    x1, y1 = end_pos
+    points = []
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0) # Utilise -dy car l'axe Y est inversé dans Pygame (haut -> bas)
+
+    # Détermine la direction du pas pour x et y
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+
+    err = dx + dy  # Variable d'erreur
+
+    while True:
+        points.append((x0, y0)) # Ajoute le point courant
+        if x0 == x1 and y0 == y1:
+            break # Point final atteint
+
+        e2 = 2 * err
+        # Ajuste l'erreur et déplace x si nécessaire
+        if e2 >= dy:
+            if x0 == x1: # Évite dépassement si déjà à la fin x
+                break
+            err += dy
+            x0 += sx
+        # Ajuste l'erreur et déplace y si nécessaire
+        if e2 <= dx:
+            if y0 == y1: # Évite dépassement si déjà à la fin y
+                break
+            err += dx
+            y0 += sy
+    return points
 
     # Zones de départ par défaut (approximatives) à éviter
     p1_start_zone = (grid_width // 4, grid_height // 2)

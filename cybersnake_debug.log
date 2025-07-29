@@ -1,7 +1,7 @@
-2025-07-29 19:16:47,896 - INFO - cybersnake.pygame:37 - --- Initialisation du Logging pour CyberSnake ---
-2025-07-29 19:16:48,114 - CRITICAL - cybersnake.pygame:60 - FATAL: Erreur initialisation Pygame: ALSA: Couldn't open audio device: No such file or directory
+2025-07-29 20:10:59,432 - INFO - cybersnake.pygame:37 - --- Initialisation du Logging pour CyberSnake ---
+2025-07-29 20:10:59,656 - CRITICAL - cybersnake.pygame:60 - FATAL: Erreur initialisation Pygame: ALSA: Couldn't open audio device: No such file or directory
 Traceback (most recent call last):
   File "/app/cybersnake.pygame", line 56, in main
     pygame.mixer.init()
 pygame.error: ALSA: Couldn't open audio device: No such file or directory
-2025-07-29 19:16:48,117 - INFO - cybersnake.pygame:307 - Sortie normale du jeu via SystemExit.
+2025-07-29 20:10:59,659 - INFO - cybersnake.pygame:308 - Sortie normale du jeu via SystemExit.

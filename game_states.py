@@ -2867,6 +2867,14 @@ def run_pause(events, dt, screen, game_state):
                 return previous_state # Signal à main.py de retourner à cet état
             elif key == pygame.K_r: # Recommencer la partie
                 try:
+                    # Conserver les noms des joueurs
+                    player_snake = game_state.get('player_snake')
+                    player2_snake = game_state.get('player2_snake')
+                    if player_snake:
+                        game_state['player1_name_input'] = player_snake.name
+                    if player2_snake:
+                        game_state['player2_name_input'] = player2_snake.name
+
                     reset_game(game_state) # Réinitialise le jeu
                     next_state = config.PLAYING # Passe directement à l'état PLAYING
                     return next_state
@@ -3070,15 +3078,17 @@ def run_game_over(events, dt, screen, game_state):
                             utils.play_sound("powerup_pickup")
                             # Réinitialiser le timer de début de game over pour une future partie
                             game_state['game_over_start_time'] = 0
-                            if current_game_mode == config.MODE_PVP:
-                                next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
-                            else:
-                                reset_game(game_state); next_state = config.PLAYING
-                            # Ne pas réinitialiser les noms des joueurs
+
+                            # Conserver les noms des joueurs
                             if player_snake:
                                 game_state['player1_name_input'] = player_snake.name
                             if player2_snake:
                                 game_state['player2_name_input'] = player2_snake.name
+
+                            if current_game_mode == config.MODE_PVP:
+                                next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
+                            else:
+                                reset_game(game_state); next_state = config.PLAYING
                             return next_state
                         elif selected_option == "Menu Principal":
                             utils.play_sound("combo_break")
@@ -3494,6 +3504,8 @@ def run_game(events, dt, screen, game_state):
                                 game_over = True
                             # Si le dash a tué, on peut considérer le mouvement comme fait pour cette frame
                             p1_moved_this_frame = True # Empêche le .move() normal si mort par dash
+                        elif dash_result_p1 and dash_result_p1.get('collided'):
+                            logging.info(f"{player_snake.name} collided during dash with {dash_result_p1.get('type')}.")
                     else:
                         utils.play_sound("combo_break") # Son pour compétence non prête
                 elif button == 1: # Tirer (Button 1)
