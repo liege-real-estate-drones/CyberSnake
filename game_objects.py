@@ -1324,7 +1324,7 @@ class Snake:
 
 
             # Mouvement Si Pas de Collision fatale
-            self.positions.insert(0, next_head)
+            self.positions.insert(0, new_head)
             tail_pos_to_emit = None
             if len(self.positions) > self.length:
                 tail_pos_to_emit = self.positions.pop()
@@ -1823,7 +1823,7 @@ class EnemySnake(Snake):
 
         chosen_dir = self.current_direction
         if best_dirs:
-            if self.current_direction in best_dirs and random.random() < 0.7:
+            if self.current_direction in best_dirs and random.random() < 0.85: # Increased inertia
                  chosen_dir = self.current_direction
             else:
                  chosen_dir = random.choice(best_dirs)
@@ -1880,7 +1880,7 @@ class EnemySnake(Snake):
             if p_head:
                 dist_to_player = abs(new_head[0] - p_head[0]) + abs(new_head[1] - p_head[1])
                 line_of_sight = (new_head[0] == p_head[0] or new_head[1] == p_head[1])
-                if self.ammo > 0 and line_of_sight and dist_to_player < config.ENEMY_AI_SIGHT:
+                if self.ammo > 0 and line_of_sight and dist_to_player < config.ENEMY_AI_SIGHT and random.random() < 0.7:
                     if current_time - self.last_shot_time > self.shoot_cooldown:
                         should_shoot = True
 
