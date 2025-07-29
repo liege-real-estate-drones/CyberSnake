@@ -824,9 +824,9 @@ def reset_game(game_state):
     start_armor_p1 = pvp_start_armor if current_game_mode == config.MODE_PVP else getattr(config, 'INITIAL_ARMOR_P1', 0)
     start_ammo_p1 = pvp_start_ammo if current_game_mode == config.MODE_PVP else getattr(config, 'INITIAL_AMMO_P1', 20)
     # --- NOUVEAU: Donne 10 munitions de départ au joueur en mode Vs AI ---
-    if current_game_mode == config.MODE_VS_AI:
+    if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SOLO:
         start_ammo_p1 = 10
-        print(f"Mode Vs AI détecté, J1 commence avec {start_ammo_p1} munitions.")
+        print(f"Mode {current_game_mode.name} détecté, J1 commence avec {start_ammo_p1} munitions.")
     # --- FIN NOUVEAU ---
     try:
         game_state['player_snake'] = game_objects.Snake(
@@ -1140,13 +1140,13 @@ def run_menu(events, dt, screen, game_state):
                     except Exception as e:
                         print(f"Erreur sélection menu joystick: {e}"); traceback.print_exc()
                         next_state = config.MENU
-                elif button == 4: # Bouton 4 pour changer musique
+                elif event.button == 4: # Bouton 4 pour changer musique
                     music_num = (utils.selected_music_index % 9) + 1 # Cycle 1-9
                     if utils.select_and_load_music(music_num, base_path):
                         try: utils.play_selected_music(base_path)
                         except pygame.error as e: print(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
                     last_axis_move_time = current_time # Évite répétition immédiate
-                elif button == 8: # Bouton 8 pour quitter
+                elif event.button == 8: # Bouton 8 pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
                     return False # Quitte le jeu
         # --- FIN Gestion Joystick Menu ---

@@ -205,7 +205,7 @@ class Nest:
         if not self.is_active:
             return
 
-        
+
         try:
             color_ratio = self.health / max(1, self.max_health)
             base_color = config.COLOR_NEST
@@ -219,7 +219,7 @@ class Nest:
         except (TypeError, IndexError, ZeroDivisionError):
             current_color = config.COLOR_NEST_DAMAGED if self.health < self.max_health else config.COLOR_NEST
 
-       
+
         try:
             pygame.draw.ellipse(surface, current_color, self.rect)
             border_color = tuple(max(0, c - 20) for c in current_color)
@@ -265,7 +265,7 @@ class Nest:
             # print(f"Warning: Error rendering/blitting nest text: {text_err}") # Décommentez pour debug
             pass
 
-  
+
 
     def get_center_pos_px(self):
         """Retourne le centre en pixels."""
@@ -830,8 +830,8 @@ class Snake:
 
         # Retourne 3 valeurs: si un mouvement a eu lieu, la nouvelle position de la tête (ou l'ancienne si pas de mouvement), et la cause de la mort si mort.
         return moved, new_head if moved else self.get_head_position(), death_cause_detail if not self.alive else None
-    
-    
+
+
     def grow(self):
         if self.alive:
             self.growing = True
@@ -1375,7 +1375,7 @@ class Snake:
 
         # --- Flash Armure Basse ---
         if self.low_armor_flash_active:
-    
+
             if current_time >= self.low_armor_flash_end_time:
                 self.low_armor_flash_active = False
                 self.low_armor_flash_visible = False
@@ -1480,7 +1480,7 @@ class Snake:
             except (TypeError, ValueError):
                 pass
 
-          
+
             if self.is_player and i == 0 and self.reversed_controls_active:
                  text_color = config.COLOR_BLACK if sum(draw_color[:3]) > 384 else config.COLOR_WHITE
                  try:
@@ -1834,87 +1834,75 @@ class EnemySnake(Snake):
         self.ai_target_pos = target_pos
 
     # --- START: MODIFIED EnemySnake.move method in game_objects.py ---
-    def move(self, obstacles, current_time): # `obstacles` est un set ici
-        if not self.alive:
-            return False, None, None # moved, new_head, death_cause_detail
+    def move(self, p1_snake, p2_snake, foods, mines, powerups, current_time, **kwargs):
+        """Déplace le serpent IA et retourne si un tir est nécessaire."""
+        # Récupère les listes optionnelles de kwargs
+        all_active_enemies = kwargs.get('all_active_enemies', [])
+        nests_list = kwargs.get('nests_list', [])
 
+        if not self.alive:
+            return False, None, False # moved, new_head, should_shoot
+
+        # Combine les obstacles
+        obstacles = set(self.current_walls)
+        # Ajoute les positions des autres serpents (sauf soi-même)
+        for snake_obj in [p1_snake, p2_snake] + all_active_enemies:
+            if snake_obj and snake_obj.alive and snake_obj is not self:
+                obstacles.update(snake_obj.positions)
+
+        # --- Logique de décision de l'IA (inchangée) ---
+        self.choose_direction(p1_snake, p2_snake, foods, mines, powerups, nests_list, obstacles)
+
+        # --- Logique de mouvement de base (similaire à Snake.move) ---
         self._apply_direction_change()
         self.update_effects(current_time)
         move_interval = self.get_current_move_interval()
 
-        if move_interval == float('inf'): # Frozen
-            return False, None, None
-
         moved = False
         new_head = None
-        death_cause_detail = None # Initialiser la cause de mort
+        should_shoot = False
 
         if current_time - self.last_move_time >= move_interval:
             self.last_move_time = current_time
             moved = True
             cur_pos = self.get_head_position()
-            if cur_pos is None: # Ne devrait pas arriver si vivant
+            if cur_pos is None:
                 self.alive = False
-                return False, None, 'error' # Indiquer une erreur
+                return False, None, False
 
             dx, dy = self.current_direction
-            next_x_raw = cur_pos[0] + dx
-            next_y_raw = cur_pos[1] + dy
+            next_x = (cur_pos[0] + dx + config.GRID_WIDTH) % config.GRID_WIDTH
+            next_y = (cur_pos[1] + dy + config.GRID_HEIGHT) % config.GRID_HEIGHT
+            new_head = (next_x, next_y)
 
-            new_x = (next_x_raw + config.GRID_WIDTH) % config.GRID_WIDTH
-            new_y = (next_y_raw + config.GRID_HEIGHT) % config.GRID_HEIGHT
-            new_head = (new_x, new_y)
+            # --- Logique de Tir ---
+            p_head = p1_snake.get_head_position() if p1_snake and p1_snake.alive else None
+            if p_head:
+                dist_to_player = abs(new_head[0] - p_head[0]) + abs(new_head[1] - p_head[1])
+                line_of_sight = (new_head[0] == p_head[0] or new_head[1] == p_head[1])
+                if self.ammo > 0 and line_of_sight and dist_to_player < config.ENEMY_AI_SIGHT:
+                    if current_time - self.last_shot_time > self.shoot_cooldown:
+                        should_shoot = True
 
+            # --- Logique de Collision (similaire à Snake.move) ---
             died_in_move = False
-            # 1. Vérifier auto-collision (priorité haute)
             if not self.ghost_active and self.length > 1 and new_head in self.positions[1:]:
-                 if not self.handle_damage(current_time, killer_snake=self, is_self_collision=True):
+                if not self.handle_damage(current_time, killer_snake=self, is_self_collision=True):
+                    died_in_move = True
+            elif new_head in self.current_walls:
+                 if not self.handle_damage(current_time, killer_snake=None):
                      died_in_move = True
-                     death_cause_detail = 'self'
-
-            # 2. Vérifier collision avec obstacles (murs, etc. mais PAS les mines qui sont gérées explicitement dans run_game)
-            # `obstacles` ici devrait être l'ensemble des murs et autres corps de serpents, mais pas les mines pour cette vérification.
-            # La logique dans `run_game` pour `get_obstacles_for_player` exclut déjà les mines si le joueur n'est pas fantôme.
-            # Donc, si `new_head in obstacles` et que `obstacles` vient de `get_obstacles_for_player`, cela concerne un mur ou un autre serpent.
-            # La collision avec un autre serpent est gérée plus tard dans `run_game` par la logique tête-vs-corps.
-            # Donc, ici, `new_head in obstacles` signifie principalement `new_head in current_map_walls`.
-            if not died_in_move and new_head in self.current_walls: # Vérifier explicitement contre les murs
-                 obs_center_px = (new_head[0] * config.GRID_SIZE + config.GRID_SIZE // 2, new_head[1] * config.GRID_SIZE + config.GRID_SIZE // 2)
-                 if not self.handle_damage(current_time, killer_snake=None, damage_source_pos=obs_center_px):
-                     died_in_move = True
-                     death_cause_detail = 'wall'
 
             if not died_in_move:
                 self.positions.insert(0, new_head)
-                tail_pos_to_emit = None
-
                 if self.growing:
                     self.growing = False
-                    tail_pos_to_emit = self.positions[-1] if len(self.positions) > 1 else None
                 elif len(self.positions) > self.length:
-                    tail_pos_to_emit = self.positions.pop()
+                    self.positions.pop()
+            else:
+                self.alive = False
 
-                emit_trail = False
-                trail_interval = config.SNAKE_TRAIL_INTERVAL
-                if self.speed_boost_level > 0:
-                    trail_interval /= (1 + self.speed_boost_level * 0.5)
-                if current_time - self.last_trail_emit_time >= trail_interval:
-                    emit_trail = True
-                    self.last_trail_emit_time = current_time
-
-                if emit_trail and tail_pos_to_emit:
-                     px = tail_pos_to_emit[0] * config.GRID_SIZE + config.GRID_SIZE // 2
-                     py = tail_pos_to_emit[1] * config.GRID_SIZE + config.GRID_SIZE // 2
-                     count = config.SNAKE_TRAIL_PARTICLE_COUNT * (config.SNAKE_TRAIL_SPEED_FACTOR if self.speed_boost_level > 0 else 1)
-                     utils.emit_particles(px, py, int(count), self.trail_color, (0.5, 1.5), config.SNAKE_TRAIL_LIFETIME, config.SNAKE_TRAIL_SIZE, gravity=0.01, shrink_rate=0.1)
-
-                if not self.positions: # Ne devrait plus arriver avec la logique actuelle
-                    self.alive = False
-                    death_cause_detail = 'error_no_pos'
-            else: # died_in_move is True
-                self.alive = False # Assurer que alive est False
-
-        return moved, new_head if moved else None, death_cause_detail if self.alive is False else None
+        return moved, new_head, should_shoot
 
 class Food:
     """Représente un item de nourriture."""
