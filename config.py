@@ -476,3 +476,11 @@ MODE_SOLO = GameMode(10, "Solo")
 MODE_VS_AI = GameMode(11, "Vs AI")
 MODE_PVP = GameMode(12, "PvP")
 MODE_SURVIVAL = GameMode(13, "Survie")
+
+
+# --- Constantes Contrôles & Inputs ---
+# Note: Ces numéros correspondent aux index des boutons de joystick Pygame (0-indexed)
+BUTTON_PRIMARY_ACTION = 1      # Tirer (en jeu), Confirmer (menus)
+BUTTON_SECONDARY_ACTION = 2    # Dash (en jeu), Annuler/Retour (menus)
+BUTTON_TERTIARY_ACTION = 3     # Bouclier (en jeu)
+BUTTON_PAUSE = 7               # Pause / Reprendre (souvent le bouton Start)

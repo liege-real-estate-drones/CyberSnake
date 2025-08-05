@@ -9,6 +9,10 @@
             "score": 2804
         },
         {
+            "name": "T",
+            "score": 1804
+        },
+        {
             "name": "Joueur 1",
             "score": 1242
         },
@@ -21,24 +25,20 @@
             "score": 860
         },
         {
+            "name": "T",
+            "score": 755
+        },
+        {
             "name": "Joueur 1",
             "score": 715
         },
         {
+            "name": "THI",
+            "score": 652
+        },
+        {
             "name": "Joueur 1",
             "score": 448
-        },
-        {
-            "name": "Joueur 1mlm",
-            "score": 396
-        },
-        {
-            "name": "Joueur 1",
-            "score": 354
-        },
-        {
-            "name": "Joueur 1",
-            "score": 258
         }
     ],
     "vs_ai": [

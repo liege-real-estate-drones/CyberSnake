@@ -1311,8 +1311,9 @@ def run_name_entry_solo(events, dt, screen, game_state):
     # Enregistrer le moment où on est entré sur cet écran pour la première fois
     if 'name_entry_start_time_solo' not in game_state:
         game_state['name_entry_start_time_solo'] = current_time
-        # Reset le nom pour éviter les problèmes de boutons attribués par défaut
-        game_state['player1_name_input'] = ""
+        # Reset le nom SEULEMENT S'IL N'EXISTE PAS. Sinon, on le garde.
+        if 'player1_name_input' not in game_state:
+            game_state['player1_name_input'] = ""
         # --- AJOUTER LES LIGNES SUIVANTES ICI ---
         game_state['input_active_solo'] = True 
         input_active = True # Mettre à jour la variable locale aussi
@@ -2362,11 +2363,13 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     if 'name_entry_start_time_pvp' not in game_state:
         game_state['name_entry_start_time_pvp'] = current_time
         game_state['input_active_pvp'] = True  # Active l'entrée dès le début
-        # Reset les noms pour éviter les problèmes de boutons attribués par défaut
+        # Reset le nom SEULEMENT S'IL N'EXISTE PAS. Sinon, on le garde.
         if stage == 1:
-            game_state['player1_name_input'] = ""
-        else:
-            game_state['player2_name_input'] = ""
+            if 'player1_name_input' not in game_state:
+                 game_state['player1_name_input'] = ""
+        else: # stage == 2
+            if 'player2_name_input' not in game_state:
+                 game_state['player2_name_input'] = ""
             
     # Période d'initialisation (1.5 secondes) - ignorer les entrées initiales
     entry_delay = 1500
