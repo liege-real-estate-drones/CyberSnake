@@ -1746,7 +1746,7 @@ class EnemySnake(Snake):
             if best_food_pos:
                 target_pos, target_type, target_bonus = best_food_pos, 'food', 3 # Basic bonus for food
 
-        """# --- ENHANCED: Improved Nest Targeting Logic ---
+        # --- ENHANCED: Improved Nest Targeting Logic ---
         best_nest_pos, best_nest_value = None, -1
         # Target nests only if AI is not a baby and in Vs AI mode
         if not self.is_baby and self.game_mode == config.MODE_VS_AI and nests_list:
@@ -1777,7 +1777,6 @@ class EnemySnake(Snake):
                             # based on the sorting (highest passes first, then closest)
                             # This ensures it keeps targeting the same nest if it's the best option.
                             # print(f"DEBUG AI: {self.name} now targeting nest at {nest_pos} (Passes: {nest.ai_pass_count}, Priority: {nest_priority})")
-"""
         # --- END ENHANCED Nest Targeting ---
 
         player_near, dist_to_player = False, float('inf')
@@ -1800,11 +1799,24 @@ class EnemySnake(Snake):
             if player_near and p_head:
                 dxp = abs(pos[0]-p_head[0]); dyp = abs(pos[1]-p_head[1])
                 d_next = min(dxp, config.GRID_WIDTH-dxp) + min(dyp, config.GRID_HEIGHT-dyp)
-                aggro = 1.0 + (self.ammo / (config.MAX_AMMO / 2.0))
+                aggro = 1.0 + (self.ammo / (config.MAX_AMMO / 2.0)) # Varie de 1.0 à 3.0
                 chase = 0
-                if self.ammo > 0 and target_bonus < 7: chase = 4 * aggro
+                # L'IA est toujours un peu agressive si elle a des munitions
+                if self.ammo > 0:
+                    if target_bonus < 7:
+                        chase = 4 * aggro # Poursuite agressive si pas d'autre cible majeure
+                    else:
+                        chase = 2 * aggro # Poursuite plus modérée si autre cible existe
+
+                    # Bonus pour une ligne de tir claire
+                    line = utils.bresenham_line(pos, p_head)
+                    if all(p not in obstacles for p in line):
+                        # Le bonus est plus élevé à courte portée
+                        score += 8 / (dist_to_player + 1)
+
                 if d_next < dist_to_player: score += chase
-                elif d_next > dist_to_player and dist_to_player < 3: score -= 3
+                # Fuit plus agressivement si trop proche pour se repositionner
+                elif d_next > dist_to_player and dist_to_player < 3: score -= 5
 
             if not self.ghost_active:
                  for dx_c, dy_c in [(0,1), (0,-1), (1,0), (-1,0)]:
@@ -1813,7 +1825,7 @@ class EnemySnake(Snake):
                      if (adj_x, adj_y) in obstacles: score -= 2
 
             if d == self.current_direction: score += 1
-            data['score'] = score + random.uniform(-1, 1)
+            data['score'] = score + random.uniform(-0.1, 0.1) # Réduction du facteur aléatoire
 
         best_score = -float('inf')
         best_dirs = []
@@ -1890,7 +1902,7 @@ class EnemySnake(Snake):
                             break
 
                 logging.debug(f"AI {self.name} shooting check: p_head={p_head}, dist={dist_to_player}, LoS={line_of_sight}, ammo={self.ammo}, cooldown_ok={current_time - self.last_shot_time > self.shoot_cooldown}")
-                if self.ammo > 0 and line_of_sight and dist_to_player < config.ENEMY_AI_SIGHT and random.random() < 0.7:
+                if self.ammo > 0 and line_of_sight and dist_to_player < config.ENEMY_AI_SIGHT and random.random() < 0.9: # Probabilité de tir augmentée
                     if current_time - self.last_shot_time > self.shoot_cooldown:
                         should_shoot = True
                         logging.info(f"AI {self.name} decided to shoot.")
