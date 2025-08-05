@@ -883,7 +883,8 @@ def reset_game(game_state):
     num_initial_nests = 0  # Initialisation par défaut à 0
 
     if current_game_mode == config.MODE_VS_AI:
-        num_initial_nests = config.VS_AI_INITIAL_NESTS
+        # En mode Vs AI, il ne faut PAS de nids ou de bébés IA.
+        num_initial_nests = 0
     elif current_game_mode == config.MODE_SURVIVAL:
         # En Survie, la vague 1 commence avec 1 nid (ou moins si MAX_NESTS < 1)
         num_initial_nests = min(1, config.MAX_NESTS_SURVIVAL)
@@ -891,10 +892,7 @@ def reset_game(game_state):
         num_initial_nests = 0
     # Pas besoin de elif pour MODE_SOLO car il est déjà couvert par l'initialisation à 0
 
-    # === MODIFIÉ: Spawn initial des nids (VsAI ou Survie Vague 1) ===
-    if current_game_mode == config.MODE_VS_AI:
-         num_initial_nests = config.VS_AI_INITIAL_NESTS
-    # (num_initial_nests est déjà défini pour Survie Vague 1 ci-dessus)
+    # La logique de spawn des nids a été consolidée ci-dessus.
 
     if num_initial_nests > 0:
         print(f"Initializing {num_initial_nests} nests for mode {current_game_mode.name}...")
@@ -3408,7 +3406,7 @@ def run_game(events, dt, screen, game_state):
                          if not too_close_player:
                              try:
                                  baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
-                                 new_enemy_wave = game_objects.EnemySnake(start_pos=spawn_pos_ai, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=False, is_baby=True)
+                                 new_enemy_wave = game_objects.EnemySnake(start_pos=spawn_pos_ai, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
                                  active_enemies.append(new_enemy_wave)
                                  logging.debug(f"    Baby AI for wave {survival_wave} spawned at {spawn_pos_ai}")
                              except Exception as e: logging.error(f"    Error spawning wave AI: {e}", exc_info=True)
@@ -3744,7 +3742,7 @@ def run_game(events, dt, screen, game_state):
                  if spawn_pos_found:
                      try:
                          baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
-                         new_enemy = game_objects.EnemySnake(start_pos=spawn_pos_found, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=False, is_baby=True)
+                         new_enemy = game_objects.EnemySnake(start_pos=spawn_pos_found, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
                          active_enemies.append(new_enemy)
                          occupied_before_spawn.update(new_enemy.positions) # Important: Mettre à jour les positions occupées
                          nest.is_active = False # Désactiver le nid APRES spawn
@@ -4457,7 +4455,7 @@ def run_game(events, dt, screen, game_state):
                                  if spawn_pos_found_hatch:
                                      try:
                                          baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
-                                         new_enemy_hatch = game_objects.EnemySnake(start_pos=spawn_pos_found_hatch, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=False, is_baby=True)
+                                         new_enemy_hatch = game_objects.EnemySnake(start_pos=spawn_pos_found_hatch, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
                                          active_enemies.append(new_enemy_hatch)
                                          utils.play_sound("shoot_enemy") # Son de spawn
                                          logging.debug(f"  -> Baby snake hatched by AI at {spawn_pos_found_hatch}")
