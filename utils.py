@@ -1,5 +1,3 @@
-# --- START OF FILE utils.py ---
-
 # -*- coding: utf-8 -*-
 import pygame
 import sys
@@ -29,6 +27,7 @@ sound_volume = 0.6
 music_volume = 0.3
 selected_music_file = config.DEFAULT_MUSIC_FILE
 selected_music_index = 0
+player_names = {"player1": "Joueur 1", "player2": "Joueur 2"}
 
 # --- Fonctions de Chargement & Volume ---
 # ... (inchangé) ...
@@ -201,6 +200,56 @@ def save_high_score(name, score, mode_key, base_path):
     except Exception as e:
         print(f"Erreur inattendue sauvegarde high scores: {e}")
         traceback.print_exc()
+
+# --- NOUVEAU: Fonctions de gestion de la persistance des noms ---
+def load_last_player_name(pvp=False):
+    """
+    Charge le ou les derniers noms de joueurs depuis le fichier de configuration.
+    Si pvp est True, retourne un dictionnaire {'J1': name1, 'J2': name2}.
+    Sinon, retourne le nom du joueur solo.
+    """
+    try:
+        with open(config.LAST_NAMES_FILE, 'r', encoding='utf-8') as f:
+            names = json.load(f)
+        if pvp:
+            return {
+                'J1': names.get('last_name_p1', 'Joueur 1'),
+                'J2': names.get('last_name_p2', 'Joueur 2')
+            }
+        else:
+            return names.get('last_name_solo', 'Joueur')
+    except (FileNotFoundError, json.JSONDecodeError):
+        # Fichier non trouvé ou corrompu, retourne les valeurs par défaut
+        if pvp:
+            return {'J1': 'Joueur 1', 'J2': 'Joueur 2'}
+        else:
+            return 'Joueur'
+
+def save_last_player_name(name, player_num=None):
+    """
+    Sauvegarde le dernier nom de joueur utilisé.
+    Si player_num est 1 ou 2, sauvegarde dans les champs pvp.
+    Sinon, sauvegarde dans le champ solo.
+    """
+    try:
+        with open(config.LAST_NAMES_FILE, 'r', encoding='utf-8') as f:
+            names = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        names = {}
+
+    if player_num == 1:
+        names['last_name_p1'] = name
+    elif player_num == 2:
+        names['last_name_p2'] = name
+    else:
+        names['last_name_solo'] = name
+
+    try:
+        with open(config.LAST_NAMES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(names, f, indent=4)
+    except IOError as e:
+        print(f"Erreur lors de la sauvegarde du nom du joueur : {e}")
+# --- FIN NOUVEAU ---
 
 # --- NOUVEAU: Fonctions Favorite Maps ---
 def load_favorite_maps(base_path):
@@ -800,48 +849,6 @@ def generate_random_walls(grid_width, grid_height):
     walls = []
     num_segments = random.randint(4, 8) # Nombre de segments de mur
     min_len, max_len = 3, 10 # Longueur min/max des segments
-def bresenham_line(start_pos, end_pos):
-    """Génère les points de la grille sur une ligne entre deux points (Algorithme de Bresenham).
-
-    Args:
-        start_pos (tuple): Coordonnées (x, y) du point de départ.
-        end_pos (tuple): Coordonnées (x, y) du point d'arrivée.
-
-    Returns:
-        list: Une liste de tuples (x, y) représentant les points de la grille sur la ligne.
-    """
-    x0, y0 = start_pos
-    x1, y1 = end_pos
-    points = []
-    dx = abs(x1 - x0)
-    dy = -abs(y1 - y0) # Utilise -dy car l'axe Y est inversé dans Pygame (haut -> bas)
-
-    # Détermine la direction du pas pour x et y
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-
-    err = dx + dy  # Variable d'erreur
-
-    while True:
-        points.append((x0, y0)) # Ajoute le point courant
-        if x0 == x1 and y0 == y1:
-            break # Point final atteint
-
-        e2 = 2 * err
-        # Ajuste l'erreur et déplace x si nécessaire
-        if e2 >= dy:
-            if x0 == x1: # Évite dépassement si déjà à la fin x
-                break
-            err += dy
-            x0 += sx
-        # Ajuste l'erreur et déplace y si nécessaire
-        if e2 <= dx:
-            if y0 == y1: # Évite dépassement si déjà à la fin y
-                break
-            err += dx
-            y0 += sy
-    return points
-
     # Zones de départ par défaut (approximatives) à éviter
     p1_start_zone = (grid_width // 4, grid_height // 2)
     p2_start_zone = (grid_width * 3 // 4, grid_height // 2)

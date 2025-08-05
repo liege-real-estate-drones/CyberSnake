@@ -391,7 +391,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                     y_p1_ui += line_height_default + gap
             # --- FIN AFFICHAGE COMPÉTENCES ---
 
-            # Icônes Powerups 
+            # Icônes Powerups
             if player_snake.alive:
                 p1_icon_y = p1_panel_rect.top + ui_padding // 2
                 icon_offset_temp = 0;
@@ -418,7 +418,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
         traceback.print_exc()
 
     # --- ** Panneau UI Top-Right (Kill Feed, HS, Effects) ** ---
-    
+
     try:
         top_right_panel_width = 280
         top_right_panel_height = config.SCREEN_HEIGHT * 0.45
@@ -558,7 +558,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
         traceback.print_exc()
 
     # --- ** Panneau UI Joueur 2 (Bottom-Left) ** ---
-   
+
     if current_game_mode == config.MODE_PVP and player2_snake:
         try:
             p2_ui_elements_height = 0
@@ -691,7 +691,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             time_left_sec = time_left_ms / 1000.0
             bottom_text = f"Vague: {survival_wave} ({time_left_sec:.1f}s)"  # Ajoute le timer
             bottom_color = config.COLOR_WAVE_TEXT
-        elif current_game_mode != config.MODE_PVP:  
+        elif current_game_mode != config.MODE_PVP:
             if objective_complete_timer > 0 and current_time < objective_complete_timer:
                 bottom_text = "Objectif Complété !"; bottom_color = config.COLOR_OBJECTIVE_COMPLETE
             elif current_objective and objective_display_text:
@@ -708,7 +708,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                         bottom_text += f" ({int(current_prog)}/{int(target_val)})"
                     else:
                         bottom_text += f" ({int(current_prog)})"
-        elif PvpCondition is not None and pvp_condition_type != PvpCondition.KILLS:  
+        elif PvpCondition is not None and pvp_condition_type != PvpCondition.KILLS:
             elapsed_ms = current_time - pvp_start_time if pvp_start_time > 0 else 0
             time_left_ms = max(0, (pvp_target_time * 1000) - elapsed_ms)
             total_seconds_left = time_left_ms // 1000;
@@ -1206,7 +1206,7 @@ def run_menu(events, dt, screen, game_state):
             except Exception as e: print(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
         else: screen.fill(config.COLOR_BACKGROUND)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
-        
+
         if pvp_error_msg:
             error_y = config.SCREEN_HEIGHT * 0.05 # En haut de l'écran
             utils.draw_text_with_shadow(screen, pvp_error_msg, font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, error_y), "center")
@@ -1286,43 +1286,46 @@ VK_MOVE_EFFECT_DURATION = 150   # Durée de l'effet de déplacement en ms
 
 def run_name_entry_solo(events, dt, screen, game_state):
     """Gère l'écran de saisie du nom pour les modes Solo, Vs AI, Survie avec support manette."""
-    player1_name_input = game_state.get('player1_name_input', "Joueur 1")
+    # --- MODIFIÉ : Charger le dernier nom utilisé ---
+    last_name = utils.load_last_player_name()
+    player1_name_input = game_state.get('player1_name_input', last_name)
+    # --- FIN MODIFICATION ---
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
-    
+
     # Positions pour le clavier virtuel
     vk_row = game_state.get('vk_row', 0)
     vk_col = game_state.get('vk_col', 0)
-    
+
     # Délai pour mouvements joystick
     axis_repeat_delay = 200
     last_axis_move_time = game_state.get('last_axis_move_time_vk', 0)
     current_time = pygame.time.get_ticks()
-    
+
     # Variables pour les animations du clavier
     key_animations = game_state.get('key_animations', {})
     key_press_effect = game_state.get('key_press_effect', None)
     key_select_time = game_state.get('key_select_time', 0)
-    
+
     # Drapeau d'entrée active - pour éviter l'ajout automatique de caractères
     input_active = game_state.get('input_active_solo', False) # Gets current or default False
-    
+
     # Enregistrer le moment où on est entré sur cet écran pour la première fois
     if 'name_entry_start_time_solo' not in game_state:
         game_state['name_entry_start_time_solo'] = current_time
         # Reset le nom pour éviter les problèmes de boutons attribués par défaut
         game_state['player1_name_input'] = ""
         # --- AJOUTER LES LIGNES SUIVANTES ICI ---
-        game_state['input_active_solo'] = True 
+        game_state['input_active_solo'] = True
         input_active = True # Mettre à jour la variable locale aussi
         logging.debug("run_name_entry_solo: First entry, setting input_active_solo to True.")
         # --- FIN DES LIGNES À AJOUTER ---
-    
+
     # Période d'initialisation (1.5 secondes) - ignorer les entrées initiales
     entry_delay = 1500 # ms
     init_period = current_time - game_state.get('name_entry_start_time_solo', 0) < entry_delay
-    
+
     # Initialisation des animations si nécessaire
     if not key_animations:
         key_animations = {}
@@ -1346,7 +1349,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
     # Période d'initialisation (1.5 secondes) - ignorer les entrées initiales
     entry_delay = 1500
     init_period = current_time - game_state.get('name_entry_start_time_solo', 0) < entry_delay
-    
+
     for event in events:
         if event.type == pygame.QUIT:
             return False
@@ -1359,12 +1362,12 @@ def run_name_entry_solo(events, dt, screen, game_state):
         elif event.type == pygame.JOYAXISMOTION:
             # Assurez-vous que target_player_joystick_id est bien géré
             # (actuellement, il alterne entre joystick 0 pour J1 et joystick 1 pour J2)
-            target_player_joystick_id = 0 # En mode solo, c'est toujours le joystick 0 
+            target_player_joystick_id = 0 # En mode solo, c'est toujours le joystick 0
             if event.instance_id == target_player_joystick_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = config.JOYSTICK_THRESHOLD
-                
+
                 if axis == 0: # Axe vertical
                     if value < -threshold: # HAUT
                         vk_row = (vk_row - 1 + len(VIRTUAL_KEYBOARD_CHARS)) % len(VIRTUAL_KEYBOARD_CHARS)
@@ -1389,7 +1392,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
                         input_active = True
-                
+
                 game_state['vk_row_pvp'] = vk_row
                 game_state['vk_col_pvp'] = vk_col
                 game_state['last_axis_move_time_vk_pvp'] = last_axis_move_time
@@ -1398,7 +1401,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
-                
+
                 if hat_y > 0: # HAUT
                     vk_row = (vk_row - 1) % len(VIRTUAL_KEYBOARD_CHARS)
                     vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
@@ -1411,7 +1414,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                     utils.play_sound("eat")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
-                
+
                 if hat_x < 0: # GAUCHE
                     vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
                     utils.play_sound("eat")
@@ -1422,7 +1425,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                     utils.play_sound("eat")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
-                
+
                 # Sauvegarde de la position dans le clavier virtuel
                 game_state['vk_row'] = vk_row
                 game_state['vk_col'] = vk_col
@@ -1436,10 +1439,11 @@ def run_name_entry_solo(events, dt, screen, game_state):
                     if event.button == 0 or event.button == 1: # Boutons A/B confirment la sélection actuelle
                         # Obtenez le caractère sélectionné
                         selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
-                        
+
                         if selected_char == "OK": # Confirmation du nom
                             name_entered = player1_name_input.strip()[:15]
                             game_state['player1_name_input'] = name_entered if name_entered else "Joueur 1"
+                            utils.save_last_player_name(game_state['player1_name_input']) # Sauvegarde du nom
                             utils.play_sound("name_input_confirm")
                             logging.info(f"Nom Joueur Solo/VsAI/Survie confirmé par joystick: '{game_state['player1_name_input']}'")
 
@@ -1447,14 +1451,14 @@ def run_name_entry_solo(events, dt, screen, game_state):
                             game_state.pop('name_entry_start_time_solo', None)
                             game_state.pop('input_active_solo', None)
                             # Optionnel, mais propre : réinitialiser aussi la position du curseur et le nom en cours
-                            game_state.pop('vk_row', None) 
-                            game_state.pop('vk_col', None) 
+                            game_state.pop('vk_row', None)
+                            game_state.pop('vk_col', None)
                             game_state.pop('last_axis_move_time_vk', None)
                             # player1_name_input est déjà mis à jour dans game_state ci-dessus
                             # --- FIN MODIFIÉ ---
 
                             next_state = config.MAP_SELECTION
-                            game_state['current_state'] = next_state 
+                            game_state['current_state'] = next_state
                             return next_state
                         elif selected_char == "<-": # Effacer
                             if player1_name_input:
@@ -1466,7 +1470,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                                 player1_name_input += selected_char
                                 game_state['player1_name_input'] = player1_name_input
                                 utils.play_sound("name_input_char")
-                
+
                 elif event.button == 8: # Bouton 8 pour Echap/Retour
                     logging.info("Joystick button 8 pressed in name entry solo, returning to MENU.")
                     next_state = config.MENU
@@ -1477,12 +1481,12 @@ def run_name_entry_solo(events, dt, screen, game_state):
                     game_state.pop('input_active_solo', None)
                     game_state.pop('player1_name_input', None) # Efface le nom en cours si on quitte
                     # Optionnel: réinitialiser la position du curseur clavier
-                    game_state.pop('vk_row', None) 
-                    game_state.pop('vk_col', None) 
+                    game_state.pop('vk_row', None)
+                    game_state.pop('vk_col', None)
                     game_state.pop('last_axis_move_time_vk', None)
                     # --- FIN NOUVEAU ---
 
-                    game_state['current_state'] = next_state 
+                    game_state['current_state'] = next_state
                     return next_state
 
         # --- Gestion Clavier pour rétrocompatibilité ---
@@ -1491,6 +1495,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
             if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                 name_entered = player1_name_input.strip()[:15] # Limite à 15 caractères
                 game_state['player1_name_input'] = name_entered if name_entered else "Joueur 1" # Nom par défaut si vide
+                utils.save_last_player_name(game_state['player1_name_input']) # Sauvegarde du nom
                 utils.play_sound("name_input_confirm")
                 print(f"Nom Joueur Solo/VsAI/Survie: '{game_state['player1_name_input']}'")
                 next_state = config.MAP_SELECTION # Après le nom, on choisit la carte
@@ -1530,10 +1535,10 @@ def run_name_entry_solo(events, dt, screen, game_state):
         # Message d'attente pendant l'initialisation
         if init_period:
             init_text = "Préparation clavier virtuel..."
-            utils.draw_text_with_shadow(screen, init_text, font_medium, 
+            utils.draw_text_with_shadow(screen, init_text, font_medium,
                                       config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW,
                                       (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.2), "center")
-            
+
             # Temps restant
             remaining = max(0, (entry_delay - (current_time - game_state.get('name_entry_start_time_solo', 0))) // 1000 + 1)
             countdown_text = f"({remaining}s)"
@@ -1541,12 +1546,12 @@ def run_name_entry_solo(events, dt, screen, game_state):
                          (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.28), "center")
 
         # Affichage du nom
-        utils.draw_text_with_shadow(screen, prompt, font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, 
+        utils.draw_text_with_shadow(screen, prompt, font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW,
                                   (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.25), "center")
-        utils.draw_text_with_shadow(screen, game_state['player1_name_input'] + cursor_char, font_large, 
-                                  config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW, 
+        utils.draw_text_with_shadow(screen, game_state['player1_name_input'] + cursor_char, font_large,
+                                  config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW,
                                   (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.35), "center")
-        
+
         # Mettre à jour l'animation de la touche sélectionnée
         if vk_row != game_state.get('last_vk_row', vk_row) or vk_col != game_state.get('last_vk_col', vk_col):
             game_state['key_select_time'] = current_time
@@ -1560,26 +1565,26 @@ def run_name_entry_solo(events, dt, screen, game_state):
         if key_press_effect and current_time - key_press_effect['time'] > VK_PRESS_EFFECT_DURATION:
             key_press_effect = None
             game_state['key_press_effect'] = None
-            
+
         # Dessin du clavier virtuel avec animations
         keyboard_y_start = config.SCREEN_HEIGHT * 0.5
         key_height = 40
         key_spacing = 5
-        
+
         for row_idx, row in enumerate(VIRTUAL_KEYBOARD_CHARS):
             key_y = keyboard_y_start + row_idx * (key_height + key_spacing)
             total_row_width = len(row) * (key_height + key_spacing)
             row_start_x = (config.SCREEN_WIDTH - total_row_width) / 2
-            
+
             for col_idx, char in enumerate(row):
                 # Dimensions et position de base de la touche
                 key_x = row_start_x + col_idx * (key_height + key_spacing)
                 key_width = key_height * 2 if char in ["<-", "OK", " "] else key_height
-                
+
                 # Animation: Effet de pulsation pour la touche sélectionnée
                 scale_factor = 1.0
                 shadow_size = 0
-                
+
                 # Touche actuellement sélectionnée
                 if row_idx == vk_row and col_idx == vk_col:
                     # Animation de pulsation basée sur le temps
@@ -1587,50 +1592,50 @@ def run_name_entry_solo(events, dt, screen, game_state):
                     pulse_factor = abs(math.sin(pulse_time * math.pi / VK_PULSE_DURATION))
                     scale_factor = 1.0 + (0.1 * pulse_factor)
                     shadow_size = 3 + int(2 * pulse_factor)
-                
+
                 # Si cette touche a été pressée récemment
                 if key_press_effect and key_press_effect['row'] == row_idx and key_press_effect['col'] == col_idx:
                     press_time_elapsed = current_time - key_press_effect['time']
                     press_factor = 1.0 - (press_time_elapsed / VK_PRESS_EFFECT_DURATION)
                     scale_factor *= max(0.9, 1.0 - (0.2 * press_factor))
-                
+
                 # Appliquer l'échelle à la touche
                 scaled_width = int(key_width * scale_factor)
                 scaled_height = int(key_height * scale_factor)
                 # Centrer la touche redimensionnée
                 scaled_x = key_x + (key_width - scaled_width) / 2
                 scaled_y = key_y + (key_height - scaled_height) / 2
-                
+
                 key_rect = pygame.Rect(scaled_x, scaled_y, scaled_width, scaled_height)
-                
+
                 # Déterminer la couleur de la touche
                 key_color = VK_KEY_COLORS['normal']
-                
+
                 if char == "OK":
                     key_color = VK_KEY_COLORS['ok']
                 elif char == "<-":
                     key_color = VK_KEY_COLORS['delete']
                 elif char in ["-", "_", ".", " "]:
                     key_color = VK_KEY_COLORS['special']
-                
+
                 # Touche sélectionnée a toujours la priorité
                 if row_idx == vk_row and col_idx == vk_col:
                     if key_press_effect and key_press_effect['row'] == row_idx and key_press_effect['col'] == col_idx:
                         key_color = VK_KEY_COLORS['pressed']
                     else:
                         key_color = VK_KEY_COLORS['selected']
-                
+
                 # Dessiner l'ombre pour effet 3D (seulement pour les touches sélectionnées)
                 if row_idx == vk_row and col_idx == vk_col and shadow_size > 0:
                     shadow_rect = key_rect.copy()
                     shadow_rect.x += shadow_size // 2
                     shadow_rect.y += shadow_size
                     pygame.draw.rect(screen, config.COLOR_UI_SHADOW, shadow_rect, 0, border_radius=8)
-                
+
                 # Dessiner le fond de la touche avec bordure arrondie
                 pygame.draw.rect(screen, key_color, key_rect, 0, border_radius=8)
                 pygame.draw.rect(screen, config.COLOR_UI_SHADOW, key_rect, 1, border_radius=8)
-                
+
                 # Afficher le caractère
                 char_size_factor = 1.1 if char in ["<-", "OK"] else 1.0
                 char_font = font_medium
@@ -1638,13 +1643,13 @@ def run_name_entry_solo(events, dt, screen, game_state):
                     char_color = (255, 255, 255)  # Blanc pour meilleure visibilité
                 else:
                     char_color = (240, 240, 240)  # Légèrement grisé pour les autres touches
-                
-                utils.draw_text_with_shadow(screen, char, char_font, char_color, 
+
+                utils.draw_text_with_shadow(screen, char, char_font, char_color,
                                           config.COLOR_UI_SHADOW,
                                           (key_x + key_width/2, key_y + key_height/2), "center")
-        
+
         # Instructions
-        utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour", 
+        utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour",
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
         print(f"Erreur lors du dessin de run_name_entry_solo: {e}")
@@ -1654,7 +1659,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
     game_state['vk_row'] = vk_row
     game_state['vk_col'] = vk_col
     game_state['last_axis_move_time_vk'] = last_axis_move_time
-    
+
     return next_state
 
 
@@ -1777,7 +1782,7 @@ def run_map_selection(events, dt, screen, game_state):
                     selected_key_or_label = _map_keys_display[map_selection_index]
                     game_state['selected_map_key'] = selected_key_or_label
                     logging.info(f"DEBUG MAP SELECTION: Carte sélectionnée: '{selected_key_or_label}', Mode: {current_game_mode}")
-                    
+
                     if selected_key_or_label == "Aléatoire":
                         game_state['current_random_map_walls'] = list(_current_random_map_walls) if _current_random_map_walls else []
                         logging.info(f"Map selected via joystick: Aléatoire (avec {len(game_state['current_random_map_walls'])} murs)")
@@ -1797,7 +1802,7 @@ def run_map_selection(events, dt, screen, game_state):
                     # Vérifier si nous sommes en mode PVP
                     is_pvp = current_game_mode == config.MODE_PVP
                     logging.info(f"DEBUG MAP SELECTION: Transition - Mode PVP: {is_pvp}, État actuel: {next_state}")
-                    
+
                     if is_pvp:
                         next_state = config.PVP_SETUP
                         logging.info(f"DEBUG MAP SELECTION: Transition vers PVP_SETUP (état {config.PVP_SETUP})")
@@ -1805,11 +1810,11 @@ def run_map_selection(events, dt, screen, game_state):
                         reset_game(game_state)
                         next_state = config.PLAYING
                         logging.info(f"DEBUG MAP SELECTION: Transition vers PLAYING (état {config.PLAYING})")
-                    
+
                     # Mise à jour explicite de l'état courant dans game_state
                     game_state['current_state'] = next_state
                     logging.info(f"DEBUG MAP SELECTION: État courant mis à jour: {game_state['current_state']}")
-                    
+
                     game_state['last_axis_move_time_map'] = 0 # Reset timer on state change
                     logging.info(f"DEBUG MAP SELECTION: Retourne l'état suivant: {next_state}")
                     return next_state
@@ -2171,11 +2176,11 @@ def run_pvp_setup(events, dt, screen, game_state):
         if event.type == pygame.QUIT:
             logging.debug("Exiting run_pvp_setup, next_state: False (QUIT)") # NOUVEAU LOG
             return False
-        
+
         # Ignore les entrées si le verrouillage est actif
         if inputs_locked:
             continue
-            
+
         # --- Gestion Joystick Game Over et Navigation Menu ---
         elif event.type == pygame.JOYAXISMOTION or event.type == pygame.JOYHATMOTION:
             if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -2235,7 +2240,7 @@ def run_pvp_setup(events, dt, screen, game_state):
                 # (Logique de confirmation déjà présente, pas besoin de la dupliquer)
                 pvp_cond = game_state.get('pvp_condition_type'); pvp_time = game_state.get('pvp_target_time')
                 pvp_kills = game_state.get('pvp_target_kills'); pvp_armor = game_state.get('pvp_start_armor')
-                pvp_ammo = game_state.get('pvp_start_ammo')                        
+                pvp_ammo = game_state.get('pvp_start_ammo')
                 next_state = config.NAME_ENTRY_PVP
                 # Mise à jour explicite de l'état courant dans game_state
                 game_state['current_state'] = next_state
@@ -2252,12 +2257,12 @@ def run_pvp_setup(events, dt, screen, game_state):
                 game_state.pop('name_entry_start_time_solo', None)
                 game_state.pop('input_active_solo', None)
                 game_state.pop('player1_name_input', None) # Important pour effacer le nom non confirmé
-                game_state.pop('vk_row', None) 
-                game_state.pop('vk_col', None) 
+                game_state.pop('vk_row', None)
+                game_state.pop('vk_col', None)
                 game_state.pop('last_axis_move_time_vk', None)
                 # --- FIN NOUVEAU ---
 
-                game_state['current_state'] = next_state 
+                game_state['current_state'] = next_state
                 return next_state
 
         # --- FIN AJOUT ---
@@ -2337,27 +2342,30 @@ def run_pvp_setup(events, dt, screen, game_state):
 
 def run_name_entry_pvp(events, dt, screen, game_state):
     """Gère l'écran de saisie des noms pour le mode PvP (deux étapes) avec support manette."""
-    player1_name_input = game_state.get('player1_name_input', "Joueur 1")
-    player2_name_input = game_state.get('player2_name_input', "Joueur 2")
+    # --- MODIFIÉ : Charger les derniers noms utilisés pour J1 et J2 ---
+    last_names = utils.load_last_player_name(pvp=True)
+    player1_name_input = game_state.get('player1_name_input', last_names.get('J1', 'Joueur 1'))
+    player2_name_input = game_state.get('player2_name_input', last_names.get('J2', 'Joueur 2'))
+    # --- FIN MODIFICATION ---
     stage = game_state.get('pvp_name_entry_stage', 1) # 1 pour J1, 2 pour J2
-    
+
     # Positions pour le clavier virtuel
     vk_row = game_state.get('vk_row_pvp', 0)
     vk_col = game_state.get('vk_col_pvp', 0)
-    
+
     # Délai pour mouvements joystick
     axis_repeat_delay = 200
     last_axis_move_time = game_state.get('last_axis_move_time_vk_pvp', 0)
     current_time = pygame.time.get_ticks()
-    
+
     # Variables pour les animations du clavier
     key_animations = game_state.get('key_animations_pvp', {})
     key_press_effect = game_state.get('key_press_effect_pvp', None)
     key_select_time = game_state.get('key_select_time_pvp', 0)
-    
+
     # Drapeau d'entrée active - pour éviter l'ajout automatique de caractères
     input_active = game_state.get('input_active_pvp', False)
-    
+
     # Enregistrer le moment où on est entré sur cet écran pour la première fois
     if 'name_entry_start_time_pvp' not in game_state:
         game_state['name_entry_start_time_pvp'] = current_time
@@ -2367,11 +2375,11 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             game_state['player1_name_input'] = ""
         else:
             game_state['player2_name_input'] = ""
-            
+
     # Période d'initialisation (1.5 secondes) - ignorer les entrées initiales
     entry_delay = 1500
     init_period = current_time - game_state.get('name_entry_start_time_pvp', 0) < entry_delay
-    
+
     # Initialisation des animations si nécessaire
     if not key_animations:
         key_animations = {}
@@ -2398,7 +2406,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
 
     for event in events:
         if event.type == pygame.QUIT: return False
-        
+
         # Ignorer les entrées pendant la période d'initialisation
         if init_period:
             continue
@@ -2409,7 +2417,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 axis = event.axis
                 value = event.value
                 threshold = config.JOYSTICK_THRESHOLD
-                
+
                 if axis == 0: # Axe vertical (positions dans notre implémentation)
                     if value < -threshold: # HAUT
                         vk_row = (vk_row - 1) % len(VIRTUAL_KEYBOARD_CHARS)
@@ -2435,7 +2443,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
                         input_active = True
-                
+
                 # Sauvegarde de la position dans le clavier virtuel
                 game_state['vk_row_pvp'] = vk_row
                 game_state['vk_col_pvp'] = vk_col
@@ -2445,7 +2453,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
-                
+
                 if hat_y > 0: # HAUT
                     vk_row = (vk_row - 1) % len(VIRTUAL_KEYBOARD_CHARS)
                     vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
@@ -2457,7 +2465,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     utils.play_sound("eat")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
-                
+
                 if hat_x < 0: # GAUCHE
                     vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
                     utils.play_sound("eat")
@@ -2468,7 +2476,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     utils.play_sound("eat")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
-                
+
                 # Sauvegarde de la position dans le clavier virtuel
                 game_state['vk_row_pvp'] = vk_row
                 game_state['vk_col_pvp'] = vk_col
@@ -2482,7 +2490,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     if event.button == 0 or event.button == 1: # Boutons A/B confirment la sélection actuelle
                         # Obtenez le caractère sélectionné
                         selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
-                        
+
                 if selected_char == "OK": # Confirmation du nom
                     current_input_name = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
                     name_entered = current_input_name.strip()[:15]
@@ -2492,32 +2500,34 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     # ---- DEBUT BLOC CORRECTEMENT INDENTÉ ----
                     if stage == 1:
                         game_state['player1_name_input'] = name_entered
+                        utils.save_last_player_name(name_entered, player_num=1) # Sauvegarde J1
                         logging.info(f"Nom J1 (PvP) confirmé par joystick: '{name_entered}'")
-                        game_state['pvp_name_entry_stage'] = 2 
+                        game_state['pvp_name_entry_stage'] = 2
                         game_state['vk_row_pvp'] = 0
                         game_state['vk_col_pvp'] = 0
                         # Réinitialiser le timer pour la nouvelle étape et s'assurer que l'entrée est active
-                        game_state['name_entry_start_time_pvp'] = current_time 
+                        game_state['name_entry_start_time_pvp'] = current_time
                         game_state['input_active_pvp'] = True
                         game_state['player2_name_input'] = "" # Effacer le nom pour J2
                     elif stage == 2:
                         game_state['player2_name_input'] = name_entered
+                        utils.save_last_player_name(name_entered, player_num=2) # Sauvegarde J2
                         logging.info(f"Nom J2 (PvP) confirmé par joystick: '{name_entered}'")
                         logging.info(f"Noms PvP finaux: J1='{game_state['player1_name_input']}', J2='{game_state['player2_name_input']}'")
                         game_state['pvp_name_entry_stage'] = 1 # Réinitialise pour la prochaine fois
 
-                        reset_game(game_state) 
+                        reset_game(game_state)
                         logging.info(f"DEBUG run_name_entry_pvp (joystick): player2_snake après reset_game: {game_state.get('player2_snake')}")
 
                         if not game_state.get('player2_snake'):
                             logging.error("CRITICAL (run_name_entry_pvp joystick): player2_snake non initialisé après reset_game. Retour au menu.")
-                            game_state['pvp_setup_error'] = "Erreur init. J2. Menu." 
+                            game_state['pvp_setup_error'] = "Erreur init. J2. Menu."
                             next_state = config.MENU
                         else:
                             logging.info("run_name_entry_pvp joystick: player2_snake initialisé, passage à PLAYING.")
                             next_state = config.PLAYING
 
-                        game_state['current_state'] = next_state 
+                        game_state['current_state'] = next_state
                         return next_state # Quitte la fonction et lance le jeu ou retourne au menu
                     # ---- FIN DU BLOC CORRECTEMENT INDENTÉ ----
 
@@ -2550,14 +2560,14 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                             else: # stage == 2
                                 game_state['player2_name_input'] = new_value
                                 player2_name_input = new_value # Mettre à jour la copie locale
-                            current_input_value = new_value 
+                            current_input_value = new_value
                             utils.play_sound("name_input_char")
                         logging.debug("PVP Char Input: Character processed successfully.")
                     except Exception as char_error:
                         logging.error(f"ERREUR lors de l'ajout de caractère en PvP (stage {stage}): {char_error}", exc_info=True)
                         # À des fins de débogage, vous pourriez temporairement forcer un état d'erreur ici
                         # ou simplement laisser le gestionnaire principal dans cybersnake.pygame prendre le relais.
-            
+
             elif event.type == pygame.JOYBUTTONDOWN:  # Vérification principale pour les boutons joystick
                 joystick_id = event.instance_id
                 button = event.button  # 'button' est défini ici
@@ -2575,8 +2585,8 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     game_state.pop('player2_name_pvp', None)
                     game_state.pop('name_entry_stage', None)
                     game_state.pop('name_entry_start_time_pvp', None)
-                    
-                    next_state = config.PVP_SETUP 
+
+                    next_state = config.PVP_SETUP
                     game_state['current_state'] = next_state
                     return next_state
 
@@ -2598,12 +2608,14 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                         utils.play_sound("name_input_confirm")
                         if stage == 1:
                             game_state['player1_name_input'] = name_entered
+                            utils.save_last_player_name(name_entered, player_num=1) # Sauvegarde J1
                             game_state['pvp_name_entry_stage'] = 2 # Change l'étape
                         elif stage == 2:
                             game_state['player2_name_input'] = name_entered
+                            utils.save_last_player_name(name_entered, player_num=2) # Sauvegarde J2
                             print(f"Noms PvP: J1='{game_state['player1_name_input']}', J2='{game_state['player2_name_input']}'")
                             game_state['pvp_name_entry_stage'] = 1 # Réinitialise pour la prochaine fois
-                            
+
                             reset_game(game_state) # Initialise le jeu PvP
 
                             # === AJOUT DE LOG ===
@@ -2618,7 +2630,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                             else:
                                 logging.info("run_name_entry_pvp keyboard: player2_snake initialisé, passage à PLAYING.")
                                 next_state = config.PLAYING
-                            
+
                             game_state['current_state'] = next_state # Important
                             return next_state # Lance le jeu ou retourne au menu
                     except Exception as e:
@@ -2653,10 +2665,10 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         # Message d'attente pendant l'initialisation
         if init_period:
             init_text = f"Préparation clavier virtuel ({stage}/2)..."
-            utils.draw_text_with_shadow(screen, init_text, font_medium, 
+            utils.draw_text_with_shadow(screen, init_text, font_medium,
                                       config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW,
                                       (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.2), "center")
-            
+
             # Temps restant avec barre de progression
             remaining = max(0, (entry_delay - (current_time - game_state.get('name_entry_start_time_pvp', 0))) / 1000)
             progress = 1.0 - (remaining / (entry_delay / 1000))
@@ -2664,37 +2676,37 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             bar_height = 10
             bar_x = (config.SCREEN_WIDTH - bar_width) // 2
             bar_y = config.SCREEN_HEIGHT * 0.28
-            
+
             # Fond de la barre
-            pygame.draw.rect(screen, config.COLOR_UI_SHADOW, 
-                           (bar_x, bar_y, bar_width, bar_height), 
+            pygame.draw.rect(screen, config.COLOR_UI_SHADOW,
+                           (bar_x, bar_y, bar_width, bar_height),
                            border_radius=bar_height//2)
-            
+
             # Barre de progression
             if progress > 0:
                 progress_width = int(bar_width * progress)
                 pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT,
                                (bar_x, bar_y, progress_width, bar_height),
                                border_radius=bar_height//2)
-            
+
             # Temps restant en texte
             countdown_text = f"{remaining:.1f}s"
             utils.draw_text(screen, countdown_text, font_medium, config.COLOR_TEXT_MENU,
                          (config.SCREEN_WIDTH / 2, bar_y + bar_height + 15), "center")
-        
+
         # Affichage du titre et du nom
-        utils.draw_text_with_shadow(screen, current_prompt, font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, 
+        utils.draw_text_with_shadow(screen, current_prompt, font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW,
                                   (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.25), "center")
         input_display_value = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
-        utils.draw_text_with_shadow(screen, input_display_value + cursor_char, font_large, 
-                                  config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW, 
+        utils.draw_text_with_shadow(screen, input_display_value + cursor_char, font_large,
+                                  config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW,
                                   (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.35), "center")
-        
+
         # Affichage du nom du J1 si on est à l'étape 2
         if stage == 2:
-            utils.draw_text(screen, f"J1: {game_state['player1_name_input']}", font_default, 
+            utils.draw_text(screen, f"J1: {game_state['player1_name_input']}", font_default,
                           config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.45), "center")
-        
+
         # Mettre à jour l'animation de la touche sélectionnée
         if vk_row != game_state.get('last_vk_row_pvp', vk_row) or vk_col != game_state.get('last_vk_col_pvp', vk_col):
             game_state['key_select_time_pvp'] = current_time
@@ -2708,26 +2720,26 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         if key_press_effect_pvp and current_time - key_press_effect_pvp['time'] > VK_PRESS_EFFECT_DURATION:
             key_press_effect_pvp = None
             game_state['key_press_effect_pvp'] = None
-        
+
         # Dessin du clavier virtuel avec animations
         keyboard_y_start = config.SCREEN_HEIGHT * 0.5
         key_height = 40
         key_spacing = 5
-        
+
         for row_idx, row in enumerate(VIRTUAL_KEYBOARD_CHARS):
             key_y = keyboard_y_start + row_idx * (key_height + key_spacing)
             total_row_width = len(row) * (key_height + key_spacing)
             row_start_x = (config.SCREEN_WIDTH - total_row_width) / 2
-            
+
             for col_idx, char in enumerate(row):
                 # Dimensions et position de base de la touche
                 key_x = row_start_x + col_idx * (key_height + key_spacing)
                 key_width = key_height * 2 if char in ["<-", "OK", " "] else key_height
-                
+
                 # Animation: Effet de pulsation pour la touche sélectionnée
                 scale_factor = 1.0
                 shadow_size = 0
-                
+
                 # Touche actuellement sélectionnée
                 if row_idx == vk_row and col_idx == vk_col:
                     # Animation de pulsation basée sur le temps
@@ -2735,50 +2747,50 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     pulse_factor = abs(math.sin(pulse_time * math.pi / VK_PULSE_DURATION))
                     scale_factor = 1.0 + (0.1 * pulse_factor)
                     shadow_size = 3 + int(2 * pulse_factor)
-                
+
                 # Si cette touche a été pressée récemment
                 if key_press_effect_pvp and key_press_effect_pvp['row'] == row_idx and key_press_effect_pvp['col'] == col_idx:
                     press_time_elapsed = current_time - key_press_effect_pvp['time']
                     press_factor = 1.0 - (press_time_elapsed / VK_PRESS_EFFECT_DURATION)
                     scale_factor *= max(0.9, 1.0 - (0.2 * press_factor))
-                
+
                 # Appliquer l'échelle à la touche
                 scaled_width = int(key_width * scale_factor)
                 scaled_height = int(key_height * scale_factor)
                 # Centrer la touche redimensionnée
                 scaled_x = key_x + (key_width - scaled_width) / 2
                 scaled_y = key_y + (key_height - scaled_height) / 2
-                
+
                 key_rect = pygame.Rect(scaled_x, scaled_y, scaled_width, scaled_height)
-                
+
                 # Déterminer la couleur de la touche
                 key_color = VK_KEY_COLORS['normal']
-                
+
                 if char == "OK":
                     key_color = VK_KEY_COLORS['ok']
                 elif char == "<-":
                     key_color = VK_KEY_COLORS['delete']
                 elif char in ["-", "_", ".", " "]:
                     key_color = VK_KEY_COLORS['special']
-                
+
                 # Touche sélectionnée a toujours la priorité
                 if row_idx == vk_row and col_idx == vk_col:
                     if key_press_effect_pvp and key_press_effect_pvp['row'] == row_idx and key_press_effect_pvp['col'] == col_idx:
                         key_color = VK_KEY_COLORS['pressed']
                     else:
                         key_color = VK_KEY_COLORS['selected']
-                
+
                 # Dessiner l'ombre pour effet 3D (seulement pour les touches sélectionnées)
                 if row_idx == vk_row and col_idx == vk_col and shadow_size > 0:
                     shadow_rect = key_rect.copy()
                     shadow_rect.x += shadow_size // 2
                     shadow_rect.y += shadow_size
                     pygame.draw.rect(screen, config.COLOR_UI_SHADOW, shadow_rect, 0, border_radius=8)
-                
+
                 # Dessiner le fond de la touche avec bordure arrondie
                 pygame.draw.rect(screen, key_color, key_rect, 0, border_radius=8)
                 pygame.draw.rect(screen, config.COLOR_UI_SHADOW, key_rect, 1, border_radius=8)
-                
+
                 # Afficher le caractère
                 char_size_factor = 1.1 if char in ["<-", "OK"] else 1.0
                 char_font = font_medium
@@ -2786,13 +2798,13 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     char_color = (255, 255, 255)  # Blanc pour meilleure visibilité
                 else:
                     char_color = (240, 240, 240)  # Légèrement grisé pour les autres touches
-                
-                utils.draw_text_with_shadow(screen, char, char_font, char_color, 
+
+                utils.draw_text_with_shadow(screen, char, char_font, char_color,
                                          config.COLOR_UI_SHADOW,
                                          (key_x + key_width/2, key_y + key_height/2), "center")
-        
+
         # Instructions
-        utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour", 
+        utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour",
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
         print(f"Erreur lors du dessin de run_name_entry_pvp: {e}")
@@ -2802,7 +2814,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     game_state['vk_row_pvp'] = vk_row
     game_state['vk_col_pvp'] = vk_col
     game_state['last_axis_move_time_vk_pvp'] = last_axis_move_time
-    
+
     return next_state
 
 
@@ -2814,6 +2826,14 @@ def run_pause(events, dt, screen, game_state):
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
 
+    # ---- Ajout pour gérer la navigation dans le menu pause ----
+    pause_menu_options = ["Reprendre", "Recommencer", "Menu Principal"]
+    pause_menu_selection = game_state.get('pause_menu_selection', 0)
+    axis_repeat_delay = 200
+    last_axis_move_time = game_state.get('last_axis_move_time_pause', 0)
+    current_time = pygame.time.get_ticks()
+    # ---------------------------------------------------------
+
     if not all([font_small, font_medium, font_large]):
         print("Erreur: Polices manquantes pour run_pause")
         return config.PAUSED # Reste en pause
@@ -2824,30 +2844,98 @@ def run_pause(events, dt, screen, game_state):
     for event in events:
         if event.type == pygame.QUIT:
             return False
-        # --- AJOUT: Gestion Joystick Pause ---
+
+        # --- GESTION JOYSTICK PAUSE (entièrement revue) ---
+        elif event.type == pygame.JOYAXISMOTION:
+            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                axis = event.axis
+                value = event.value
+                threshold = config.JOYSTICK_THRESHOLD
+
+                if axis == 0: # Axe Vertical pour naviguer HAUT/BAS
+                    if value < -threshold: # HAUT
+                        pause_menu_selection = (pause_menu_selection - 1 + len(pause_menu_options)) % len(pause_menu_options)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                    elif value > threshold: # BAS
+                        pause_menu_selection = (pause_menu_selection + 1) % len(pause_menu_options)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                elif axis == 1: # Axe Horizontal pour changer volume musique
+                    utils.update_music_volume(value * 0.05) # Ajuste la sensibilité si besoin
+                    last_axis_move_time = current_time # Ajout pour éviter répétition trop rapide
+                # --- NOUVEAU: Utiliser un autre axe pour le volume des effets ---
+                # (Exemple avec l'axe 3, à adapter selon la manette)
+                elif axis == 3: # Souvent le stick droit vertical
+                    utils.update_sound_volume(-value * 0.05) # Inversé car -1 est souvent "haut"
+                    last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYHATMOTION:
+            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                hat_x, hat_y = event.value
+                if hat_y > 0: # HAUT
+                    pause_menu_selection = (pause_menu_selection - 1 + len(pause_menu_options)) % len(pause_menu_options)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_y < 0: # BAS
+                    pause_menu_selection = (pause_menu_selection + 1) % len(pause_menu_options)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == 0:
                 button = event.button
-                if button == 3: # Bouton 3 pour Reprendre
-                    try:
-                        if music_selected_this_pause: utils.play_selected_music(base_path)
-                        elif pygame.mixer.get_init() and pygame.mixer.music.get_busy(): pygame.mixer.music.unpause()
-                        elif pygame.mixer.get_init() and not pygame.mixer.music.get_busy() and utils.selected_music_file: utils.play_selected_music(base_path)
-                    except pygame.error as music_e: print(f"Erreur musique en quittant la pause: {music_e}")
-                    previous_state = game_state.get('previous_state', config.PLAYING)
-                    return previous_state
-                elif button == 4: # Bouton 4 pour changer musique
-                    music_num = (utils.selected_music_index % 9) + 1 # Cycle 1-9
+                # Bouton 0 ou 1 pour confirmer la sélection du menu
+                if button == 0 or button == 1:
+                    selected_option = pause_menu_options[pause_menu_selection]
+
+                    if selected_option == "Reprendre":
+                        try:
+                            if music_selected_this_pause: utils.play_selected_music(base_path)
+                            elif pygame.mixer.get_init() and pygame.mixer.music.get_busy(): pygame.mixer.music.unpause()
+                            elif pygame.mixer.get_init() and not pygame.mixer.music.get_busy() and utils.selected_music_file: utils.play_selected_music(base_path)
+                        except pygame.error as music_e: print(f"Erreur musique en quittant la pause: {music_e}")
+                        previous_state = game_state.get('previous_state', config.PLAYING)
+                        game_state['pause_menu_selection'] = 0 # Reset pour la prochaine pause
+                        return previous_state
+
+                    elif selected_option == "Recommencer":
+                        try:
+                            # Conserver les noms des joueurs
+                            player_snake = game_state.get('player_snake')
+                            player2_snake = game_state.get('player2_snake')
+                            if player_snake: game_state['player1_name_input'] = player_snake.name
+                            if player2_snake: game_state['player2_name_input'] = player2_snake.name
+
+                            reset_game(game_state)
+                            game_state['pause_menu_selection'] = 0 # Reset
+                            return config.PLAYING
+                        except Exception as e:
+                            print(f"Erreur lors du reset depuis la pause: {e}"); traceback.print_exc()
+                            return config.MENU
+
+                    elif selected_option == "Menu Principal":
+                        logging.info("Pause menu: Returning to MENU.")
+                        try: pygame.mixer.music.stop()
+                        except pygame.error: pass
+                        game_state['pause_menu_selection'] = 0 # Reset
+                        return config.MENU
+
+                # --- AUTRES BOUTONS ---
+                elif button == 4: # Changer musique
+                    music_num = (utils.selected_music_index % 9) + 1
                     if utils.select_and_load_music(music_num, base_path):
-                        music_selected_this_pause = True # Flag pour jouer en quittant la pause
-                        utils.play_sound("powerup_pickup") # Feedback
-                elif button == 8: # Bouton 8 pour Retour Menu (Echap)
+                        music_selected_this_pause = True
+                        utils.play_sound("powerup_pickup")
+                elif button == 8: # Raccourci direct pour Menu Principal (Select/Back)
                     logging.info("Joystick button 8 pressed in pause, returning to MENU.")
-                    next_state = config.MENU
                     try: pygame.mixer.music.stop()
                     except pygame.error: pass
-                    return next_state
-        # --- FIN AJOUT ---
+                    game_state['pause_menu_selection'] = 0 # Reset
+                    return config.MENU
+        # --- FIN GESTION JOYSTICK ---
+
+        # --- GESTION CLAVIER (simplifiée, obsolète) ---
         elif event.type == pygame.KEYDOWN:
             key = event.key
             music_num = utils.get_number_from_key(key)
@@ -2855,68 +2943,56 @@ def run_pause(events, dt, screen, game_state):
             if music_num is not None:
                 if utils.select_and_load_music(music_num, base_path):
                     music_selected_this_pause = True
-            elif key == pygame.K_p: # Reprendre le jeu (Clavier)
-                try:
-                    if music_selected_this_pause: utils.play_selected_music(base_path)
-                    elif pygame.mixer.get_init() and pygame.mixer.music.get_busy(): pygame.mixer.music.unpause()
-                    elif pygame.mixer.get_init() and not pygame.mixer.music.get_busy() and utils.selected_music_file: utils.play_selected_music(base_path)
-                except pygame.error as music_e: print(f"Erreur musique en quittant la pause: {music_e}")
-                previous_state = game_state.get('previous_state', config.PLAYING)
-                return previous_state # Signal à main.py de retourner à cet état
-            elif key == pygame.K_r: # Recommencer la partie
-                try:
-                    # Conserver les noms des joueurs
-                    player_snake = game_state.get('player_snake')
-                    player2_snake = game_state.get('player2_snake')
-                    if player_snake:
-                        game_state['player1_name_input'] = player_snake.name
-                    if player2_snake:
-                        game_state['player2_name_input'] = player2_snake.name
-
-                    reset_game(game_state) # Réinitialise le jeu
-                    next_state = config.PLAYING # Passe directement à l'état PLAYING
-                    return next_state
-                except Exception as e:
-                    print(f"Erreur lors du reset depuis la pause: {e}")
-                    traceback.print_exc()
-                    next_state = config.MENU # Retour menu par sécurité
-                    return next_state
-            elif key == pygame.K_ESCAPE: # Retour au menu principal
-                next_state = config.MENU
-                try: pygame.mixer.music.stop()
-                except pygame.error: pass
-                return next_state
-            # Contrôles volume
+            # Contrôles volume (gardés pour debug)
             elif key == pygame.K_PLUS or key == pygame.K_KP_PLUS: utils.update_music_volume(0.1)
             elif key == pygame.K_MINUS or key == pygame.K_KP_MINUS: utils.update_music_volume(-0.1)
             elif key == pygame.K_RIGHTBRACKET or key == pygame.K_KP_MULTIPLY: utils.update_sound_volume(0.1)
             elif key == pygame.K_LEFTBRACKET or key == pygame.K_KP_DIVIDE: utils.update_sound_volume(-0.1)
+            # Quitter avec Echap (gardé)
+            elif key == pygame.K_ESCAPE:
+                 logging.info("Escape key in pause, returning to MENU.")
+                 try: pygame.mixer.music.stop()
+                 except pygame.error: pass
+                 game_state['pause_menu_selection'] = 0
+                 return config.MENU
 
-    # Dessin de l'écran de pause
-    try: # Bloc try autour du dessin complet
+    # --- DESSIN DE L'ÉCRAN DE PAUSE (revu) ---
+    try:
         draw_game_elements_on_surface(screen, game_state, pygame.time.get_ticks())
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 180)); screen.blit(overlay, (0, 0))
+
         utils.draw_text_with_shadow(screen, "PAUSE", font_large, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.20), "center")
-        y_opts, gap = config.SCREEN_HEIGHT * 0.38, 50
-        utils.draw_text(screen, "P: Reprendre", font_medium, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += gap
-        utils.draw_text(screen, "R: Recommencer", font_medium, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += gap
-        utils.draw_text(screen, "Echap: Retour Menu", font_medium, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += gap * 1.5
-        # --- MODIFICATION INSTRUCTIONS PAUSE ---
-        utils.draw_text(screen, "J1: Joystick/Hat + Boutons (0/1: Tir, 2: Dash, 3: Bouclier)", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += 25 # Updated instruction
-        # REMOVED: J2 instructions as keyboard controls are removed
-        # if current_game_mode == config.MODE_PVP: utils.draw_text(screen, "J2: ZQSD + Tab | Compétence: (Non assignée)", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += 25
-        # --- FIN MODIFICATION ---
-        y_opts += 20
-        utils.draw_text(screen, "0-9: Choix Musique", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += 25
+
+        # Menu de pause
+        y_opts, gap = config.SCREEN_HEIGHT * 0.38, 60
+        for i, option in enumerate(pause_menu_options):
+            color = config.COLOR_TEXT_HIGHLIGHT if i == pause_menu_selection else config.COLOR_TEXT_MENU
+            prefix = "> " if i == pause_menu_selection else "  "
+            utils.draw_text_with_shadow(screen, prefix + option, font_medium, color, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_opts + i * gap), "center")
+
+        # Instructions
+        y_instr = config.SCREEN_HEIGHT * 0.75
+        instr_gap = 25
+        utils.draw_text(screen, "Joystick H/B: Naviguer | Stick Droit H/B: Vol. Musique | Stick Droit G/D: Vol. Effets", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_instr), "center")
+        y_instr += instr_gap
+        utils.draw_text(screen, "Bouton 4: Changer Musique | ECHAP / Bouton 8: Menu Principal", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_instr), "center")
+        y_instr += instr_gap * 1.5
+
+        # Infos Volume et Musique
         music_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'} (Vol: {utils.music_volume:.1f})"
         music_color = config.COLOR_TEXT_HIGHLIGHT if music_selected_this_pause else config.COLOR_TEXT
-        utils.draw_text(screen, music_text, font_small, music_color, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += 25
-        utils.draw_text(screen, f"+/- Musique, PavNum */ / Effets (Vol: {utils.sound_volume:.1f})", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_opts), "center")
+        utils.draw_text(screen, music_text, font_small, music_color, (config.SCREEN_WIDTH / 2, y_instr), "center")
+        y_instr += instr_gap
+        utils.draw_text(screen, f"Effets (Vol: {utils.sound_volume:.1f})", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_instr), "center")
+
     except Exception as e:
         print(f"Erreur majeure lors du dessin de run_pause: {e}")
         traceback.print_exc()
 
-    return next_state # Reste en pause sauf si une action change l'état
+    # Sauvegarde de la sélection du menu de pause
+    game_state['pause_menu_selection'] = pause_menu_selection
+    game_state['last_axis_move_time_pause'] = last_axis_move_time
+    return next_state
 
 
 def run_game_over(events, dt, screen, game_state):
@@ -2930,51 +3006,37 @@ def run_game_over(events, dt, screen, game_state):
     font_default = game_state.get('font_default')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
-    
+
     # Variables pour gérer le menu de fin de partie
     gameover_menu_options = ["Rejouer", "Menu Principal"]
     gameover_menu_selection = game_state.get('gameover_menu_selection', 0)
-    
+
     # Variable pour gérer le délai de répétition du joystick
     axis_repeat_delay = 200
     last_axis_move_time = game_state.get('last_axis_move_time_gameover', 0)
     current_time = pygame.time.get_ticks()
-    
+
     # Verrouillage des entrées pendant 5 secondes au démarrage du menu game over
-    game_over_start_time = game_state.get('game_over_start_time', current_time)
-    if 'game_over_start_time' not in game_state:
+    game_over_start_time = game_state.get('game_over_start_time', 0)
+    if not game_over_start_time:
         game_state['game_over_start_time'] = current_time
+        game_over_start_time = current_time
         # Réinitialiser la sélection du menu à chaque nouvelle game over
         game_state['gameover_menu_selection'] = 0
     input_lock_duration = 5000  # 5 secondes
     inputs_locked = (current_time - game_over_start_time < input_lock_duration)
-    
+
     # Forcer la sélection à 0 pendant le verrouillage
     if inputs_locked:
         gameover_menu_selection = 0
         game_state['gameover_menu_selection'] = 0
-    
-    # Verrouillage des entrées pendant 5 secondes au démarrage du menu game over
-    game_over_start_time = game_state.get('game_over_start_time', current_time)
-    if 'game_over_start_time' not in game_state:
-        game_state['game_over_start_time'] = current_time
-        # Réinitialiser la sélection du menu à chaque nouvelle game over
-        game_state['gameover_menu_selection'] = 0
-    input_lock_duration = 5000  # 5 secondes
-    inputs_locked = (current_time - game_over_start_time < input_lock_duration)
-    
-    # Forcer la sélection à 0 pendant le verrouillage
-    if inputs_locked:
-        gameover_menu_selection = 0
-        game_state['gameover_menu_selection'] = 0
+
     if not all([font_default, font_medium, font_large]):
         print("Erreur: Polices manquantes pour run_game_over")
         try:
-            screen.fill((0,0,0)) # Fond noir
-            error_font = pygame.font.Font(None, 30)
+            screen.fill((0,0,0)); error_font = pygame.font.Font(None, 30)
             utils.draw_text(screen, "Erreur: Polices non chargees!", error_font, (255,0,0), (config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2), "center")
-            pygame.display.flip() # Afficher l'erreur
-            pygame.time.wait(3000) # Attendre 3 secondes
+            pygame.display.flip(); pygame.time.wait(3000)
         except: pass
         return config.MENU # Retour menu
 
@@ -2989,17 +3051,14 @@ def run_game_over(events, dt, screen, game_state):
         if p2_score > p1_score: score_to_check, name_for_hs = p2_score, p2_name
         else: score_to_check, name_for_hs = p1_score, p1_name
     elif current_game_mode == config.MODE_SURVIVAL:
-        # En Survie, le score est le numéro de la vague atteinte
         mode_key, mode_name = "survie", "Survie"; score_to_check = survival_wave; name_for_hs = p1_name
 
     hs_list = utils.high_scores.get(mode_key, [])
     is_high_score = False
     if score_to_check > 0:
         try:
-            # Vérifie si le score est meilleur que le dernier de la liste OU si la liste n'est pas pleine
-            is_high_score = (len(hs_list) < config.MAX_HIGH_SCORES or
-                             (len(hs_list) >= config.MAX_HIGH_SCORES and score_to_check > hs_list[-1]['score']))
-        except (IndexError, KeyError, TypeError): is_high_score = False # Erreur si hs_list[-1] n'existe pas ou format incorrect
+            is_high_score = (len(hs_list) < config.MAX_HIGH_SCORES or score_to_check > hs_list[-1]['score'])
+        except (IndexError, KeyError, TypeError): is_high_score = False
 
     if is_high_score and not hs_saved:
         try:
@@ -3021,126 +3080,85 @@ def run_game_over(events, dt, screen, game_state):
             if p1_reached_target and not p2_reached_target: winner_text = f"{p1_name} Gagne (Kills)!"
             elif p2_reached_target and not p1_reached_target: winner_text = f"{p2_name} Gagne (Kills)!"
             elif p1_reached_target and p2_reached_target:
-                 # Si les deux atteignent la cible en même temps, le score départage
                  if p1_score >= p2_score: winner_text = f"{p1_name} Gagne (Score)!"
                  else: winner_text = f"{p2_name} Gagne (Score)!"
-            else: winner_text = "Objectif Kills Atteint?" # Devrait pas arriver si la logique est bonne
+            else: winner_text = "Objectif Kills Atteint?"
 
     next_state = config.GAME_OVER
     for event in events:
         if event.type == pygame.QUIT: return False
-        
-        # Ignore les entrées si le verrouillage est actif
-        if inputs_locked:
-            continue
-            
-        # --- Gestion Joystick Game Over et Navigation Menu ---
-        elif event.type == pygame.JOYAXISMOTION or event.type == pygame.JOYHATMOTION:
+
+        if inputs_locked: continue
+
+        elif event.type == pygame.JOYAXISMOTION:
             if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
-                # Navigation haut/bas entre les options
-                if (event.type == pygame.JOYAXISMOTION and event.axis == 0):
+                if event.axis == 0:
                     value = event.value
-                    if value < -config.JOYSTICK_THRESHOLD: # Haut - option précédente
-                        gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
+                    if value < -config.JOYSTICK_THRESHOLD:
+                        gameover_menu_selection = (gameover_menu_selection - 1 + len(gameover_menu_options)) % len(gameover_menu_options)
                         utils.play_sound("eat")
-                        game_state['gameover_menu_selection'] = gameover_menu_selection
                         last_axis_move_time = current_time
-                    elif value > config.JOYSTICK_THRESHOLD: # Bas - option suivante
+                    elif value > config.JOYSTICK_THRESHOLD:
                         gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
                         utils.play_sound("eat")
-                        game_state['gameover_menu_selection'] = gameover_menu_selection
                         last_axis_move_time = current_time
-                # Navigation avec le hat (croix directionnelle)
-                elif event.type == pygame.JOYHATMOTION and event.hat == 0:
-                    hat_x, hat_y = event.value
-                    if hat_y > 0: # Haut
-                        gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
-                        utils.play_sound("eat")
-                        game_state['gameover_menu_selection'] = gameover_menu_selection
-                        last_axis_move_time = current_time
-                    elif hat_y < 0: # Bas
-                        gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
-                        utils.play_sound("eat")
-                        game_state['gameover_menu_selection'] = gameover_menu_selection
-                        last_axis_move_time = current_time
-        
+
+        elif event.type == pygame.JOYHATMOTION:
+            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                hat_x, hat_y = event.value
+                if hat_y > 0:
+                    gameover_menu_selection = (gameover_menu_selection - 1 + len(gameover_menu_options)) % len(gameover_menu_options)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_y < 0:
+                    gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == 0:
                 button = event.button
-                if button == 0 or button == 1: # Confirmation de l'option sélectionnée
+                if button == 0 or button == 1:
                     try:
-                        game_state['game_over_hs_saved'] = False # Réinitialise flag sauvegarde HS
+                        game_state['game_over_hs_saved'] = False
                         selected_option = gameover_menu_options[gameover_menu_selection]
-                        
+
                         if selected_option == "Rejouer":
                             utils.play_sound("powerup_pickup")
-                            # Réinitialiser le timer de début de game over pour une future partie
                             game_state['game_over_start_time'] = 0
-
-                            # Conserver les noms des joueurs
-                            if player_snake:
-                                game_state['player1_name_input'] = player_snake.name
-                            if player2_snake:
-                                game_state['player2_name_input'] = player2_snake.name
-
-                            if current_game_mode == config.MODE_PVP:
-                                next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
-                            else:
-                                reset_game(game_state); next_state = config.PLAYING
-                            return next_state
+                            if player_snake: game_state['player1_name_input'] = player_snake.name
+                            if player2_snake: game_state['player2_name_input'] = player2_snake.name
+                            reset_game(game_state)
+                            return config.PLAYING
                         elif selected_option == "Menu Principal":
                             utils.play_sound("combo_break")
-                            game_state['game_over_hs_saved'] = False
-                            # Réinitialiser le timer de début de game over
                             game_state['game_over_start_time'] = 0
-                            next_state = config.MENU
-                            return next_state
+                            return config.MENU
                     except Exception as e:
-                        print(f"Erreur en tentant d'exécuter l'option via joystick: {e}"); traceback.print_exc()
-                        next_state = config.MENU; return next_state
-                        
-                elif button == 8: # Bouton 8 pour Menu (Echap) - raccourci direct
+                        print(f"Erreur option joystick game over: {e}"); traceback.print_exc()
+                        return config.MENU
+                elif button == 8:
                     logging.info("Joystick button 8 pressed in game over, returning to MENU.")
-                    game_state['game_over_hs_saved'] = False
-                    game_state['game_over_start_time'] = 0 # Réinitialiser le timer
-                    next_state = config.MENU; return next_state
-        # --- FIN Gestion Joystick ---
-        elif event.type == pygame.KEYDOWN:
-            key = event.key
-            if key == pygame.K_r: # Rejouer (Clavier)
-                try:
-                    game_state['game_over_hs_saved'] = False # Réinitialise flag sauvegarde HS
-                    game_state['game_over_start_time'] = 0 # Réinitialiser le timer
-                    if current_game_mode == config.MODE_PVP:
-                        # Pour PvP, on retourne à l'écran de saisie des noms
-                        next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
-                    else:
-                        # Pour les autres modes, on reset et on relance directement
-                        reset_game(game_state); next_state = config.PLAYING
-                    return next_state
-                except Exception as e:
-                    print(f"Erreur en tentant de rejouer: {e}"); traceback.print_exc()
-                    next_state = config.MENU; return next_state # Sécurité: retour menu
-            elif key == pygame.K_m or key == pygame.K_ESCAPE: # Menu
-                game_state['game_over_hs_saved'] = False
-                game_state['game_over_start_time'] = 0 # Réinitialiser le timer
-                next_state = config.MENU; return next_state
+                    game_state['game_over_start_time'] = 0
+                    return config.MENU
+
+        elif event.type == pygame.KEYDOWN and key == pygame.K_ESCAPE:
+            game_state['game_over_start_time'] = 0
+            return config.MENU
 
     # Dessin
     try:
         screen.fill(config.COLOR_BACKGROUND); overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 180)); screen.blit(overlay, (0, 0))
-        utils.draw_text_with_shadow(screen, "GAME OVER", font_large, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.20), "center")
-        
-        # Afficher le décompte si les entrées sont verrouillées
+        utils.draw_text_with_shadow(screen, "GAME OVER", font_large, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
+
         if inputs_locked:
             time_left = (input_lock_duration - (current_time - game_over_start_time)) // 1000 + 1
-            lock_text = f"Commandes verrouillées ({time_left}s)"
-            utils.draw_text_with_shadow(screen, lock_text, font_medium, config.COLOR_TEXT_HIGHLIGHT, 
-                                      config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.28), "center")
-        
+            lock_text = f"Attendez... ({time_left}s)"
+            utils.draw_text_with_shadow(screen, lock_text, font_medium, config.COLOR_TEXT_HIGHLIGHT,
+                                      config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.25), "center")
+
         y_disp, gap, hs_gap = config.SCREEN_HEIGHT * 0.35, 40, 50
         utils.draw_text_with_shadow(screen, winner_text, font_medium, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center"); y_disp += gap + 10
-        # Affichage des scores finaux
         if current_game_mode == config.MODE_PVP:
             utils.draw_text_with_shadow(screen, f"{p1_name} Score: {p1_score} | Kills: {p1_kills}", font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center"); y_disp += gap
             utils.draw_text_with_shadow(screen, f"{p2_name} Score: {p2_score} | Kills: {p2_kills}", font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center")
@@ -3149,1564 +3167,31 @@ def run_game_over(events, dt, screen, game_state):
         else: # Solo ou Vs AI
             utils.draw_text_with_shadow(screen, f"Score final ({p1_name}): {p1_score}", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center")
         y_disp += hs_gap
-        # Affichage du record pour ce mode
+
         top_score_disp = f"Record ({mode_name}): ---"
         if hs_list:
             try: prefix = "Vague Max" if mode_key == "survie" else "Meilleur"; top_score_disp = f"{prefix} ({mode_name}): {hs_list[0]['name']} {hs_list[0]['score']}"
-            except: pass # Ignore si erreur format HS
+            except: pass
         utils.draw_text(screen, top_score_disp, font_default, config.COLOR_TEXT_HIGHLIGHT, (config.SCREEN_WIDTH / 2, y_disp), "center")
-        
-        # Message si nouveau high score
+
         y_menu = config.SCREEN_HEIGHT * 0.75
-        if is_high_score: 
-            utils.draw_text(screen, "High Score Enregistré!", font_default, config.COLOR_TEXT_HIGHLIGHT, 
+        if is_high_score:
+            utils.draw_text(screen, "High Score Enregistré!", font_default, config.COLOR_TEXT_HIGHLIGHT,
                           (config.SCREEN_WIDTH / 2, y_menu - 40), "center")
-        
-        # Menu options de fin de partie
-        menu_spacing = 40
-        for i, option in enumerate(gameover_menu_options):
-            option_color = config.COLOR_TEXT_HIGHLIGHT if i == gameover_menu_selection else config.COLOR_TEXT_MENU
-            prefix = "> " if i == gameover_menu_selection else "  "
-            utils.draw_text_with_shadow(screen, f"{prefix}{option}", font_default, option_color, 
-                                     config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_menu), "center")
-            y_menu += menu_spacing
-        
-        # Instructions
-        if inputs_locked:
-            utils.draw_text(screen, "Veuillez patienter...", 
-                          font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_menu + 20), "center")
-        else:
-            utils.draw_text(screen, "HAUT/BAS: Naviguer | BOUTON: Confirmer | ECHAP: Menu", 
-                          font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_menu + 20), "center")
+
+        if not inputs_locked:
+            menu_spacing = 50
+            for i, option in enumerate(gameover_menu_options):
+                option_color = config.COLOR_TEXT_HIGHLIGHT if i == gameover_menu_selection else config.COLOR_TEXT_MENU
+                prefix = "> " if i == gameover_menu_selection else "  "
+                utils.draw_text_with_shadow(screen, f"{prefix}{option}", font_medium, option_color,
+                                         config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_menu), "center")
+                y_menu += menu_spacing
+            utils.draw_text(screen, "Joystick: Naviguer | Bouton: Confirmer | ECHAP / Bouton 8: Menu",
+                          font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.95), "center")
     except Exception as e:
         print(f"Erreur majeure lors du dessin de run_game_over: {e}"); traceback.print_exc(); return config.MENU
 
+    game_state['gameover_menu_selection'] = gameover_menu_selection
+    game_state['last_axis_move_time_gameover'] = last_axis_move_time
     return next_state
-
-
-def run_hall_of_fame(events, dt, screen, game_state):
-    """Affiche l'écran des meilleurs scores."""
-    font_default=game_state.get('font_default'); font_medium=game_state.get('font_medium'); font_large=game_state.get('font_large')
-    if not all([font_default, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_hall_of_fame")
-        try:
-            screen.fill((0,0,0)) # Fond noir
-            error_font = pygame.font.Font(None, 30)
-            utils.draw_text(screen, "Erreur: Polices non chargees!", error_font, (255,0,0), (config.SCREEN_WIDTH/2, config.SCREEN_HEIGHT/2), "center")
-            pygame.display.flip() # Afficher l'erreur
-            pygame.time.wait(3000) # Attendre 3 secondes
-        except: pass
-        return config.MENU # Retour menu
-
-    categories = {"solo": "Solo", "vs_ai": "Vs IA", "pvp": "PvP", "survie": "Survie"}
-    num_categories = len(categories)
-    next_state = config.HALL_OF_FAME
-
-    for event in events:
-        if event.type == pygame.QUIT: return False
-        # --- AJOUT: Gestion Joystick Hall of Fame ---
-        elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0 and event.button == 8: # Bouton 8 pour Retour Menu (Echap)
-                logging.info("Joystick button 8 pressed in Hall of Fame, returning to MENU.")
-                next_state = config.MENU; utils.play_sound("combo_break"); return next_state
-        # --- FIN AJOUT ---
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE: # Retour au menu (Clavier)
-                next_state = config.MENU; utils.play_sound("combo_break"); return next_state
-
-    # Dessin écran Hall of Fame
-    try: # Bloc try autour du dessin
-        screen.fill(config.COLOR_BACKGROUND); overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 170)); screen.blit(overlay, (0, 0))
-        utils.draw_text_with_shadow(screen, "Hall of Fame", font_large, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.1), "center")
-        if num_categories > 0:
-            col_width = (config.SCREEN_WIDTH * 0.9) / max(1, num_categories)
-            start_x = (config.SCREEN_WIDTH * 0.05) + (col_width / 2)
-            for i, (mode_key, cat_name) in enumerate(categories.items()):
-                col_center_x = start_x + i * col_width
-                utils.draw_text_with_shadow(screen, cat_name, font_medium, config.COLOR_HOF_CATEGORY, config.COLOR_UI_SHADOW, (col_center_x, config.SCREEN_HEIGHT * 0.25), "center")
-                y_pos, entry_gap = config.SCREEN_HEIGHT * 0.35, 35
-                scores = utils.high_scores.get(mode_key, [])
-                if not scores:
-                     utils.draw_text(screen, "---", font_default, config.COLOR_HOF_ENTRY, (col_center_x, y_pos), "center")
-                else:
-                    for rank, entry in enumerate(scores):
-                        if rank >= config.MAX_HIGH_SCORES: break
-                        rank_d = f"{rank + 1}."; entry_d = f"{entry.get('name', '?')}: {entry.get('score', 0)}"
-                        rank_x, entry_x = col_center_x - 15, col_center_x + 15
-                        utils.draw_text(screen, rank_d, font_default, config.COLOR_HOF_RANK, (rank_x, y_pos), "midright")
-                        utils.draw_text(screen, entry_d, font_default, config.COLOR_HOF_ENTRY, (entry_x, y_pos), "midleft")
-                        y_pos += entry_gap
-                        if y_pos > config.SCREEN_HEIGHT * 0.85: break
-        utils.draw_text(screen, "ECHAP: Retour Menu", font_default, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.92), "center")
-    except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_hall_of_fame: {e}"); traceback.print_exc(); return config.MENU
-
-    return next_state
-
-def run_game(events, dt, screen, game_state):
-    """Gère la logique principale du jeu (état PLAYING)."""
-    next_state = config.PLAYING
-
-    # --- Accès aux variables d'état ---
-    player_snake = game_state.get('player_snake')
-    player2_snake = game_state.get('player2_snake')
-    enemy_snake = game_state.get('enemy_snake')
-    foods = game_state.get('foods', [])
-    mines = game_state.get('mines', [])
-    powerups = game_state.get('powerups', [])
-    player_projectiles = game_state.get('player_projectiles', [])
-    player2_projectiles = game_state.get('player2_projectiles', [])
-    enemy_projectiles = game_state.get('enemy_projectiles', [])
-    current_map_walls = game_state.get('current_map_walls', [])
-    wall_positions = set(current_map_walls)
-    current_game_mode = game_state.get('current_game_mode')
-    last_mine_spawn_time = game_state.get('last_mine_spawn_time', 0)
-    last_powerup_spawn_time = game_state.get('last_powerup_spawn_time', 0)
-    last_food_spawn_time = game_state.get('last_food_spawn_time', 0)
-    player1_respawn_timer = game_state.get('player1_respawn_timer', 0)
-    player2_respawn_timer = game_state.get('player2_respawn_timer', 0)
-    current_objective = game_state.get('current_objective')
-    objective_complete_timer = game_state.get('objective_complete_timer', 0)
-    survival_wave = game_state.get('survival_wave', 0)
-    survival_wave_start_time = game_state.get('survival_wave_start_time', 0)
-    current_survival_interval_factor = game_state.get('current_survival_interval_factor', 1.0)
-    pvp_start_time = game_state.get('pvp_start_time', 0)
-    pvp_target_time = game_state.get('pvp_target_time', config.PVP_DEFAULT_TIME_SECONDS)
-    pvp_target_kills = game_state.get('pvp_target_kills', config.PVP_DEFAULT_KILLS)
-    pvp_condition_type = game_state.get('pvp_condition_type', config.PVP_DEFAULT_CONDITION)
-    base_path = game_state.get('base_path', "")
-    screen_width = config.SCREEN_WIDTH
-    screen_height = config.SCREEN_HEIGHT
-    PvpCondition = getattr(config, 'PvpCondition', None)
-    nests = game_state.get('nests', [])
-    moving_mines = game_state.get('moving_mines', [])
-    active_enemies = game_state.get('active_enemies', [])
-    last_mine_wave_spawn_time = game_state.get('last_mine_wave_spawn_time', 0)
-    last_nest_spawn_time = game_state.get('last_nest_spawn_time', 0)
-    nests_hit_indices = set()
-    moving_mines_hit_indices = set()
-    enemies_died_this_frame = []
-
-    # --- Vérifications Critiques ---
-    critical_error = False; error_message = ""
-    print(f"DEBUG RUN_GAME: Mode actuel: {current_game_mode}, player_snake: {player_snake}, player2_snake: {player2_snake}")
-    if not player_snake:
-        critical_error = True; error_message = "player_snake manquant!"
-        print("DEBUG RUN_GAME: CRITICAL - player_snake est None.")
-    elif current_game_mode == config.MODE_PVP and not player2_snake:
-        critical_error = True; error_message = "player2_snake manquant en mode PvP!"
-        print("DEBUG RUN_GAME: CRITICAL - Mode PVP et player2_snake est None.")
-    
-    if critical_error:
-        logging.error(f"Erreur critique dans run_game: {error_message} - Retour forcé au menu.") # Log l'erreur
-        print(f"ERREUR CRITIQUE DANS RUN_GAME: {error_message} - RETOUR AU MENU")
-        try: pygame.mixer.music.stop()
-        except Exception: pass
-        game_state['current_state'] = config.MENU; return config.MENU
-
-    # --- Logique Principale ---
-    game_over = False
-    p1_died_this_frame = False
-    p2_died_this_frame = False
-    current_time = pygame.time.get_ticks()
-
-    # --- MàJ PvP Respawn, Difficulté IA, Objectifs/Vagues ---
-    # (Ces sections restent identiques, sauf si elles contenaient des 'print' à remplacer)
-    # ... (Coller ici les sections Respawn, Difficulté, Objectifs/Vagues de la version précédente) ...
-    # --- Refactored PvP Respawn Check using death timestamps ---
-    if current_game_mode == config.MODE_PVP:
-        # REMOVED explicit get here, access directly in if check
-        # p1_death_time = game_state.get('p1_death_time', 0)
-        # p2_death_time = game_state.get('p2_death_time', 0)
-        try:
-            # Directly check game_state within the if condition
-            if game_state.get('p1_death_time', 0) > 0 and current_time - game_state.get('p1_death_time', 0) >= config.PVP_RESPAWN_DELAY:
-                logging.info(f"Respawn delay met for P1 ({player_snake.name if player_snake else 'N/A'}). Current time: {current_time}, Death time: {game_state.get('p1_death_time', 0)}")
-                if player_snake:
-                    player_snake.respawn(current_time, current_game_mode, current_map_walls)
-                    game_state['p1_death_time'] = 0 # Reset death time after respawn
-                else:
-                    logging.warning("P1 respawn check passed, but player_snake object is None.")
-                    game_state['p1_death_time'] = 0 # Reset anyway to prevent loop
-            # Directly check game_state within the if condition
-            if game_state.get('p2_death_time', 0) > 0 and current_time - game_state.get('p2_death_time', 0) >= config.PVP_RESPAWN_DELAY:
-                 logging.info(f"Respawn delay met for P2 ({player2_snake.name if player2_snake else 'N/A'}). Current time: {current_time}, Death time: {game_state.get('p2_death_time', 0)}")
-                 if player2_snake:
-                     player2_snake.respawn(current_time, current_game_mode, current_map_walls)
-                     game_state['p2_death_time'] = 0 # Reset death time after respawn
-                 else:
-                    logging.warning("P2 respawn check passed, but player2_snake object is None.")
-                    game_state['p2_death_time'] = 0 # Reset anyway to prevent loop
-        except Exception as e:
-            logging.error(f"Erreur refactored respawn PvP: {e}", exc_info=True)
-            game_state['current_state'] = config.MENU; return config.MENU
-
-    if current_game_mode == config.MODE_VS_AI and enemy_snake and enemy_snake.alive:
-        vs_ai_start_time = game_state.get('vs_ai_start_time', 0)
-        last_difficulty_update_time = game_state.get('last_difficulty_update_time', 0)
-        if vs_ai_start_time > 0 and current_time - last_difficulty_update_time >= config.DIFFICULTY_TIME_STEP:
-            elapsed_time = current_time - vs_ai_start_time
-            difficulty_level = elapsed_time // config.DIFFICULTY_TIME_STEP
-            enemy_snake.update_difficulty(difficulty_level)
-            game_state['last_difficulty_update_time'] = current_time
-            logging.info(f"AI difficulty increased to level {difficulty_level} based on time.")
-
-    try:
-        if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
-            if objective_complete_timer > 0 and current_time >= objective_complete_timer:
-                game_state['objective_complete_timer'] = 0
-                player_score = player_snake.score if player_snake else 0
-                new_objective = utils.select_new_objective(current_game_mode, player_score)
-                game_state['current_objective'] = new_objective
-                game_state['objective_display_text'] = new_objective.get('display_text', '') if new_objective else ''
-            elif current_objective is None and objective_complete_timer == 0 and player_snake and player_snake.alive:
-                player_score = player_snake.score if player_snake else 0
-                new_objective = utils.select_new_objective(current_game_mode, player_score)
-                game_state['current_objective'] = new_objective
-                game_state['objective_display_text'] = new_objective.get('display_text', '') if new_objective else ''
-
-        elif current_game_mode == config.MODE_SURVIVAL:
-            if survival_wave > 0 and current_time >= survival_wave_start_time + config.SURVIVAL_WAVE_DURATION:
-                survival_wave += 1; game_state['survival_wave'] = survival_wave
-                game_state['survival_wave_start_time'] = current_time
-                factor = config.SURVIVAL_INITIAL_INTERVAL_FACTOR - (survival_wave - 1) * config.SURVIVAL_INTERVAL_REDUCTION_PER_WAVE
-                current_survival_interval_factor = max(config.SURVIVAL_MIN_INTERVAL_FACTOR, factor)
-                game_state['current_survival_interval_factor'] = current_survival_interval_factor
-                logging.info(f"Starting Wave {survival_wave} (Interval factor: {current_survival_interval_factor:.2f})")
-
-                if player_snake and player_snake.alive and survival_wave > 1 and (survival_wave - 1) % config.SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL == 0:
-                    player_snake.add_armor(1); utils.play_sound("objective_complete")
-                    logging.info(f"Wave {survival_wave - 1} complete! +1 Armor.")
-
-                target_nest_count = min(survival_wave, config.MAX_NESTS_SURVIVAL)
-                current_active_nest_count = sum(1 for n in nests if n.is_active)
-                nests_to_spawn_this_wave = max(0, target_nest_count - current_active_nest_count)
-
-                if nests_to_spawn_this_wave > 0:
-                    logging.debug(f"  Spawning {nests_to_spawn_this_wave} new nest(s) for Wave {survival_wave}...")
-                    occupied_for_new_nests = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-                    spawned_count = 0
-                    for _ in range(nests_to_spawn_this_wave):
-                        spawn_pos = utils.get_random_empty_position(occupied_for_new_nests)
-                        if spawn_pos:
-                             player_head = player_snake.get_head_position() if player_snake and player_snake.alive else None
-                             too_close_player = player_head and abs(spawn_pos[0] - player_head[0]) + abs(spawn_pos[1] - player_head[1]) < 5
-                             if not too_close_player:
-                                 try: nests.append(game_objects.Nest(spawn_pos)); occupied_for_new_nests.add(spawn_pos); spawned_count += 1; logging.debug(f"    Nest created at {spawn_pos}")
-                                 except Exception as e: logging.error(f"    Error spawning Nest: {e}", exc_info=True)
-                    if spawned_count > 0: game_state['last_nest_spawn_time'] = current_time
-
-                if survival_wave >= 2:
-                    logging.debug(f"  Spawning 1 new baby AI for Wave {survival_wave}...")
-                    occupied_for_new_ai = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-                    spawn_pos_ai = utils.get_random_empty_position(occupied_for_new_ai)
-                    if spawn_pos_ai:
-                         player_head = player_snake.get_head_position() if player_snake and player_snake.alive else None
-                         too_close_player = player_head and abs(spawn_pos_ai[0] - player_head[0]) + abs(spawn_pos_ai[1] - player_head[1]) < 8
-                         if not too_close_player:
-                             try:
-                                 baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
-                                 new_enemy_wave = game_objects.EnemySnake(start_pos=spawn_pos_ai, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
-                                 active_enemies.append(new_enemy_wave)
-                                 logging.debug(f"    Baby AI for wave {survival_wave} spawned at {spawn_pos_ai}")
-                             except Exception as e: logging.error(f"    Error spawning wave AI: {e}", exc_info=True)
-                         else: logging.warning(f"    Could not find safe spawn position for wave AI (too close to player).")
-                    else: logging.warning(f"    Could not find ANY empty position for wave AI.")
-    except Exception as e:
-        logging.error(f"Erreur mise à jour objectif/vague: {e}", exc_info=True)
-
-
-    # --- Gestion des Événements (Inputs Joueur) ---
-    for event in events:
-        if event.type == pygame.QUIT:
-            logging.info("Quit event received.")
-            return False
-
-        # --- Gestion Joystick Mouvement (AVEC LOGGING) ---
-        elif event.type == pygame.JOYAXISMOTION:
-            target_snake = None
-            if event.instance_id == 0 and player_snake and player_snake.alive:
-                target_snake = player_snake
-            elif event.instance_id == 1 and current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
-                target_snake = player2_snake
-
-            if target_snake:
-                axis = event.axis
-                value = event.value
-                threshold = config.JOYSTICK_THRESHOLD # Use config value
-
-                # --- CORRECTED AXIS MAPPING (Match example) ---
-                if axis == 0: # Vertical Axis (Up/Down in example)
-                    if value < -threshold:
-                        logging.debug(f"P{target_snake.player_num} Axis 0 turning UP (Value: {value:.2f})")
-                        target_snake.turn(config.UP)
-                    elif value > threshold:
-                        logging.debug(f"P{target_snake.player_num} Axis 0 turning DOWN (Value: {value:.2f})")
-                        target_snake.turn(config.DOWN)
-                elif axis == 1: # Horizontal Axis (Left/Right in example)
-                    if value < -threshold: # Negative value = LEFT in example
-                        logging.debug(f"P{target_snake.player_num} Axis 1 turning LEFT (Value: {value:.2f})")
-                        target_snake.turn(config.RIGHT) # Reverted: Negative value -> RIGHT
-                    elif value > threshold: # Positive value = RIGHT in example
-                        logging.debug(f"P{target_snake.player_num} Axis 1 turning RIGHT (Value: {value:.2f})")
-                        target_snake.turn(config.LEFT) # Reverted: Positive value -> LEFT
-                # --- END CORRECTED AXIS MAPPING ---
-
-        elif event.type == pygame.JOYHATMOTION:
-            target_snake_hat = None
-            if event.instance_id == 0 and player_snake and player_snake.alive:
-                target_snake_hat = player_snake
-            elif event.instance_id == 1 and current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
-                target_snake_hat = player2_snake
-
-            if target_snake_hat and event.hat == 0:
-                hat_x, hat_y = event.value
-
-                if hat_x < 0:
-                    logging.debug(f"P{target_snake_hat.player_num} Hat turning LEFT")
-                    target_snake_hat.turn(config.LEFT)
-                elif hat_x > 0:
-                    logging.debug(f"P{target_snake_hat.player_num} Hat turning RIGHT")
-                    target_snake_hat.turn(config.RIGHT)
-
-                if hat_y > 0:
-                    logging.debug(f"P{target_snake_hat.player_num} Hat turning UP")
-                    target_snake_hat.turn(config.UP)
-                elif hat_y < 0:
-                    logging.debug(f"P{target_snake_hat.player_num} Hat turning DOWN")
-                    target_snake_hat.turn(config.DOWN)
-        # --- FIN Gestion Joystick Mouvement ---
-
-        # --- Gestion Boutons Joystick J1 (AVEC LOGGING) ---
-        elif event.type == pygame.JOYBUTTONDOWN:
-             # --- Gestion Boutons Joystick J1 ---
-            if player_snake and player_snake.alive and event.instance_id == 0:
-                button = event.button
-                if button == 0: # Dash (Button 0 pour J1)
-                    logging.debug(f"P1 Button {button} (Dash) pressed")
-                    if player_snake.dash_ready:
-                        p1_obstacles_for_dash = utils.get_obstacles_for_player(player_snake, player_snake, player2_snake, enemy_snake, mines, current_map_walls, active_enemies)
-                        # Assurez-vous de passer toutes les listes nécessaires à activate_dash
-                        dash_result_p1 = player_snake.activate_dash(current_time, p1_obstacles_for_dash, foods, powerups, mines, wall_positions) # wall_positions est set(current_map_walls)
-
-                        if dash_result_p1 and dash_result_p1.get('died'):
-                            p1_died_this_frame = True
-                            death_type_p1 = dash_result_p1.get('type')
-                            logging.info(f"{player_snake.name} died by {death_type_p1} during dash at {dash_result_p1.get('position')}.")
-
-                            if current_game_mode == config.MODE_PVP:
-                                game_state['p1_death_time'] = current_time
-                                game_state['p1_death_cause'] = f"{death_type_p1}_dash" # ex: 'mine_dash' ou 'wall_dash'
-                                # L'attribution du kill sera gérée par la logique de fin de frame
-                            else: # Modes non-PvP
-                                game_over = True
-                            # Si le dash a tué, on peut considérer le mouvement comme fait pour cette frame
-                            p1_moved_this_frame = True # Empêche le .move() normal si mort par dash
-                        elif dash_result_p1 and dash_result_p1.get('collided'):
-                            logging.info(f"{player_snake.name} collided during dash with {dash_result_p1.get('type')}.")
-                    else:
-                        utils.play_sound("combo_break") # Son pour compétence non prête
-                elif button == 1: # Tirer (Button 1)
-                    logging.debug(f"Button {button} (Shoot) pressed")
-                    new_projectiles_list = player_snake.shoot(current_time)
-                    if new_projectiles_list:
-                        game_state['player_projectiles'].extend(new_projectiles_list)
-                        utils.play_sound(player_snake.shoot_sound)
-                elif button == 2: # Shield (Button 2)
-                    logging.debug(f"Button {button} (Shield) pressed")
-                    if player_snake.shield_ready: player_snake.activate_shield(current_time)
-                    else: utils.play_sound("combo_break")
-                elif button == 3: # Ignore Button 3
-                    logging.debug(f"Button {button} pressed, explicitly ignored.")
-                    pass # Do nothing for button 3
-                elif button == 7: # Pause (Button 7 - often Start)
-                    logging.info("Joystick button 7 pressed, pausing game.")
-                    try: pygame.mixer.music.pause()
-                    except Exception: pass
-                    game_state['previous_state'] = config.PLAYING
-                    game_state['current_state'] = config.PAUSED; return config.PAUSED # Return immediately
-                elif button == 8: # Escape (Button 8 - often Select/Back)
-                    logging.info("Joystick button 8 pressed in game, returning to MENU.")
-                    try: pygame.mixer.music.stop()
-                    except Exception: pass
-                    game_state['current_state'] = config.MENU; return config.MENU # Return immediately
-                 # else:
-                 #     logging.debug(f"Button {button} pressed, but not mapped to an action.")
-                 # --- END NEW BUTTON MAPPING ---
-
-             # --- START: Player 2 Joystick Button Handling (PvP) ---
-            elif current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and event.instance_id == 1:
-                button = event.button
-                if button == 0: # Dash (Button 0 pour J2)
-                    logging.debug(f"P2 Button {button} (Dash) pressed")
-                    if player2_snake.dash_ready:
-                        p2_obstacles_for_dash = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, None, mines, current_map_walls, [])
-                        dash_result_p2 = player2_snake.activate_dash(current_time, p2_obstacles_for_dash, foods, powerups, mines, wall_positions)
-
-                        if dash_result_p2 and dash_result_p2.get('died'):
-                            p2_died_this_frame = True
-                            death_type_p2 = dash_result_p2.get('type')
-                            logging.info(f"{player2_snake.name} died by {death_type_p2} during dash at {dash_result_p2.get('position')}.")
-                            game_state['p2_death_time'] = current_time
-                            game_state['p2_death_cause'] = f"{death_type_p2}_dash"
-                            p2_moved_this_frame = True
-                    else:
-                        utils.play_sound("combo_break")
-                elif button == 1: # Tirer (Button 1)
-                    logging.debug(f"P2 Button {button} (Shoot) pressed")
-                    new_projectiles_list_p2 = player2_snake.shoot(current_time)
-                    if new_projectiles_list_p2:
-                        game_state['player2_projectiles'].extend(new_projectiles_list_p2)
-                        utils.play_sound(player2_snake.shoot_sound)
-                elif button == 2: # Shield (Button 2)
-                    logging.debug(f"P2 Button {button} (Shield) pressed")
-                    if player2_snake.shield_ready: player2_snake.activate_shield(current_time)
-                    else: utils.play_sound("combo_break")
-                 # Note: Pause/Escape are typically handled by Player 1 only.
-             # --- END: Player 2 Joystick Button Handling ---
-        # --- FIN Gestion Boutons Joystick ---
-
-        elif event.type == pygame.KEYDOWN:
-            # logging.debug(f"KEYDOWN - Key={event.key}, Mod={event.mod}") # Optionnel
-            try:
-                key = event.key
-                if key == pygame.K_ESCAPE:
-                    logging.info("Escape key pressed, returning to MENU.")
-                    try: pygame.mixer.music.pause()
-                    except Exception: pass
-                    game_state['current_state'] = config.MENU; return config.MENU
-                if key == pygame.K_p:
-                    logging.info("P key pressed, pausing game.")
-                    try: pygame.mixer.music.pause()
-                    except Exception: pass
-                    game_state['previous_state'] = config.PLAYING
-                    game_state['current_state'] = config.PAUSED; return config.PAUSED
-
-                # REMOVED: Contrôles Clavier J1
-                # if player_snake and player_snake.alive:
-                #     if key == pygame.K_UP: player_snake.turn(config.UP)
-                #     ... (rest of P1 keyboard controls) ...
-
-                # REMOVED: Contrôles Clavier J2 (PvP)
-                # if current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
-                #     if key == pygame.K_z: player2_snake.turn(config.UP)
-                #     ... (rest of P2 keyboard controls) ...
-
-                # Contrôles Volume (KEEP)
-                if key in (pygame.K_PLUS, pygame.K_KP_PLUS): utils.update_music_volume(0.1)
-                elif key in (pygame.K_MINUS, pygame.K_KP_MINUS): utils.update_music_volume(-0.1)
-                elif key == pygame.K_RIGHTBRACKET or key == pygame.K_KP_MULTIPLY: utils.update_sound_volume(0.1)
-                elif key == pygame.K_LEFTBRACKET or key == pygame.K_KP_DIVIDE: utils.update_sound_volume(-0.1)
-            except Exception as e:
-                logging.error(f"Erreur traitement touche {event.key}: {e}", exc_info=True)
-
-    # --- FIN de la boucle de gestion des événements ---
-
-
-    # --- Mises à jour Nids, Respawn IA, Mouvements Serpents, Tir IA, Spawn Bébés, Spawning Items ---
-    # (Ces sections restent identiques à la version précédente, collez-les ici)
-    # ... (Coller ici les sections Nids -> Spawning Items de la version précédente) ...
-    # --- Mises à jour Nids (Auto-Spawn Timer) ---
-    nests_to_remove_indices = []
-    enemies_to_spawn_from_nests = []
-    if current_game_mode == config.MODE_SURVIVAL:
-        try:
-            nests_list_copy = list(nests)
-            for i, nest in enumerate(nests_list_copy):
-                if nest.is_active:
-                    spawn_result = nest.update(current_time)
-                    if spawn_result == 'auto_spawn':
-                        enemies_to_spawn_from_nests.append(nest.position)
-        except Exception as e:
-            logging.error(f"Erreur mise à jour Nids (Timer): {e}", exc_info=True)
-
-    # --- Respawn IA Principale (Mode Vs AI) ---
-    if current_game_mode == config.MODE_VS_AI and enemy_snake and not enemy_snake.alive:
-        if enemy_snake.death_time > 0 and current_time - enemy_snake.death_time >= config.ENEMY_RESPAWN_TIME:
-            all_occupied_respawn = utils.get_all_occupied_positions(player_snake, None, None, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-            respawn_pos = utils.get_random_empty_position(all_occupied_respawn)
-            if respawn_pos:
-                walls_for_respawn = game_state.get('current_map_walls', [])
-                enemy_snake.reset(current_game_mode, walls_for_respawn)
-                enemy_snake.positions = [respawn_pos]
-                safe_dir = enemy_snake._find_safe_initial_direction(respawn_pos, walls_for_respawn, config.LEFT)
-                enemy_snake.current_direction = safe_dir
-                enemy_snake.next_direction = safe_dir
-                enemy_snake.alive = True
-                enemy_snake.death_time = 0
-                if player_snake:
-                    enemy_snake.update_difficulty(player_snake.score)
-
-    # --- Mouvements et Logique des Serpents ---
-    p1_moved_this_frame, p1_new_head = False, None
-    p2_moved_this_frame, p2_new_head = False, None
-    ai_moved_this_frame, ai_new_head, ai_should_shoot = False, None, False
-    baby_ai_actions = []
-    enemies_died_this_frame = []
-    
-
-    try:
-        # Mouvement Joueur 1
-        if player_snake and player_snake.alive and not p1_died_this_frame:
-            p1_obstacles = utils.get_obstacles_for_player(player_snake, player_snake, player2_snake, enemy_snake, mines, current_map_walls, active_enemies)
-            # Récupère maintenant 3 valeurs de .move()
-            p1_moved_this_frame, p1_new_head, p1_death_cause_detail = player_snake.move(p1_obstacles, current_time)
-
-            if not player_snake.alive and not p1_died_this_frame: # Si .move() a causé la mort
-                p1_died_this_frame = True
-                logging.info(f"{player_snake.name} died during move. Reported cause: {p1_death_cause_detail}. Head at: {p1_new_head}")
-                if current_game_mode == config.MODE_PVP:
-                    game_state['p1_death_time'] = current_time
-                    if p1_death_cause_detail == 'wall':
-                        game_state['p1_death_cause'] = 'wall' # Mort par mur
-                    elif p1_death_cause_detail == 'self':
-                        game_state['p1_death_cause'] = 'self' # Auto-collision
-                    # Si p1_death_cause_detail est None, la mort pourrait être due à une mine,
-                    # ce qui sera vérifié et géré par la section "Collision Tête contre Mine Fixe" plus bas.
-                else: # Modes non-PvP
-                    game_over = True
-                # Vérification objectif "mort" (si applicable)
-                obj_completed, bonus = utils.check_objective_completion('death', current_objective, 1)
-                if obj_completed:
-                    logging.warning("!!! Objectif secret 'Survie' échoué !!!") # Utilisez logging
-                    game_state['current_objective'] = None
-
-        # Mouvement Joueur 2 (PvP)
-        # Seulement si pas déjà mort CETTE FRAME
-        if current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and not p2_died_this_frame:
-            p2_obstacles = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, None, mines, current_map_walls, []) # Pas d'IA en PvP
-            p2_moved_this_frame, p2_new_head, p2_death_cause_detail = player2_snake.move(p2_obstacles, current_time)
-
-            if not player2_snake.alive and not p2_died_this_frame: # Si .move() a causé la mort
-                p2_died_this_frame = True
-                logging.info(f"{player2_snake.name} died during move. Reported cause: {p2_death_cause_detail}. Head at: {p2_new_head}")
-                game_state['p2_death_time'] = current_time
-                if p2_death_cause_detail == 'wall':
-                    game_state['p2_death_cause'] = 'wall'
-                elif p2_death_cause_detail == 'self':
-                    game_state['p2_death_cause'] = 'self'
-        # Mouvement IA (Principale et Bébés)
-        all_ai_snakes_to_move = []
-        if current_game_mode == config.MODE_VS_AI and enemy_snake and enemy_snake.alive:
-            all_ai_snakes_to_move.append(enemy_snake)
-        current_active_enemies_copy = list(active_enemies)
-        all_ai_snakes_to_move.extend([baby for baby in current_active_enemies_copy if baby and baby.alive])
-
-        for current_ai in all_ai_snakes_to_move:
-            if not current_ai.alive: continue
-            ai_obstacles_for_move = utils.get_obstacles_for_ai(player_snake, player2_snake, current_ai, mines, current_map_walls, current_active_enemies_copy)
-            moved_this_ai, new_head_this_ai, should_shoot_this_ai = current_ai.move(player_snake, player2_snake, foods, mines, powerups, current_time, all_active_enemies=current_active_enemies_copy, nests_list=nests)
-
-            if current_ai == enemy_snake:
-                ai_moved_this_frame = moved_this_ai; ai_new_head = new_head_this_ai; ai_should_shoot = should_shoot_this_ai
-                if player_snake: current_ai.update_difficulty(player_snake.score)
-            else: # Bébé IA
-                try:
-                     baby_ai_actions.append({'ai_obj': current_ai, 'should_shoot': should_shoot_this_ai})
-                     if not current_ai.alive:
-                         if current_ai not in enemies_died_this_frame:
-                             enemies_died_this_frame.append(current_ai)
-                except Exception as e_baby: logging.warning(f"Warning: Error processing baby AI action or death: {e_baby}")
-
-    except Exception as e:
-        logging.error(f"Erreur mouvement serpents/IA: {e}", exc_info=True)
-        game_state['current_state'] = config.MENU; return config.MENU
-
-    # --- Tir des IA (Après tous les mouvements) ---
-    try:
-        if ai_should_shoot and enemy_snake and enemy_snake.alive:
-            new_enemy_proj = enemy_snake.shoot(current_time)
-            if new_enemy_proj: game_state['enemy_projectiles'].extend(new_enemy_proj); utils.play_sound(enemy_snake.shoot_sound)
-        for action in baby_ai_actions:
-            baby_snake = action['ai_obj']
-            should_shoot = action['should_shoot']
-            if baby_snake and baby_snake.alive and baby_snake not in enemies_died_this_frame and should_shoot:
-                new_baby_proj = baby_snake.shoot(current_time)
-                if new_baby_proj: game_state['enemy_projectiles'].extend(new_baby_proj); utils.play_sound(baby_snake.shoot_sound)
-    except Exception as e:
-        logging.error(f"Erreur lors du tir des IA: {e}", exc_info=True)
-
-    # --- Spawn des Bébés IA (depuis éclosion auto des nids) ---
-    if enemies_to_spawn_from_nests:
-        occupied_before_spawn = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-        nests_spawned_indices = set() # Utiliser un set pour éviter doublons d'indices
-        for i, nest in enumerate(nests):
-            if nest.position in enemies_to_spawn_from_nests and nest.is_active:
-                 spawn_pos_found = None; potential_spawns = []
-                 for dx, dy in config.DIRECTIONS:
-                     check_pos = ((nest.position[0] + dx + config.GRID_WIDTH) % config.GRID_WIDTH, (nest.position[1] + dy + config.GRID_HEIGHT) % config.GRID_HEIGHT)
-                     if check_pos not in occupied_before_spawn: potential_spawns.append(check_pos)
-                 if potential_spawns: spawn_pos_found = random.choice(potential_spawns)
-                 else: spawn_pos_found = utils.get_random_empty_position(occupied_before_spawn)
-
-                 if spawn_pos_found:
-                     try:
-                         baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
-                         new_enemy = game_objects.EnemySnake(start_pos=spawn_pos_found, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
-                         active_enemies.append(new_enemy)
-                         occupied_before_spawn.update(new_enemy.positions) # Important: Mettre à jour les positions occupées
-                         nest.is_active = False # Désactiver le nid APRES spawn
-                         nests_spawned_indices.add(i) # Ajouter l'index du nid qui a spawn
-                     except Exception as e: logging.error(f"  ERROR spawning baby AI at {spawn_pos_found}: {e}", exc_info=True)
-                 else: logging.warning(f"  Could not find empty spawn position near nest {nest.position} for baby AI.")
-        # Mettre à jour la liste globale nests_to_remove_indices AVANT le nettoyage des nids
-        nests_to_remove_indices = list(set(nests_to_remove_indices) | nests_spawned_indices)
-        enemies_to_spawn_from_nests.clear()
-
-    # --- Spawning Items (Food, Mines Fixes, Powerups) ---
-    try:
-        if not game_over:
-            spawn_factor = current_survival_interval_factor if current_game_mode == config.MODE_SURVIVAL else 1.0
-            solo_diff_level = 0
-            if current_game_mode == config.MODE_SOLO and player_snake:
-                try: solo_diff_level = player_snake.score // config.SOLO_SPAWN_RATE_SCORE_STEP
-                except AttributeError: pass
-            food_interval_base = config.FOOD_SPAWN_INTERVAL_BASE
-            mine_interval_base = config.MINE_SPAWN_INTERVAL_BASE
-            powerup_interval_base = config.POWERUP_SPAWN_INTERVAL_BASE
-            if current_game_mode == config.MODE_SOLO:
-                food_interval_base = max(config.SOLO_MIN_FOOD_INTERVAL, food_interval_base * (config.SOLO_SPAWN_RATE_FACTOR**solo_diff_level))
-                mine_interval_base = max(config.SOLO_MIN_MINE_INTERVAL, mine_interval_base * (config.SOLO_SPAWN_RATE_FACTOR**solo_diff_level))
-            food_interval = food_interval_base * spawn_factor * random.uniform(1 - config.FOOD_SPAWN_VARIATION, 1 + config.FOOD_SPAWN_VARIATION)
-            mine_interval = mine_interval_base * spawn_factor * random.uniform(1 - config.MINE_SPAWN_VARIATION, 1 + config.MINE_SPAWN_VARIATION)
-            powerup_interval = powerup_interval_base * spawn_factor * random.uniform(1 - config.POWERUP_SPAWN_VARIATION, 1 + config.POWERUP_SPAWN_VARIATION)
-
-            current_occupied = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-
-            if len(foods) < config.MAX_FOOD_ITEMS and current_time - last_food_spawn_time > food_interval:
-                spawn_pos = utils.get_random_empty_position(current_occupied)
-                if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
-
-            if current_time - last_mine_spawn_time > mine_interval:
-                spawned_count = 0
-                for _ in range(config.MINE_SPAWN_COUNT):
-                    if len(mines) >= config.MAX_MINES: break
-                    spawn_pos = utils.get_random_empty_position(current_occupied)
-                    if spawn_pos:
-                        all_snake_bodies = []
-                        if player_snake and player_snake.alive:
-                            all_snake_bodies.extend(player_snake.positions)
-                        if player2_snake and player2_snake.alive:
-                            all_snake_bodies.extend(player2_snake.positions)
-                        if enemy_snake and enemy_snake.alive:
-                            all_snake_bodies.extend(enemy_snake.positions)
-                        for baby in active_enemies:
-                            if baby and baby.alive:
-                                all_snake_bodies.extend(baby.positions)
-
-                        too_close = any(abs(spawn_pos[0]-body_part[0]) + abs(spawn_pos[1]-body_part[1]) < 3 for body_part in all_snake_bodies)
-                        if not too_close: mines.append(game_objects.Mine(spawn_pos)); current_occupied.add(spawn_pos); spawned_count += 1
-                if spawned_count > 0: game_state['last_mine_spawn_time'] = current_time
-
-            expired_indices = [i for i, pu in enumerate(powerups) if pu.is_expired()]
-            if expired_indices:
-                for i in sorted(expired_indices, reverse=True):
-                    if 0 <= i < len(powerups):
-                        pu = powerups.pop(i); px, py = pu.get_center_pos_px()
-                        if px is not None: utils.emit_particles(px, py, 10, pu.data['color'], (1, 3), (300, 600), (2, 4), 0, 0.2)
-                current_occupied = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-
-            if current_time - last_powerup_spawn_time > powerup_interval:
-                spawned_count = 0
-                for _ in range(config.POWERUP_SPAWN_COUNT):
-                    if len(powerups) >= config.MAX_POWERUPS: break
-                    spawn_pos = utils.get_random_empty_position(current_occupied)
-                    if spawn_pos:
-                        heads = [s.get_head_position() for s in [player_snake, player2_snake, enemy_snake] if s and s.alive] + [baby.get_head_position() for baby in active_enemies if baby and baby.alive]
-                        too_close = any(h and abs(spawn_pos[0]-h[0]) + abs(spawn_pos[1]-h[1]) < 4 for h in heads)
-                        if not too_close:
-                            available_powerups = list(config.POWERUP_TYPES.keys())
-                            if available_powerups: powerup_type = random.choice(available_powerups); powerups.append(game_objects.PowerUp(spawn_pos, powerup_type)); current_occupied.add(spawn_pos); spawned_count += 1
-                if spawned_count > 0: game_state['last_powerup_spawn_time'] = current_time
-
-            if current_game_mode == config.MODE_SURVIVAL:
-                mine_wave_interval_adjusted = config.MINE_WAVE_INTERVAL * spawn_factor
-                if current_time - last_mine_wave_spawn_time > mine_wave_interval_adjusted:
-                    game_state['last_mine_wave_spawn_time'] = current_time
-                    player_pos_target = player_snake.get_head_position() if player_snake and player_snake.alive else (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
-                    spawned_mine_count = 0
-                    for _ in range(config.MINE_WAVE_COUNT):
-                        spawn_edge = random.choice(['top', 'bottom', 'left', 'right']); sx_grid, sy_grid = 0, 0; grid_margin = 2
-                        if spawn_edge == 'top': sx_grid, sy_grid = random.randint(0, config.GRID_WIDTH - 1), -grid_margin
-                        elif spawn_edge == 'bottom': sx_grid, sy_grid = random.randint(0, config.GRID_WIDTH - 1), config.GRID_HEIGHT + grid_margin -1
-                        elif spawn_edge == 'left': sx_grid, sy_grid = -grid_margin, random.randint(0, config.GRID_HEIGHT - 1)
-                        elif spawn_edge == 'right': sx_grid, sy_grid = config.GRID_WIDTH + grid_margin - 1, random.randint(0, config.GRID_HEIGHT - 1)
-                        spawn_pos_pixels_x = sx_grid * config.GRID_SIZE + config.GRID_SIZE // 2; spawn_pos_pixels_y = sy_grid * config.GRID_SIZE + config.GRID_SIZE // 2
-                        try: new_mine = game_objects.MovingMine(spawn_pos_pixels_x, spawn_pos_pixels_y, player_pos_target); moving_mines.append(new_mine); spawned_mine_count += 1
-                        except Exception as e: logging.error(f"Error creating MovingMine: {e}", exc_info=True)
-
-
-    except Exception as e:
-        logging.error(f"Erreur spawning items/mines/nests: {e}", exc_info=True)
-
-
-    # --- Logique Projectiles ---
-    # (Cette section reste identique à la version précédente, collez-la ici)
-    # ... (Coller ici la section Logique Projectiles de la version précédente) ...
-    try:
-        if not game_over:
-            p1_rem_indices = set()
-            p2_rem_indices = set()
-            en_rem_indices = set()
-            mines_hit_indices_proj = set() # Pour les mines touchées par projectiles
-            moving_mines_hit_indices_proj = set() # Pour les mines mobiles touchées par projectiles
-            nests_hit_indices_proj = set() # Pour les nids touchés par projectiles
-
-            # --- Projectiles Joueur 1 ---
-            projectiles_p1_copy = list(enumerate(player_projectiles))
-            for i, p in projectiles_p1_copy:
-                if i in p1_rem_indices: continue
-
-                p.move(dt)
-                proj_center = p.rect.center
-                if proj_center[0] is None or proj_center[1] is None:
-                    p1_rem_indices.add(i)
-                    continue
-                try:
-                    proj_grid_pos = (proj_center[0] // config.GRID_SIZE, proj_center[1] // config.GRID_SIZE)
-                except TypeError:
-                    p1_rem_indices.add(i)
-                    continue
-
-                hit_something = False
-
-                # Collision Mur
-                if proj_grid_pos in wall_positions:
-                    p1_rem_indices.add(i); hit_something = True; utils.emit_particles(proj_center[0], proj_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall"); continue
-
-                # Collision Mine Fixe
-                current_mines_copy_p1 = list(enumerate(mines))
-                for j, m in current_mines_copy_p1:
-                    if j not in mines_hit_indices_proj and p.rect.colliderect(m.rect):
-                        p1_rem_indices.add(i); mines_hit_indices_proj.add(j); hit_something = True
-                        if player_snake and player_snake.alive: # P1 est le owner ici
-                            player_snake.add_score(config.MINE_SCORE_VALUE); player_snake.increment_combo(1)
-                            if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
-                                obj_completed, bonus = utils.check_objective_completion('destroy_mine', current_objective, 1)
-                                if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-                        utils.play_sound("explode_mine"); cx, cy = m.get_center_pos_px()
-                        if cx is not None: utils.emit_particles(cx, cy, 25, config.COLOR_PROJ_HIT_MINE); utils.trigger_shake(5, 250)
-                        break
-                if hit_something: continue
-
-                # Collision Mine Mobile (Survival)
-                if current_game_mode == config.MODE_SURVIVAL:
-                    current_moving_mines_copy_p1 = list(enumerate(moving_mines))
-                    for j, mm in current_moving_mines_copy_p1:
-                        if mm.is_active and j not in moving_mines_hit_indices_proj and p.rect.colliderect(mm.rect):
-                            p1_rem_indices.add(i); moving_mines_hit_indices_proj.add(j); hit_something = True; mm.explode(); break
-                    if hit_something: continue
-
-                # Collision Nid (Vs AI / Survival)
-                if current_game_mode in [config.MODE_VS_AI, config.MODE_SURVIVAL]:
-                    current_nests_copy_p1 = list(enumerate(nests))
-                    for j, nest in current_nests_copy_p1:
-                        if nest.is_active and j not in nests_hit_indices_proj and p.rect.colliderect(nest.rect):
-                            p1_rem_indices.add(i); hit_something = True; utils.play_sound("hit_enemy"); utils.emit_particles(proj_center[0], proj_center[1], 5, config.COLOR_NEST_DAMAGED)
-                            if nest.take_damage():
-                                nests_hit_indices_proj.add(j) # Marquer pour suppression à la fin
-                                # ... (logique de drop/spawn bébé IA si nécessaire) ...
-                                if player_snake and player_snake.alive: player_snake.add_score(config.NEST_DESTROY_SCORE); player_snake.increment_combo(2)
-                            break
-                    if hit_something: continue
-
-                # Collision avec Joueur 2 (PvP)
-                if current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and not player2_snake.ghost_active:
-                    for seg_pos_p2 in player2_snake.positions:
-                        seg_rect_p2 = pygame.Rect(seg_pos_p2[0]*config.GRID_SIZE, seg_pos_p2[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-                        if p.rect.colliderect(seg_rect_p2):
-                            p1_rem_indices.add(i); hit_something = True
-                            survived_p2 = player2_snake.handle_damage(current_time, player_snake, damage_source_pos=p.rect.center)
-                            if not survived_p2:
-                                if player_snake and player_snake.alive: # P1 (owner) marque le kill
-                                    player_snake.kills += 1
-                                    logging.info(f"PvP Projectile Kill: {player_snake.name} KILLS {player2_snake.name} (Total Kills: {player_snake.kills})")
-                                    utils.add_kill_feed_message(player_snake.name, player2_snake.name)
-                                if not p2_died_this_frame: # Ne marque mort et ne set le timer qu'une fois par frame
-                                    p2_died_this_frame = True
-                                    game_state['p2_death_time'] = current_time
-                                    logging.debug(f"Setting p2_death_time for {player2_snake.name} due to P1 Projectile collision: {current_time}")
-                            else: # P2 a survécu
-                                if player_snake and player_snake.alive: player_snake.increment_combo(1) # Combo pour P1 si P2 survit au coup
-                            break # Sort de la boucle des segments de P2
-                    if hit_something: continue
-
-                # Collision avec IA Principale (Vs AI)
-                if current_game_mode == config.MODE_VS_AI and enemy_snake and enemy_snake.alive and not enemy_snake.ghost_active:
-                    for seg_pos_ai in enemy_snake.positions:
-                         seg_rect_ai = pygame.Rect(seg_pos_ai[0]*config.GRID_SIZE, seg_pos_ai[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-                         if p.rect.colliderect(seg_rect_ai):
-                            p1_rem_indices.add(i); hit_something = True
-                            survived_ai = enemy_snake.handle_damage(current_time, player_snake, damage_source_pos=p.rect.center)
-                            if survived_ai:
-                                if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_HIT_SCORE); player_snake.increment_combo(1)
-                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
-                                    obj_completed, bonus = utils.check_objective_completion('hit_opponent', current_objective, 1)
-                                    if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-                            else: # AI died
-                                if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_KILL_SCORE); player_snake.add_armor(config.ENEMY_KILL_ARMOR); player_snake.increment_combo(3)
-                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
-                                     obj_completed, bonus = utils.check_objective_completion('kill_opponent', current_objective, 1)
-                                     if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-                            break # Sort de la boucle des segments IA
-                    if hit_something: continue
-
-                # Collision avec Bébés IA (Vs AI / Survival)
-                if current_game_mode in [config.MODE_VS_AI, config.MODE_SURVIVAL]:
-                    active_enemies_copy_p1_proj = list(active_enemies) # Copie pour itération sûre
-                    for baby_snake_obj in active_enemies_copy_p1_proj:
-                        if baby_snake_obj and baby_snake_obj.alive and not baby_snake_obj.ghost_active:
-                             for seg_pos_baby in baby_snake_obj.positions:
-                                 seg_rect_baby = pygame.Rect(seg_pos_baby[0]*config.GRID_SIZE, seg_pos_baby[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-                                 if p.rect.colliderect(seg_rect_baby):
-                                     p1_rem_indices.add(i); hit_something = True
-                                     survived_baby = baby_snake_obj.handle_damage(current_time, player_snake, damage_source_pos=p.rect.center)
-                                     if survived_baby:
-                                         if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_HIT_SCORE // 2); player_snake.increment_combo(1)
-                                     else: # Baby died
-                                         if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_KILL_SCORE // 2); player_snake.increment_combo(1)
-                                         if baby_snake_obj not in enemies_died_this_frame: enemies_died_this_frame.append(baby_snake_obj)
-                                     break # Sort de la boucle des segments bébé
-                        if hit_something: break # Sort de la boucle des bébés pour ce projectile
-                    if hit_something: continue
-
-                # Hors écran
-                if not hit_something and p.is_off_screen(screen_width, screen_height):
-                    p1_rem_indices.add(i)
-
-            # --- Projectiles Joueur 2 (PvP) ---
-            if current_game_mode == config.MODE_PVP:
-                projectiles_p2_copy = list(enumerate(player2_projectiles))
-                for j, p2_proj in projectiles_p2_copy:
-                    if j in p2_rem_indices: continue
-
-                    p2_proj.move(dt)
-                    proj2_center = p2_proj.rect.center
-                    if proj2_center[0] is None or proj2_center[1] is None:
-                        p2_rem_indices.add(j)
-                        continue
-                    try:
-                        proj2_grid_pos = (proj2_center[0] // config.GRID_SIZE, proj2_center[1] // config.GRID_SIZE)
-                    except TypeError:
-                        p2_rem_indices.add(j)
-                        continue
-
-                    hit_something_p2 = False
-
-                    # Collision Mur
-                    if proj2_grid_pos in wall_positions:
-                        p2_rem_indices.add(j); hit_something_p2 = True; utils.emit_particles(proj2_center[0], proj2_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall"); continue
-
-                    # Collision Mine Fixe
-                    current_mines_copy_p2 = list(enumerate(mines))
-                    for k, m in current_mines_copy_p2:
-                        # Utilise mines_hit_indices_proj pour éviter double destruction
-                        if k not in mines_hit_indices_proj and p2_proj.rect.colliderect(m.rect):
-                            p2_rem_indices.add(j); mines_hit_indices_proj.add(k); hit_something_p2 = True
-                            if player2_snake and player2_snake.alive: # P2 est le owner
-                                player2_snake.add_score(config.MINE_SCORE_VALUE); player2_snake.increment_combo(1)
-                            utils.play_sound("explode_mine"); cx, cy = m.get_center_pos_px()
-                            if cx is not None: utils.emit_particles(cx, cy, 25, config.COLOR_PROJ_HIT_MINE); utils.trigger_shake(5, 250)
-                            break
-                    if hit_something_p2: continue
-
-                    # Collision avec Joueur 1
-                    if player_snake and player_snake.alive and not player_snake.ghost_active:
-                        for seg_pos_p1 in player_snake.positions:
-                            seg_rect_p1 = pygame.Rect(seg_pos_p1[0]*config.GRID_SIZE, seg_pos_p1[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-                            if p2_proj.rect.colliderect(seg_rect_p1):
-                                p2_rem_indices.add(j); hit_something_p2 = True
-                                survived_p1 = player_snake.handle_damage(current_time, player2_snake, damage_source_pos=p2_proj.rect.center)
-                                if not survived_p1:
-                                    if player2_snake and player2_snake.alive: # P2 (owner) marque le kill
-                                        player2_snake.kills += 1
-                                        logging.info(f"PvP Projectile Kill: {player2_snake.name} KILLS {player_snake.name} (Total Kills: {player2_snake.kills})")
-                                        utils.add_kill_feed_message(player2_snake.name, player_snake.name)
-                                    if not p1_died_this_frame: # Ne marque mort et ne set le timer qu'une fois par frame
-                                        p1_died_this_frame = True
-                                        game_over = (current_game_mode != config.MODE_PVP) # Game over si pas PvP
-                                        if current_game_mode == config.MODE_PVP:
-                                            game_state['p1_death_time'] = current_time
-                                            logging.debug(f"Setting p1_death_time for {player_snake.name} due to P2 Projectile collision: {current_time}")
-                                else: # P1 a survécu
-                                    if player2_snake and player2_snake.alive: player2_snake.increment_combo(1) # Combo pour P2 si P1 survit
-                                break # Sort de la boucle des segments de P1
-                        if hit_something_p2: continue
-
-                    # Hors écran
-                    if not hit_something_p2 and p2_proj.is_off_screen(screen_width, screen_height):
-                        p2_rem_indices.add(j)
-
-            # --- Projectiles Ennemis (IA/Bébés) ---
-            projectiles_en_copy = list(enumerate(enemy_projectiles))
-            for l, en_proj in projectiles_en_copy:
-                 if l in en_rem_indices: continue
-                 en_proj.move(dt)
-                 proj_en_center = en_proj.rect.center
-                 if proj_en_center[0] is None or proj_en_center[1] is None: en_rem_indices.add(l); continue
-                 try: proj_en_grid_pos = (proj_en_center[0] // config.GRID_SIZE, proj_en_center[1] // config.GRID_SIZE)
-                 except TypeError: en_rem_indices.add(l); continue
-
-                 hit_something_en = False
-
-                 # Collision Mur
-                 if proj_en_grid_pos in wall_positions: en_rem_indices.add(l); hit_something_en = True; utils.emit_particles(proj_en_center[0], proj_en_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall"); continue
-
-                 # Collision Mine Fixe
-                 current_mines_copy_en = list(enumerate(mines))
-                 for m_idx, m in current_mines_copy_en:
-                      if m_idx not in mines_hit_indices_proj and en_proj.rect.colliderect(m.rect):
-                         en_rem_indices.add(l); mines_hit_indices_proj.add(m_idx); hit_something_en = True
-                         # Pas de score pour l'IA qui détruit une mine
-                         utils.play_sound("explode_mine"); cx, cy = m.get_center_pos_px()
-                         if cx is not None: utils.emit_particles(cx, cy, 25, config.COLOR_PROJ_HIT_MINE); utils.trigger_shake(4, 200) # Shake moins fort
-                         break
-                 if hit_something_en: continue
-
-                 # Collision Mine Mobile (Survival)
-                 if current_game_mode == config.MODE_SURVIVAL:
-                      current_moving_mines_copy_en = list(enumerate(moving_mines))
-                      for mm_idx, mm in current_moving_mines_copy_en:
-                          if mm.is_active and mm_idx not in moving_mines_hit_indices_proj and en_proj.rect.colliderect(mm.rect):
-                             en_rem_indices.add(l); moving_mines_hit_indices_proj.add(mm_idx); hit_something_en = True; mm.explode(); break
-                      if hit_something_en: continue
-
-                 # Collision Nid (IA ne tire pas sur les nids pour le moment)
-
-                 # Collision avec Joueur 1
-                 if player_snake and player_snake.alive and not player_snake.ghost_active:
-                     for seg_pos_p1 in player_snake.positions:
-                         seg_rect_p1 = pygame.Rect(seg_pos_p1[0]*config.GRID_SIZE, seg_pos_p1[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-                         if en_proj.rect.colliderect(seg_rect_p1):
-                             en_rem_indices.add(l); hit_something_en = True
-                             survived_p1 = player_snake.handle_damage(current_time, en_proj.owner_snake, damage_source_pos=en_proj.rect.center) # Passe l'owner IA
-                             if not survived_p1:
-                                 if not p1_died_this_frame:
-                                     p1_died_this_frame = True
-                                     game_over = (current_game_mode != config.MODE_PVP)
-                                     if current_game_mode == config.MODE_PVP:
-                                         game_state['p1_death_time'] = current_time
-                                         logging.debug(f"Setting p1_death_time for {player_snake.name} due to Enemy Projectile collision: {current_time}")
-                                     # Attribue kill à l'IA qui a tiré (si elle existe)
-                                     shooter_ai = en_proj.owner_snake
-                                     if shooter_ai and shooter_ai.alive and isinstance(shooter_ai, game_objects.EnemySnake):
-                                         # Pas de 'kills' pour l'IA, mais on pourrait logguer
-                                         logging.info(f"AI Kill: {shooter_ai.name} killed {player_snake.name}")
-                             break # Sort boucle segments P1
-                     if hit_something_en: continue
-
-                 # Collision avec Joueur 2 (PvP)
-                 if current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and not player2_snake.ghost_active:
-                    for seg_pos_p2 in player2_snake.positions:
-                        seg_rect_p2 = pygame.Rect(seg_pos_p2[0]*config.GRID_SIZE, seg_pos_p2[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-                        if en_proj.rect.colliderect(seg_rect_p2): # en_proj est le projectile IA
-                            en_rem_indices.add(l); hit_something_en = True
-                            survived_p2 = player2_snake.handle_damage(current_time, en_proj.owner_snake, damage_source_pos=en_proj.rect.center) # Passe l'owner IA
-                            if not survived_p2:
-                                if not p2_died_this_frame:
-                                    p2_died_this_frame = True
-                                    if current_game_mode == config.MODE_PVP:
-                                        game_state['p2_death_time'] = current_time
-                                        logging.debug(f"Setting p2_death_time for {player2_snake.name} due to Enemy Projectile collision: {current_time}")
-                                    # Attribue kill à l'IA qui a tiré (si elle existe)
-                                    shooter_ai = en_proj.owner_snake
-                                    if shooter_ai and shooter_ai.alive and isinstance(shooter_ai, game_objects.EnemySnake):
-                                        logging.info(f"AI Kill: {shooter_ai.name} killed {player2_snake.name}")
-                            break # Sort boucle segments P2
-                    if hit_something_en: continue
-                 # Collision avec une autre IA
-                 if current_game_mode in [config.MODE_VS_AI, config.MODE_SURVIVAL]:
-                    for other_ai in active_enemies:
-                        if other_ai is not en_proj.owner_snake and other_ai.alive and not other_ai.ghost_active:
-                            for seg_pos_other_ai in other_ai.positions:
-                                seg_rect_other_ai = pygame.Rect(seg_pos_other_ai[0]*config.GRID_SIZE, seg_pos_other_ai[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-                                if en_proj.rect.colliderect(seg_rect_other_ai):
-                                    en_rem_indices.add(l)
-                                    hit_something_en = True
-                                    break
-                            if hit_something_en:
-                                break
-                    if hit_something_en:
-                        continue
-
-                 # Hors écran
-                 if not hit_something_en and en_proj.is_off_screen(screen_width, screen_height):
-                     en_rem_indices.add(l)
-
-            # --- Nettoyage après toutes les vérifications de projectiles ---
-            if p1_rem_indices: game_state['player_projectiles'] = [p for i, p in enumerate(player_projectiles) if i not in p1_rem_indices]
-            if p2_rem_indices: game_state['player2_projectiles'] = [p for j, p in enumerate(player2_projectiles) if j not in p2_rem_indices]
-            if en_rem_indices: game_state['enemy_projectiles'] = [p for l, p in enumerate(enemy_projectiles) if l not in en_rem_indices]
-            if mines_hit_indices_proj: game_state['mines'] = [m for i, m in enumerate(mines) if i not in mines_hit_indices_proj]
-            if moving_mines_hit_indices_proj: game_state['moving_mines'] = [m for i, m in enumerate(moving_mines) if i not in moving_mines_hit_indices_proj]
-            # Nids touchés par projectiles sont gérés séparément à la fin
-
-    except Exception as e:
-        logging.error(f"Erreur logique projectiles: {e}", exc_info=True)
-        game_state['current_state'] = config.MENU; return config.MENU
-
-    # --- Collisions Post-Mouvement (Tête vs Mine/Objets et Tête vs Corps/Tête) ---
-    try:
-        if not game_over:
-            snakes_to_check_collision = []
-            if player_snake and player_snake.alive: snakes_to_check_collision.append(player_snake)
-            if player2_snake and player2_snake.alive: snakes_to_check_collision.append(player2_snake)
-            if enemy_snake and enemy_snake.alive: snakes_to_check_collision.append(enemy_snake)
-            snakes_to_check_collision.extend([baby for baby in active_enemies if baby and baby.alive and baby not in enemies_died_this_frame])
-
-            mines_collided_indices_head = set() # Pour mines fixes percutées par tête
-            moving_mines_collided_indices_head = set() # Pour mines mobiles percutées par tête
-            nests_collided_indices_head = set() # Pour nids percutés par tête (hatch AI)
-
-            # --- Boucle principale pour collisions post-mouvement ---
-            for snake_object in snakes_to_check_collision:
-                if not snake_object.alive: continue # Skip si déjà mort (ex: projectile)
-                head_pos = snake_object.get_head_position()
-                if not head_pos: continue
-
-                # --- Collecte Nourriture & Powerups ---
-                collected_food_index = -1
-                for i in range(len(foods) - 1, -1, -1):
-                    if head_pos == foods[i].position: collected_food_index = i; break
-                if collected_food_index != -1:
-                    # ... (Logique collecte nourriture - inchangée, mais attention à l'indentation) ...
-                    collected_food = foods.pop(collected_food_index); food_data = collected_food.type_data; food_type_key = collected_food.type; effect = food_data.get('effect')
-                    if food_type_key == 'normal': utils.play_sound("eat")
-                    else: utils.play_sound("eat_special")
-                    food_center_px = collected_food.get_center_pos_px()
-                    if food_center_px: utils.emit_particles(food_center_px[0], food_center_px[1], 10, config.COLOR_FOOD_EAT_PARTICLE, (1, 3), (200, 400), (1, 4), 0.05, 0.2)
-                    
-                    # Gérer la logique de gain d'armure ici si c'est 'armor_plate_food'
-                    if food_type_key == "armor_plate_food":
-                        if snake_object.is_player:
-                             # Limite fixée par ARMOR_REGEN_MAX_STACKS (ou MAX_ARMOR si plus pertinent?)
-                            if snake_object.armor < config.ARMOR_REGEN_MAX_STACKS: # Ou utiliser config.MAX_ARMOR
-                                if not snake_object.is_armor_regen_pending:
-                                    snake_object.last_armor_regen_tick_time = current_time # Démarre le timer au premier gain
-                                snake_object.is_armor_regen_pending = True # Active la regen passive
-                                logging.debug(f"{snake_object.name} ate armor food, regen pending activated/refreshed.")
-                            else:
-                                # Si déjà au max pour la regen, donne quand même +1 direct jusqu'à MAX_ARMOR
-                                snake_object.add_armor(1)
-                                logging.debug(f"{snake_object.name} ate armor food while at regen cap, adding +1 armor directly (if possible).")
-                        # L'IA ignore cet effet (pas de regen passive pour elle)
-
-                    else: # Autres types de nourriture
-                        should_grow = True
-                        if food_type_key == 'poison' and food_data.get('shrink', False): should_grow = False
-                        # Cas spécifique bébé IA
-                        if snake_object.is_ai and snake_object.is_baby and food_type_key not in ['normal', 'ammo']:
-                             should_grow = False # Bébé ne grandit qu'avec normal/ammo
-
-                        if should_grow: snake_object.grow()
-
-                        if snake_object.is_player:
-                            snake_object.add_score(food_data.get('score', 0))
-                            # Ammo bonus maintenant géré directement dans config.FOOD_TYPES["normal"]
-                            #if food_type_key == 'normal': snake_object.add_ammo(config.NORMAL_FOOD_AMMO_BONUS)
-                            #else: snake_object.add_ammo(food_data.get('ammo', 0)) # Gère ammo pack
-                            snake_object.add_ammo(food_data.get('ammo', 0)) # Simplifié: prend la valeur ammo du dict
-
-                            snake_object.increment_combo(food_data.get('combo_points', 0))
-                            if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and collected_food.objective_tag:
-                                obj_completed, bonus = utils.check_objective_completion(collected_food.objective_tag, current_objective, 1)
-                                if obj_completed:
-                                    snake_object.add_score(bonus, is_objective_bonus=True)
-                                    game_state['current_objective'] = None
-                                    game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-
-                            # Logique regen ammo
-                            if food_type_key == 'normal':
-                                if snake_object.ammo_regen_rate < config.AMMO_REGEN_MAX_RATE:
-                                    snake_object.ammo_regen_rate += 1
-                                    snake_object.normal_food_eaten_at_max_rate = 0
-                                    logging.debug(f"{snake_object.name} ammo regen rate increased to +{snake_object.ammo_regen_rate}")
-                                else:
-                                    snake_object.normal_food_eaten_at_max_rate += 1
-                                    if snake_object.normal_food_eaten_at_max_rate >= config.AMMO_REGEN_FOOD_COUNT_FOR_INTERVAL_REDUCTION:
-                                        new_interval = snake_object.ammo_regen_interval - config.AMMO_REGEN_INTERVAL_REDUCTION_STEP
-                                        snake_object.ammo_regen_interval = max(config.AMMO_REGEN_MIN_INTERVAL, new_interval) # Utilise MIN_INTERVAL
-                                        snake_object.normal_food_eaten_at_max_rate = 0
-                                        logging.debug(f"{snake_object.name} ammo regen interval reduced to {snake_object.ammo_regen_interval}ms")
-
-                        # Applique les effets de durée (sauf grow, ammo_only, armor_plate)
-                        if effect and effect not in ['grow', 'ammo_only', 'armor_plate']:
-                            if effect != 'freeze_opponent':
-                                snake_object.apply_food_effect(food_type_key, current_time, player1_snake=player_snake, player2_snake=player2_snake)
-                            elif snake_object.is_player: # Joueur mange freeze_opponent
-                                freeze_duration = config.ENEMY_FREEZE_DURATION
-                                opponent_snake = None
-                                if current_game_mode == config.MODE_PVP: opponent_snake = player2_snake if snake_object == player_snake else player_snake
-                                elif current_game_mode == config.MODE_VS_AI: opponent_snake = enemy_snake
-
-                                if opponent_snake and opponent_snake.alive: opponent_snake.freeze(current_time, freeze_duration)
-                                # Geler aussi les bébés IA si présents
-                                active_enemies_copy_freeze = list(active_enemies)
-                                for baby_ai in active_enemies_copy_freeze:
-                                    if baby_ai and baby_ai.alive: baby_ai.freeze(current_time, freeze_duration)
-
-                        # Food burst
-                        if snake_object == player_snake and food_type_key == 'normal' and current_game_mode == config.MODE_SOLO and random.random() < config.FOOD_BURST_CHANCE:
-                           # ... (logique food burst) ...
-                           pass
-
-
-                collected_powerup_index = -1
-                for i in range(len(powerups) - 1, -1, -1):
-                    # ... (logique collecte powerup - inchangée, mais attention indentation) ...
-                    pu = powerups[i]
-                    if head_pos == pu.position and not pu.is_expired():
-                         # Seuls les joueurs OU l'IA principale peuvent prendre les powerups
-                         if snake_object.is_player or (snake_object == enemy_snake):
-                             collected_powerup_index = i
-                             break
-                if collected_powerup_index != -1:
-                    collected_pu = powerups.pop(collected_powerup_index)
-                    game_state['last_powerup_spawn_time'] = current_time # Reset timer on pickup
-                    pu_center_px = collected_pu.get_center_pos_px()
-
-                    # Objectif
-                    if snake_object.is_player and current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
-                        obj_tags_to_check = [collected_pu.objective_tag, 'powerup_generic']
-                        for tag in obj_tags_to_check:
-                             if tag and game_state['current_objective']: # Vérifie si objectif existe
-                                 obj_completed_pu, bonus_pu = utils.check_objective_completion(tag, current_objective, 1)
-                                 if obj_completed_pu:
-                                     snake_object.add_score(bonus_pu, is_objective_bonus=True)
-                                     game_state['current_objective'] = None
-                                     game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-                                     break # Arrête de vérifier les tags si un correspond
-
-                    # Effet EMP
-                    if collected_pu.type == 'emp':
-                        utils.play_sound("explode_mine")
-                        utils.trigger_shake(6 if snake_object.is_player else 4, 350)
-                        if pu_center_px: utils.emit_particles(pu_center_px[0], pu_center_px[1], 50, config.COLOR_EMP_PULSE, (3, 10), (700, 1500), (4, 8), 0.01, 0.08)
-                        
-                        destroyed_fixed_mines_count = len(mines)
-                        destroyed_moving_mines_count = len(moving_mines)
-                        destroyed_total_mines_count = destroyed_fixed_mines_count + destroyed_moving_mines_count
-                        
-                        # Clear mines and projectiles
-                        mines.clear(); game_state['mines'] = []
-                        moving_mines.clear(); game_state['moving_mines'] = []
-                        player_projectiles.clear(); game_state['player_projectiles'] = []
-                        player2_projectiles.clear(); game_state['player2_projectiles'] = []
-                        enemy_projectiles.clear(); game_state['enemy_projectiles'] = []
-
-                        # Score/Combo bonus pour le joueur
-                        if snake_object.is_player:
-                            emp_score_bonus = 0
-                            if destroyed_fixed_mines_count > 0:
-                                emp_score_bonus = int(round(destroyed_fixed_mines_count * (config.MINE_SCORE_VALUE * config.EMP_MINE_SCORE_PERCENTAGE)))
-                            if emp_score_bonus > 0: snake_object.add_score(emp_score_bonus, is_objective_bonus=True) # Considéré comme bonus
-                            combo_points = 3 + (destroyed_total_mines_count // 2)
-                            snake_object.increment_combo(points=combo_points)
-                            
-                            # Objectif destruction mines
-                            if destroyed_total_mines_count > 0 and current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
-                                if game_state['current_objective']: # Vérifie si objectif existe
-                                     obj_completed_mine_emp, bonus_mine_emp = utils.check_objective_completion('destroy_mine', current_objective, destroyed_total_mines_count)
-                                     if obj_completed_mine_emp:
-                                         snake_object.add_score(bonus_mine_emp, is_objective_bonus=True)
-                                         game_state['current_objective'] = None
-                                         game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-                    else: # Autres powerups
-                        snake_object.activate_powerup(collected_pu.type, current_time)
-
-
-                # --- Collision Tête contre Mine Fixe ---
-                if snake_object.alive and not snake_object.ghost_active:
-                    collided_mine_idx_head = -1
-                    for i in range(len(mines) - 1, -1, -1):
-                         # Utilise mines_collided_indices_head pour éviter double collision
-                         if i not in mines_collided_indices_head and 0 <= i < len(mines): # Vérifie index
-                             if head_pos == mines[i].position:
-                                 collided_mine_idx_head = i
-                                 break
-                    
-                    if collided_mine_idx_head != -1:
-                        # Vérifie à nouveau l'index avant d'accéder
-                        if 0 <= collided_mine_idx_head < len(mines):
-                            mines_collided_indices_head.add(collided_mine_idx_head)
-                            mine_collided_obj = mines[collided_mine_idx_head]
-                            mine_center_px_head = mine_collided_obj.get_center_pos_px()
-                            utils.play_sound("explode_mine")
-                            utils.trigger_shake(5 if snake_object.is_player else 4, 300)
-                            if mine_center_px_head: utils.emit_particles(mine_center_px_head[0], mine_center_px_head[1], 30, config.COLOR_MINE_EXPLOSION, (2, 9), (600, 1100), (3, 7), 0.02)
-                            
-                            survived_mine_head = snake_object.handle_damage(current_time, None, damage_source_pos=mine_center_px_head)
-
-                            if not survived_mine_head:
-                                logging.warning(f"Mine Head Collision Death: {snake_object.name} died.")
-
-                                # --- Logique Kill Mine PvP (MODIFIÉ) ---
-                                # Ne pas attribuer le kill ici, on le fera à la fin de la frame.
-                                # Marquer juste la mort.
-                                # --- FIN MODIFICATION ---
-
-                                # Gestion flags p1_died/p2_died et game_over (inchangé)
-                                if not survived_mine_head: # Si le joueur meurt en heurtant la mine
-                                    logging.warning(f"Mine Head Collision Death: {snake_object.name} died at {head_pos}.")
-
-                                if snake_object == player_snake and not p1_died_this_frame:
-                                    p1_died_this_frame = True
-                                    if current_game_mode == config.MODE_PVP:
-                                        game_state['p1_death_time'] = current_time # Assurer que le timer est (re)mis
-                                        game_state['p1_death_cause'] = 'mine'
-                                        logging.debug(f"P1 died from mine (no dash). Death time: {current_time}")
-                                    else:
-                                        game_over = True
-                                elif snake_object == player2_snake and not p2_died_this_frame:
-                                    p2_died_this_frame = True
-                                    # En PvP, la mort de J2 n'entraîne pas game_over directement
-                                    game_state['p2_death_time'] = current_time # Assurer que le timer est (re)mis
-                                    game_state['p2_death_cause'] = 'mine'
-                                    logging.debug(f"P2 died from mine (no dash). Death time: {current_time}")
-                                elif isinstance(snake_object, game_objects.EnemySnake) and snake_object.is_baby:
-                                    if snake_object not in enemies_died_this_frame:
-                                        enemies_died_this_frame.append(snake_object)
-                                # --- Fin Logique Kill Mine ---
-
-                                # Logique de mort commune
-                                if snake_object == player_snake and not p1_died_this_frame:
-                                    p1_died_this_frame = True
-                                    game_over = (current_game_mode != config.MODE_PVP)
-                                    if current_game_mode == config.MODE_PVP:
-                                        # Assure que death_time est défini *ici* si c'est la cause primaire
-                                        if not game_state.get('p1_death_time', 0): game_state['p1_death_time'] = current_time
-                                        logging.debug(f"Setting p1_death_time for {snake_object.name} due to Mine HEAD collision: {current_time}")
-                                elif snake_object == player2_snake and not p2_died_this_frame:
-                                    p2_died_this_frame = True
-                                    if current_game_mode == config.MODE_PVP:
-                                        if not game_state.get('p2_death_time', 0): game_state['p2_death_time'] = current_time
-                                        logging.debug(f"Setting p2_death_time for {snake_object.name} due to Mine HEAD collision: {current_time}")
-                                elif isinstance(snake_object, game_objects.EnemySnake) and snake_object.is_baby:
-                                    if snake_object not in enemies_died_this_frame: enemies_died_this_frame.append(snake_object)
-                        else:
-                             logging.error(f"Erreur: Index de mine ({collided_mine_idx_head}) invalide lors de la collision tête !")
-
-
-                # --- Collision Tête contre Mine Mobile (Survival) ---
-                if snake_object.alive and not snake_object.ghost_active and current_game_mode == config.MODE_SURVIVAL:
-                    head_rect = pygame.Rect(head_pos[0]*config.GRID_SIZE, head_pos[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-                    collided_moving_mine_idx_head = -1
-                    for i in range(len(moving_mines) - 1, -1, -1):
-                        if i not in moving_mines_collided_indices_head and 0 <= i < len(moving_mines): # Vérif index
-                             mmine_obj = moving_mines[i]
-                             if mmine_obj.is_active and head_rect.colliderect(mmine_obj.rect):
-                                 collided_moving_mine_idx_head = i
-                                 break
-                    
-                    if collided_moving_mine_idx_head != -1:
-                        if 0 <= collided_moving_mine_idx_head < len(moving_mines):
-                            moving_mines_collided_indices_head.add(collided_moving_mine_idx_head)
-                            mmine_collided_obj = moving_mines[collided_moving_mine_idx_head]
-                            mmine_center_px_head = mmine_collided_obj.get_center_pos_px()
-                            mmine_collided_obj.explode(proximity=False) # Explose au contact tête
-
-                            survived_mmine_head = snake_object.handle_damage(current_time, None, damage_source_pos=mmine_center_px_head)
-                            if not survived_mmine_head:
-                                logging.warning(f"Moving Mine Head Collision Death: {snake_object.name} died.")
-                                # Logique de mort commune
-                                if snake_object == player_snake and not p1_died_this_frame:
-                                     p1_died_this_frame=True; game_over=True # Mode survie -> game over
-                                     if not game_state.get('p1_death_time', 0): game_state['p1_death_time'] = current_time # Bien que game over, enregistrons
-                                     logging.debug(f"Setting p1_death_time for {snake_object.name} due to Moving Mine HEAD collision: {current_time}")
-                                elif isinstance(snake_object, game_objects.EnemySnake) and snake_object.is_baby:
-                                     if snake_object not in enemies_died_this_frame: enemies_died_this_frame.append(snake_object)
-                        else:
-                             logging.error(f"Erreur: Index de mine mobile ({collided_moving_mine_idx_head}) invalide lors de la collision tête !")
-
-                # --- Collision/Interaction Tête contre Nid (IA Hatching) ---
-                if snake_object.alive and snake_object.is_ai and not snake_object.is_baby: # Seule l'IA principale fait éclore
-                     for i, nest in enumerate(nests):
-                         if i not in nests_collided_indices_head and nest.is_active and head_pos == nest.position:
-                             hatch_result = nest.hatch_by_ai()
-                             if hatch_result == 'ai_hatch':
-                                 logging.info(f"AI {snake_object.name} triggered nest hatch at {nest.position}")
-                                 nests_collided_indices_head.add(i) # Marque pour suppression/inactivation à la fin
-                                 # Spawn le bébé IA
-                                 occupied_for_hatch = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-                                 spawn_pos_found_hatch = None; potential_spawns_hatch = []
-                                 for dx, dy in config.DIRECTIONS: # Cherche autour du nid
-                                     check_pos_hatch = ((nest.position[0] + dx + config.GRID_WIDTH) % config.GRID_WIDTH, (nest.position[1] + dy + config.GRID_HEIGHT) % config.GRID_HEIGHT)
-                                     if check_pos_hatch not in occupied_for_hatch: potential_spawns_hatch.append(check_pos_hatch)
-                                 if potential_spawns_hatch: spawn_pos_found_hatch = random.choice(potential_spawns_hatch)
-                                 else: spawn_pos_found_hatch = utils.get_random_empty_position(occupied_for_hatch) # Fallback
-
-                                 if spawn_pos_found_hatch:
-                                     try:
-                                         baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
-                                         new_enemy_hatch = game_objects.EnemySnake(start_pos=spawn_pos_found_hatch, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
-                                         active_enemies.append(new_enemy_hatch)
-                                         utils.play_sound("shoot_enemy") # Son de spawn
-                                         logging.debug(f"  -> Baby snake hatched by AI at {spawn_pos_found_hatch}")
-                                     except Exception as e: logging.error(f"  -> ERROR spawning baby AI from AI hatch: {e}", exc_info=True)
-                                 else: logging.warning(f"  -> Could not find empty spawn position near nest {nest.position} for AI hatch.")
-                             break # L'IA ne peut interagir qu'avec un nid à la fois
-
-            # --- Fin boucle collision objets pour snake_object ---
-
-            # --- Nettoyage des mines touchées par les têtes ---
-            if mines_collided_indices_head:
-                 current_mines_list = game_state.get('mines', [])
-                 new_mines_list = [m for i, m in enumerate(current_mines_list) if i not in mines_collided_indices_head]
-                 game_state['mines'] = new_mines_list
-            if moving_mines_collided_indices_head:
-                 current_moving_mines_list = game_state.get('moving_mines', [])
-                 new_moving_mines_list = [m for i, m in enumerate(current_moving_mines_list) if i not in moving_mines_collided_indices_head]
-                 game_state['moving_mines'] = new_moving_mines_list
-            # Nids touchés par tête IA gérés séparément à la fin
-
-            # --- Collisions Tête-vs-Corps / Tête-vs-Tête ---
-            currently_alive_final_check = []
-            if player_snake and player_snake.alive and not p1_died_this_frame: currently_alive_final_check.append(player_snake)
-            if player2_snake and player2_snake.alive and not p2_died_this_frame: currently_alive_final_check.append(player2_snake)
-            if enemy_snake and enemy_snake.alive: currently_alive_final_check.append(enemy_snake)
-            currently_alive_final_check.extend([baby for baby in active_enemies if baby and baby.alive and baby not in enemies_died_this_frame])
-
-            if len(currently_alive_final_check) >= 2:
-                newly_dead_from_body_head = set()
-
-                all_pairs = list(itertools.combinations(currently_alive_final_check, 2))
-
-                for snake_a, snake_b in all_pairs:
-                    # Double check alive status again, as previous pairs could cause death
-                    if not snake_a.alive or not snake_b.alive: continue
-                    if snake_a.ghost_active or snake_b.ghost_active: continue
-
-                    head_a = snake_a.get_head_position()
-                    head_b = snake_b.get_head_position()
-                    if not head_a or not head_b: continue
-
-                    center_a_px = snake_a.get_head_center_px()
-                    center_b_px = snake_b.get_head_center_px()
-
-                    # Head-on Collision
-                    if head_a == head_b:
-                        # Process only if neither is already marked dead *in this specific collision check phase*
-                        if snake_a not in newly_dead_from_body_head and snake_b not in newly_dead_from_body_head:
-                             logging.info(f"Head-on collision (Post-Move): {snake_a.name} vs {snake_b.name}")
-                             if center_a_px: utils.emit_particles(center_a_px[0], center_a_px[1], 15, [snake_a.color, snake_b.color]); utils.trigger_shake(3, 200)
-
-                             # Call handle_damage but rely on the loop below to set game_state death time
-                             survived_a_ho = snake_a.handle_damage(current_time, snake_b, damage_source_pos=center_b_px)
-                             survived_b_ho = snake_b.handle_damage(current_time, snake_a, damage_source_pos=center_a_px)
-
-                             if not survived_a_ho: newly_dead_from_body_head.add(snake_a)
-                             if not survived_b_ho: newly_dead_from_body_head.add(snake_b)
-                             # No kills awarded for head-on
-
-                    # A's head hits B's body
-                    elif head_a in snake_b.positions[1:]:
-                        if snake_a not in newly_dead_from_body_head: # Process only if A isn't already marked dead
-                             logging.info(f"Collision (Post-Move): {snake_a.name} hit {snake_b.name}'s body.")
-                             survived_a_hb = snake_a.handle_damage(current_time, snake_b, damage_source_pos=center_b_px)
-                             if not survived_a_hb:
-                                 newly_dead_from_body_head.add(snake_a)
-                                 # Award kill to B if B is still alive *and wasn't marked dead in this check*
-                                 if snake_b.alive and snake_b not in newly_dead_from_body_head:
-                                     if snake_b.is_player:
-                                         snake_b.kills += 1
-                                         logging.info(f"PvP Body Collision Kill: {snake_b.name} KILLS {snake_a.name} (Total Kills: {snake_b.kills})")
-                                         utils.add_kill_feed_message(snake_b.name, snake_a.name)
-                                     elif snake_a.is_player and snake_b.is_ai:
-                                         logging.info(f"AI Kill (Body Collision): {snake_b.name} killed {snake_a.name}")
-
-                    # B's head hits A's body
-                    elif head_b in snake_a.positions[1:]:
-                        if snake_b not in newly_dead_from_body_head: # Process only if B isn't already marked dead
-                             logging.info(f"Collision (Post-Move): {snake_b.name} hit {snake_a.name}'s body.")
-                             survived_b_ha = snake_b.handle_damage(current_time, snake_a, damage_source_pos=center_a_px)
-                             if not survived_b_ha:
-                                 newly_dead_from_body_head.add(snake_b)
-                                 # Award kill to A if A is still alive *and wasn't marked dead in this check*
-                                 if snake_a.alive and snake_a not in newly_dead_from_body_head:
-                                     if snake_a.is_player:
-                                         snake_a.kills += 1
-                                         logging.info(f"PvP Body Collision Kill: {snake_a.name} KILLS {snake_b.name} (Total Kills: {snake_a.kills})")
-                                         utils.add_kill_feed_message(snake_a.name, snake_b.name)
-                                     elif snake_b.is_player and snake_a.is_ai:
-                                          logging.info(f"AI Kill (Body Collision): {snake_a.name} killed {snake_b.name}")
-
-                # Apply deaths from body/head collisions
-                for p_dead in newly_dead_from_body_head:
-                    # --- MODIFICATION START ---
-                    # Set alive = False definitively IF it's still True
-                    if p_dead.alive:
-                        p_dead.alive = False
-
-                    # Set death time and flags *only once per frame*
-                    if p_dead == player_snake and not p1_died_this_frame:
-                        p1_died_this_frame = True
-                        game_over = (current_game_mode != config.MODE_PVP)
-                        if current_game_mode == config.MODE_PVP:
-                            game_state['p1_death_time'] = current_time # Always set/update time on confirmed death this frame
-                            logging.debug(f"Setting/Updating p1_death_time for {p_dead.name} due to PvP body/head: {current_time}")
-                    elif p_dead == player2_snake and not p2_died_this_frame:
-                        p2_died_this_frame = True
-                        if current_game_mode == config.MODE_PVP:
-                            game_state['p2_death_time'] = current_time # Always set/update time on confirmed death this frame
-                            logging.debug(f"Setting/Updating p2_death_time for {p_dead.name} due to PvP body/head: {current_time}")
-                    elif isinstance(p_dead, game_objects.EnemySnake) and p_dead.is_baby:
-                        if p_dead not in enemies_died_this_frame:
-                            enemies_died_this_frame.append(p_dead)
-                    elif p_dead == enemy_snake: # IA principale morte par collision corps/tête
-                         if enemy_snake.alive: # Check if not already marked dead by projectile
-                             enemy_snake.die(current_time) # Enregistre death_time pour respawn IA
-                    # --- MODIFICATION END ---
-
-    except Exception as e:
-        logging.error(f"Erreur collisions post-mouvement: {e}", exc_info=True)
-        game_state['current_state'] = config.MENU; return config.MENU
-
-    # --- Nettoyage final bébés IA morts (après toutes collisions) ---
-    if enemies_died_this_frame:
-         current_active_enemies = game_state.get('active_enemies', [])
-         new_active_enemies = [baby for baby in current_active_enemies if baby not in enemies_died_this_frame]
-         game_state['active_enemies'] = new_active_enemies
-         enemies_died_this_frame.clear()
-
-    # --- Nettoyage final Nids (Proj + Tête IA) ---
-    all_nests_to_remove_final = nests_hit_indices_proj | nests_collided_indices_head
-    if all_nests_to_remove_final:
-        current_nests_list = game_state.get('nests', [])
-        new_nests_list = [nest for idx, nest in enumerate(current_nests_list) if idx not in all_nests_to_remove_final]
-        game_state['nests'] = new_nests_list
-        nests_to_remove_indices = [] # Clear the temporary list
-        nests_hit_indices.clear() # Clear the set
-
-    if current_game_mode == config.MODE_PVP:
-        # Gérer la mort de Joueur 1
-        if p1_died_this_frame: # p1_died_this_frame est True si P1 est mort durant cette frame
-            p1_cause = game_state.get('p1_death_cause')
-            opponent_p1 = player2_snake # L'adversaire de J1 est J2
-
-            # Vérifier si l'adversaire est vivant pour marquer le kill
-            if opponent_p1 and opponent_p1.alive and not p2_died_this_frame: # p2_died_this_frame vérifie si P2 est mort DANS LA MÊME frame
-                kill_awarded_p1_death = False
-                kill_message_p1_death = ""
-
-                if p1_cause == 'mine' or p1_cause == 'mine_dash':
-                    opponent_p1.kills += 1
-                    cause_text = "(Mine Dash)" if p1_cause == 'mine_dash' else "(Mine)"
-                    kill_message_p1_death = f"{opponent_p1.name} > {player_snake.name} {cause_text}"
-                    kill_awarded_p1_death = True
-                elif p1_cause == 'wall' or p1_cause == 'wall_dash':
-                    opponent_p1.kills += 1
-                    cause_text = "(Mur Dash)" if p1_cause == 'wall_dash' else "(Mur)"
-                    kill_message_p1_death = f"{opponent_p1.name} > {player_snake.name} {cause_text}"
-                    kill_awarded_p1_death = True
-                
-                if kill_awarded_p1_death:
-                    utils.add_kill_feed_message(opponent_p1.name, f"{player_snake.name} ({p1_cause.replace('_dash', ' Dash') if p1_cause else 'Erreur'})")
-                    logging.info(f"PvP Kill: {kill_message_p1_death} (Kills J2: {opponent_p1.kills})")
-
-            game_state['p1_death_cause'] = None # Toujours réinitialiser la cause après traitement
-
-        # Gérer la mort de Joueur 2
-        if p2_died_this_frame: # p2_died_this_frame est True si J2 est mort durant cette frame
-            p2_cause = game_state.get('p2_death_cause')
-            opponent_p2 = player_snake # L'adversaire de J2 est J1
-
-            if opponent_p2 and opponent_p2.alive and not p1_died_this_frame:
-                kill_awarded_p2_death = False
-                kill_message_p2_death = ""
-
-                if p2_cause == 'mine' or p2_cause == 'mine_dash':
-                    opponent_p2.kills += 1
-                    cause_text = "(Mine Dash)" if p2_cause == 'mine_dash' else "(Mine)"
-                    kill_message_p2_death = f"{opponent_p2.name} > {player2_snake.name} {cause_text}"
-                    kill_awarded_p2_death = True
-                elif p2_cause == 'wall' or p2_cause == 'wall_dash':
-                    opponent_p2.kills += 1
-                    cause_text = "(Mur Dash)" if p2_cause == 'wall_dash' else "(Mur)"
-                    kill_message_p2_death = f"{opponent_p2.name} > {player2_snake.name} {cause_text}"
-                    kill_awarded_p2_death = True
-
-                if kill_awarded_p2_death:
-                    utils.add_kill_feed_message(opponent_p2.name, f"{player2_snake.name} ({p2_cause.replace('_dash', ' Dash') if p2_cause else 'Erreur'})")
-                    logging.info(f"PvP Kill: {kill_message_p2_death} (Kills J1: {opponent_p2.kills})")
-            
-            game_state['p2_death_cause'] = None # Toujours réinitialiser la cause après traitement
-    # --- Fin de la section attribution des kills ---
-
-            # Important: Reset les causes même si aucun kill n'a été attribué
-            # pour éviter des attributions incorrectes la frame suivante.
-            if game_state.get('p1_death_cause') == 'mine': game_state['p1_death_cause'] = None
-            if game_state.get('p2_death_cause') == 'mine': game_state['p2_death_cause'] = None
-    # --- Vérification explicite objectif 'reach_score' ---
-
-    if not game_over and current_objective and player_snake and player_snake.alive:
-        obj_template = current_objective.get('template', {}); obj_id = obj_template.get('id')
-        if obj_id == 'reach_score':
-            obj_completed, bonus = utils.check_objective_completion('score', current_objective, player_snake.score)
-            if obj_completed:
-                player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-
-    # --- Vérifications Fin de Partie ---
- 
-    try:
-        if (current_game_mode != config.MODE_PVP) and p1_died_this_frame: game_over = True
-        elif current_game_mode == config.MODE_PVP and not game_over and PvpCondition:
-            timer_ended = False
-            if pvp_condition_type in (PvpCondition.TIMER, PvpCondition.MIXED):
-                if pvp_start_time > 0 and current_time - pvp_start_time >= pvp_target_time * 1000:
-                    timer_ended = True
-            kills_target_reached = False
-            if pvp_condition_type in (PvpCondition.KILLS, PvpCondition.MIXED):
-                p1_reached_kills = player_snake and player_snake.kills >= pvp_target_kills
-                p2_reached_kills = player2_snake and player2_snake.kills >= pvp_target_kills
-                if p1_reached_kills or p2_reached_kills:
-                    kills_target_reached = True
-            if timer_ended:
-                game_over = True; game_state['pvp_game_over_reason'] = 'timer';
-            elif kills_target_reached:
-                game_over = True; game_state['pvp_game_over_reason'] = 'kills';
-    except Exception as e:
-         logging.error(f"Erreur lors de la vérification de fin de partie: {e}", exc_info=True); game_over = True
-
-
-    # --- Transition vers Game Over ---
-    if game_over:
-        logging.info("Game Over sequence initiated.")
-        try: pygame.mixer.music.fadeout(1000)
-        except pygame.error: pass
-        game_state['game_over_hs_saved'] = False
-        game_state['current_state'] = config.GAME_OVER; return config.GAME_OVER
-
-    # --- Mise à Jour Particules & Screen Shake ---
-  
-    try:
-        particles_alive = []
-        for p in list(utils.particles):
-             if not p.update(dt): particles_alive.append(p)
-        utils.particles[:] = particles_alive
-        shake_x, shake_y = utils.apply_shake_offset(current_time)
-    except Exception as e:
-        logging.error(f"Erreur màj particules/shake: {e}", exc_info=False); shake_x, shake_y = 0, 0
-
-
-    # --- Dessin ---
- 
-    try:
-        target_surf = screen; temp_surf = None
-        if utils.screen_shake_timer > 0 and (shake_x != 0 or shake_y != 0):
-            try:
-                temp_surf = pygame.Surface(screen.get_size(), flags=pygame.SRCALPHA)
-                target_surf = temp_surf
-            except pygame.error as surf_e:
-                logging.warning(f"Erreur création surface temporaire pour shake: {surf_e}")
-                target_surf = screen
-        draw_game_elements_on_surface(target_surf, game_state, current_time)
-        if temp_surf and target_surf == temp_surf:
-            screen.fill(config.COLOR_BACKGROUND)
-            screen.blit(temp_surf, (shake_x, shake_y))
-    except Exception as e:
-        logging.error(f"Erreur majeure lors du dessin final de run_game: {e}", exc_info=True)
-        game_state['current_state'] = config.MENU; return config.MENU
-
-
-    return next_state
-# --- END: REVISED run_game function ---

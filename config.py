@@ -439,6 +439,7 @@ DEFAULT_MUSIC_FILE = "background_music.mp3"
 MENU_BACKGROUND_IMAGE_FILE = "cover.jpg"
 HIGH_SCORE_FILE = "highscores.json"
 FAVORITE_MAP_FILE = "favorite_maps.json" # NOUVEAU
+PLAYER_NAMES_FILE = "player_names.json"
 MAX_HIGH_SCORES = 10
 
 
