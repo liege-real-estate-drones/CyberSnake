@@ -153,7 +153,7 @@ MULTISHOT_COUNT = 3
 ENEMY_PROJECTILE_SPEED = 15
 ENEMY_PROJECTILE_SIZE = 5
 ENEMY_SHOOT_RANGE = 12
-ENEMY_INITIAL_AMMO = 0   # Give main AI snakes initial ammo to shoot
+ENEMY_INITIAL_AMMO = 10   # Give main AI snakes initial ammo to shoot
 
 
 # --- Constantes Mines ---
@@ -401,7 +401,7 @@ MAX_NESTS_VS_AI = 3             # Nombre maximum de nids en Vs AI
 
 # --- Constantes Bébé IA ---
 BABY_AI_START_ARMOR = 1         # Armure de départ du bébé IA
-BABY_AI_START_AMMO = 0          # Munitions de départ du bébé IA
+BABY_AI_START_AMMO = 5          # Munitions de départ du bébé IA
 
 
 # --- Constantes Mines Mobiles (Mode Survie) ---

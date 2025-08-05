@@ -3609,7 +3609,7 @@ def run_game(events, dt, screen, game_state):
     # --- Mises à jour Nids (Auto-Spawn Timer) ---
     nests_to_remove_indices = []
     enemies_to_spawn_from_nests = []
-    if current_game_mode in [config.MODE_SURVIVAL, config.MODE_VS_AI]:
+    if current_game_mode == config.MODE_SURVIVAL:
         try:
             nests_list_copy = list(nests)
             for i, nest in enumerate(nests_list_copy):
@@ -3835,23 +3835,6 @@ def run_game(events, dt, screen, game_state):
                         try: new_mine = game_objects.MovingMine(spawn_pos_pixels_x, spawn_pos_pixels_y, player_pos_target); moving_mines.append(new_mine); spawned_mine_count += 1
                         except Exception as e: logging.error(f"Error creating MovingMine: {e}", exc_info=True)
 
-            if current_game_mode == config.MODE_VS_AI:
-                nest_spawn_interval = config.NEST_SPAWN_DELAY
-                current_active_nest_count = sum(1 for n in nests if n.is_active)
-                if current_active_nest_count < config.MAX_NESTS_VS_AI and current_time - last_nest_spawn_time > nest_spawn_interval:
-                    logging.debug(f"Attempting to spawn new nest in Vs AI (Current: {current_active_nest_count}, Max: {config.MAX_NESTS_VS_AI})")
-                    occupied_for_new_nest = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-                    spawn_pos = utils.get_random_empty_position(occupied_for_new_nest)
-                    if spawn_pos:
-                        player_head = player_snake.get_head_position() if player_snake and player_snake.alive else None
-                        ai_head = enemy_snake.get_head_position() if enemy_snake and enemy_snake.alive else None
-                        too_close_player = player_head and abs(spawn_pos[0] - player_head[0]) + abs(spawn_pos[1] - player_head[1]) < 5
-                        too_close_ai = ai_head and abs(spawn_pos[0] - ai_head[0]) + abs(spawn_pos[1] - ai_head[1]) < 5
-                        if not too_close_player and not too_close_ai:
-                            try: nests.append(game_objects.Nest(spawn_pos)); game_state['last_nest_spawn_time'] = current_time; logging.debug(f"  -> New nest spawned at {spawn_pos} in Vs AI mode.")
-                            except Exception as e: logging.error(f"  -> Error spawning Vs AI nest: {e}", exc_info=True)
-                        else: logging.warning(f"  -> Nest spawn position {spawn_pos} too close to player or AI, skipping.")
-                    else: logging.warning("  -> Could not find empty position for Vs AI nest.")
 
     except Exception as e:
         logging.error(f"Erreur spawning items/mines/nests: {e}", exc_info=True)
