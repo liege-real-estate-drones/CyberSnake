@@ -9,12 +9,16 @@ import os
 import json
 import traceback
 from collections import defaultdict, deque
+import logging
 
 # Importe toutes les constantes
 import config
 # Importe les classes nécessaires (pour emit_particles)
 # Note: Dépendance circulaire au niveau des fichiers, mais gérée par Python à l'exécution
 import game_objects
+
+
+logger = logging.getLogger(__name__)
 
 # --- Variables globales gérées par ce module ---
 # ... (inchangé) ...
@@ -115,57 +119,54 @@ def load_high_scores(base_path):
     default_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": []}
     loaded_high_scores = default_scores.copy()
 
-    try:
-        if os.path.exists(file_path):
-            file_content = ""
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f: # Spécifie l'encodage
-                    file_content = f.read()
-                    # Vérifie si le fichier n'est pas vide avant de décoder
-                    if not file_content.strip():
-                         print(f"Fichier high scores ({file_path}) est vide. Utilisation scores défaut.")
-                         high_scores = default_scores
-                         return
+    if os.path.exists(file_path):
+        file_content = ""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f: # Spécifie l'encodage
+                file_content = f.read()
+                # Vérifie si le fichier n'est pas vide avant de décoder
+                if not file_content.strip():
+                     print(f"Fichier high scores ({file_path}) est vide. Utilisation scores défaut.")
+                     high_scores = default_scores
+                     return
 
-                    loaded_data = json.loads(file_content) # Utilise loads après lecture
-                    if not isinstance(loaded_data, dict):
-                        raise json.JSONDecodeError("Root is not a dictionary", file_content, 0)
+                loaded_data = json.loads(file_content) # Utilise loads après lecture
+                if not isinstance(loaded_data, dict):
+                    raise json.JSONDecodeError("Root is not a dictionary", file_content, 0)
 
-            except json.JSONDecodeError as json_e:
-                print(f"Erreur décodage JSON ({file_path}): {json_e}. Contenu: '{file_content[:100]}...' Utilisation scores défaut.")
-                high_scores = default_scores
-                return
-            except (IOError, FileNotFoundError) as io_e:
-                print(f"Erreur lecture fichier high scores ({file_path}): {io_e}. Utilisation scores défaut.")
-                high_scores = default_scores
-                return
+        except json.JSONDecodeError as json_e:
+            print(f"Erreur décodage JSON ({file_path}): {json_e}. Contenu: '{file_content[:100]}...' Utilisation scores défaut.")
+            high_scores = default_scores
+            return
+        except (IOError, FileNotFoundError) as io_e:
+            print(f"Erreur lecture fichier high scores ({file_path}): {io_e}. Utilisation scores défaut.")
+            high_scores = default_scores
+            return
+        except Exception as unexpected_error:
+            logger.exception("Erreur inattendue lors de la lecture des high scores depuis %s", file_path)
+            raise
 
-            # Valide les données chargées
-            for mode in default_scores.keys():
-                if mode in loaded_data and isinstance(loaded_data[mode], list):
-                    validated_list = []
-                    for item in loaded_data[mode]:
-                        try:
-                            if isinstance(item, dict) and 'name' in item and 'score' in item:
-                                name = str(item['name'])[:15].strip()
-                                score = int(item['score'])
-                                validated_list.append({"name": name if name else "???", "score": score})
-                            # else: # Ignore entrées invalides silencieusement
-                            #    print(f"Entrée invalide dans high scores (mode: {mode}): {item}")
-                        except (TypeError, ValueError, KeyError):
-                            # print(f"Erreur validation entrée high score (mode: {mode}): {item}")
-                            pass # Ignore silencieusement
-                    validated_list.sort(key=lambda x: x['score'], reverse=True)
-                    loaded_high_scores[mode] = validated_list[:config.MAX_HIGH_SCORES]
-                else:
-                    loaded_high_scores[mode] = [] # Garde vide si clé absente ou type incorrect
-        else:
-            print(f"Fichier high score non trouvé ({file_path}), initialisation.")
-
-    except Exception as e:
-        print(f"Erreur inattendue chargement high scores: {e}")
-        traceback.print_exc()
-        high_scores = default_scores # Réinitialise en cas d'erreur majeure
+        # Valide les données chargées
+        for mode in default_scores.keys():
+            if mode in loaded_data and isinstance(loaded_data[mode], list):
+                validated_list = []
+                for item in loaded_data[mode]:
+                    try:
+                        if isinstance(item, dict) and 'name' in item and 'score' in item:
+                            name = str(item['name'])[:15].strip()
+                            score = int(item['score'])
+                            validated_list.append({"name": name if name else "???", "score": score})
+                        # else: # Ignore entrées invalides silencieusement
+                        #    print(f"Entrée invalide dans high scores (mode: {mode}): {item}")
+                    except (TypeError, ValueError, KeyError):
+                        # print(f"Erreur validation entrée high score (mode: {mode}): {item}")
+                        pass # Ignore silencieusement
+                validated_list.sort(key=lambda x: x['score'], reverse=True)
+                loaded_high_scores[mode] = validated_list[:config.MAX_HIGH_SCORES]
+            else:
+                loaded_high_scores[mode] = [] # Garde vide si clé absente ou type incorrect
+    else:
+        print(f"Fichier high score non trouvé ({file_path}), initialisation.")
 
     high_scores = loaded_high_scores # Met à jour la globale
 
