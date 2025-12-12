@@ -2943,28 +2943,15 @@ def run_game_over(events, dt, screen, game_state):
     current_time = pygame.time.get_ticks()
     
     # Verrouillage des entrées pendant 5 secondes au démarrage du menu game over
-    game_over_start_time = game_state.get('game_over_start_time', current_time)
-    if 'game_over_start_time' not in game_state:
+    game_over_start_time = game_state.get('game_over_start_time')
+    if not game_over_start_time or 'game_over_start_time' not in game_state:
+        game_over_start_time = current_time
         game_state['game_over_start_time'] = current_time
         # Réinitialiser la sélection du menu à chaque nouvelle game over
         game_state['gameover_menu_selection'] = 0
     input_lock_duration = 5000  # 5 secondes
     inputs_locked = (current_time - game_over_start_time < input_lock_duration)
-    
-    # Forcer la sélection à 0 pendant le verrouillage
-    if inputs_locked:
-        gameover_menu_selection = 0
-        game_state['gameover_menu_selection'] = 0
-    
-    # Verrouillage des entrées pendant 5 secondes au démarrage du menu game over
-    game_over_start_time = game_state.get('game_over_start_time', current_time)
-    if 'game_over_start_time' not in game_state:
-        game_state['game_over_start_time'] = current_time
-        # Réinitialiser la sélection du menu à chaque nouvelle game over
-        game_state['gameover_menu_selection'] = 0
-    input_lock_duration = 5000  # 5 secondes
-    inputs_locked = (current_time - game_over_start_time < input_lock_duration)
-    
+
     # Forcer la sélection à 0 pendant le verrouillage
     if inputs_locked:
         gameover_menu_selection = 0
