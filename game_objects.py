@@ -700,54 +700,49 @@ class Snake:
             self.combo_counter = 0
             self.combo_timer = 0
 
-            # if self.is_player and not self.skill_ready and self.skill_cooldown_duration > 0: # Supprimé (logique générique)
-            #     if current_time >= self.last_skill_time + self.skill_cooldown_duration:
-            #         self.skill_ready = True
-            #         utils.play_sound("skill_ready")
+        # --- NOUVELLE LOGIQUE COOLDOWNS & EFFETS ---
+        if self.is_player:  # Cooldowns spécifiques au joueur
+            # Cooldown Dash
+            if not self.dash_ready and self.last_dash_time > 0:
+                if current_time >= self.last_dash_time + config.SKILL_COOLDOWN_DASH:
+                    self.dash_ready = True
+                    # Optionnel: utils.play_sound("skill_ready_dash") ou son spécifique
 
-            # --- NOUVELLE LOGIQUE COOLDOWNS & EFFETS ---
-            if self.is_player:  # Cooldowns spécifiques au joueur
-                # Cooldown Dash
-                if not self.dash_ready and self.last_dash_time > 0:
-                    if current_time >= self.last_dash_time + config.SKILL_COOLDOWN_DASH:
-                        self.dash_ready = True
-                        # Optionnel: utils.play_sound("skill_ready_dash") ou son spécifique
+            # Cooldown Bouclier
+            if not self.shield_ready and self.last_shield_time > 0:
+                if current_time >= self.last_shield_time + config.SKILL_COOLDOWN_SHIELD:
+                    self.shield_ready = True
+                    utils.play_sound("skill_ready")  # Son générique pour le moment
 
-                # Cooldown Bouclier
-                if not self.shield_ready and self.last_shield_time > 0:
-                    if current_time >= self.last_shield_time + config.SKILL_COOLDOWN_SHIELD:
-                        self.shield_ready = True
-                        utils.play_sound("skill_ready")  # Son générique pour le moment
+        # --- MODIFICATION: Expiration de la CHARGE de bouclier ---
+        # Désactivation Bouclier de compétence ACTIF (différent du cooldown) <- Remplacé par expiration de charge
+        # if self.shield_skill_active and current_time >= self.shield_skill_end_time:
+        #     print(f"DEBUG update_effects: Deactivating SKILL shield for {self.name}. Current: {current_time}, End: {self.shield_skill_end_time}") # DEBUG
+        #     self.shield_skill_active = False
+        #     self.shield_skill_end_time = 0
+        # Optionnel: Effet visuel/sonore de fin de bouclier
+        if self.shield_charge_active and current_time >= self.shield_charge_expiry_time:
+            print(
+                f"DEBUG update_effects: Shield CHARGE expired for {self.name}. Current: {current_time}, Expiry: {self.shield_charge_expiry_time}")  # DEBUG
+            self.shield_charge_active = False
+            self.shield_charge_expiry_time = 0
+        # --- FIN MODIFICATION ---
 
-                # --- MODIFICATION: Expiration de la CHARGE de bouclier ---
-                # Désactivation Bouclier de compétence ACTIF (différent du cooldown) <- Remplacé par expiration de charge
-                # if self.shield_skill_active and current_time >= self.shield_skill_end_time:
-                #     print(f"DEBUG update_effects: Deactivating SKILL shield for {self.name}. Current: {current_time}, End: {self.shield_skill_end_time}") # DEBUG
-                #     self.shield_skill_active = False
-                #     self.shield_skill_end_time = 0
-                # Optionnel: Effet visuel/sonore de fin de bouclier
-            if self.shield_charge_active and current_time >= self.shield_charge_expiry_time:
-                print(
-                    f"DEBUG update_effects: Shield CHARGE expired for {self.name}. Current: {current_time}, Expiry: {self.shield_charge_expiry_time}")  # DEBUG
-                self.shield_charge_active = False
-                self.shield_charge_expiry_time = 0
-                # --- FIN MODIFICATION ---
-
-                # Gain d'armure périodique (via nourriture type armure)
-            if self.is_armor_regen_pending:
-                # print(f"DEBUG update_effects: Armor regen pending for {self.name}. Armor: {self.armor}, MaxStacks: {config.ARMOR_REGEN_MAX_STACKS}, TimeCheck: {current_time >= self.last_armor_regen_tick_time + config.ARMOR_REGEN_INTERVAL}") # Debug
-                if self.armor < config.ARMOR_REGEN_MAX_STACKS:
-                    if current_time >= self.last_armor_regen_tick_time + config.ARMOR_REGEN_INTERVAL:
-                        # print(f"DEBUG: {self.name} regenerating 1 armor via timer. Current: {self.armor}") # Debug
-                        self.add_armor(1)
-                        self.last_armor_regen_tick_time = current_time  # Réinitialise pour le prochain intervalle
-                        # Jouer un son léger si on veut un feedback
-                        # utils.play_sound("armor_regen_tick")
-                else:
-                    # Si l'armure a atteint ou dépassé la limite de regen, on arrête le timer
-                    # print(f"DEBUG: {self.name} reached armor regen stack limit ({self.armor}). Stopping timer.") # Debug
-                    self.is_armor_regen_pending = False
-            # --- FIN NOUVELLE LOGIQUE ---
+        # Gain d'armure périodique (via nourriture type armure)
+        if self.is_armor_regen_pending:
+            # print(f"DEBUG update_effects: Armor regen pending for {self.name}. Armor: {self.armor}, MaxStacks: {config.ARMOR_REGEN_MAX_STACKS}, TimeCheck: {current_time >= self.last_armor_regen_tick_time + config.ARMOR_REGEN_INTERVAL}") # Debug
+            if self.armor < config.ARMOR_REGEN_MAX_STACKS:
+                if current_time >= self.last_armor_regen_tick_time + config.ARMOR_REGEN_INTERVAL:
+                    # print(f"DEBUG: {self.name} regenerating 1 armor via timer. Current: {self.armor}") # Debug
+                    self.add_armor(1)
+                    self.last_armor_regen_tick_time = current_time  # Réinitialise pour le prochain intervalle
+                    # Jouer un son léger si on veut un feedback
+                    # utils.play_sound("armor_regen_tick")
+            else:
+                # Si l'armure a atteint ou dépassé la limite de regen, on arrête le timer
+                # print(f"DEBUG: {self.name} reached armor regen stack limit ({self.armor}). Stopping timer.") # Debug
+                self.is_armor_regen_pending = False
+        # --- FIN NOUVELLE LOGIQUE ---
 
     def get_current_move_interval(self):
         base_interval = config.SNAKE_MOVE_INTERVAL_BASE if self.is_player else self.move_interval
@@ -848,7 +843,7 @@ class Snake:
 
     def shrink(self, amount=1):
         if not self.alive or amount <= 0: return
-        actual_shrink = min(amount, self.length - 1)
+        actual_shrink = min(amount, self.length)
         last_center_px = None
 
         if actual_shrink > 0:
@@ -864,7 +859,9 @@ class Snake:
                 last_center_px = (last_pos[0] * config.GRID_SIZE + config.GRID_SIZE // 2, last_pos[1] * config.GRID_SIZE + config.GRID_SIZE // 2)
 
         if self.length <= 0:
-             death_pos = last_center_px if last_center_px else self.get_head_center_px()
+            death_pos = last_center_px if last_center_px else self.get_head_center_px()
+            self.handle_damage(pygame.time.get_ticks(), is_shrink_death=True, death_pos_px=death_pos)
+            return
 
     def add_score(self, value, is_combo_bonus=False, is_objective_bonus=False):
         if not self.alive or not self.is_player or value == 0:
@@ -947,59 +944,60 @@ class Snake:
     def handle_damage(self, current_time, killer_snake=None, is_self_collision=False, is_shrink_death=False, damage_source_pos=None, death_pos_px=None):
         if not self.alive: return False
 
-        is_timer_invincible = (self.invincible_timer > 0 and current_time < self.invincible_timer)
-        is_powerup_invincible = self.invincible_powerup_active
-        is_invincible = is_timer_invincible or is_powerup_invincible
+        if not is_shrink_death:
+            is_timer_invincible = (self.invincible_timer > 0 and current_time < self.invincible_timer)
+            is_powerup_invincible = self.invincible_powerup_active
+            is_invincible = is_timer_invincible or is_powerup_invincible
 
-        if is_invincible:
-            return True
+            if is_invincible:
+                return True
 
-        # --- MODIFICATION : Vérification et CONSOMMATION Bouclier de COMPÉTENCE ---
-        # if self.shield_skill_active: # <- Ancienne vérification
-        if self.shield_charge_active: # <- Nouvelle vérification
-            print(f"DEBUG handle_damage: SKILL shield charge absorbed damage for {self.name}") # DEBUG
-            self.shield_charge_active = False # Consomme la charge
-            self.shield_charge_expiry_time = 0 # Annule l'expiration
-            # Jouer un son différent si le bouclier de compétence absorbe
-            utils.play_sound("shield_absorb")  # Ou "skill_shield_absorb"
-            # Effet visuel spécifique
-            cx_skill, cy_skill = self.get_head_center_px()
-            if cx_skill is not None: utils.emit_particles(cx_skill, cy_skill, 20, config.COLOR_SHIELD_POWERUP, (3, 7),
-                                                          (300, 600), (2, 5))
-            # PAS D'INVINCIBILITÉ ADDITIONNELLE ICI (sauf si on le décide)
-            # self.invincible_timer = current_time + ???
-            return True  # Bloque les dégâts, le serpent survit
+            # --- MODIFICATION : Vérification et CONSOMMATION Bouclier de COMPÉTENCE ---
+            # if self.shield_skill_active: # <- Ancienne vérification
+            if self.shield_charge_active: # <- Nouvelle vérification
+                print(f"DEBUG handle_damage: SKILL shield charge absorbed damage for {self.name}") # DEBUG
+                self.shield_charge_active = False # Consomme la charge
+                self.shield_charge_expiry_time = 0 # Annule l'expiration
+                # Jouer un son différent si le bouclier de compétence absorbe
+                utils.play_sound("shield_absorb")  # Ou "skill_shield_absorb"
+                # Effet visuel spécifique
+                cx_skill, cy_skill = self.get_head_center_px()
+                if cx_skill is not None: utils.emit_particles(cx_skill, cy_skill, 20, config.COLOR_SHIELD_POWERUP, (3, 7),
+                                                              (300, 600), (2, 5))
+                # PAS D'INVINCIBILITÉ ADDITIONNELLE ICI (sauf si on le décide)
+                # self.invincible_timer = current_time + ???
+                return True  # Bloque les dégâts, le serpent survit
 
-            # Vérification Bouclier POWERUP (logique existante)
-        if self.shield_active:
-            utils.play_sound("shield_absorb")
-            self.shield_active = False  # Le powerup est consommé
-            self.powerup_end_time = 0
-            cx, cy = self.get_head_center_px()
-            if cx is not None: utils.emit_particles(cx, cy, 15, config.COLOR_SHIELD_ABSORB, (2, 6), (400, 900), (2, 4),
-                                                    0)
-            self.invincible_timer = current_time + config.ARMOR_ABSORB_INVINCIBILITY
-            return True
+                # Vérification Bouclier POWERUP (logique existante)
+            if self.shield_active:
+                utils.play_sound("shield_absorb")
+                self.shield_active = False  # Le powerup est consommé
+                self.powerup_end_time = 0
+                cx, cy = self.get_head_center_px()
+                if cx is not None: utils.emit_particles(cx, cy, 15, config.COLOR_SHIELD_ABSORB, (2, 6), (400, 900), (2, 4),
+                                                        0)
+                self.invincible_timer = current_time + config.ARMOR_ABSORB_INVINCIBILITY
+                return True
 
-        previous_armor = self.armor
-        if self.armor > 0:
-            self.armor -= 1
-            self.invincible_timer = current_time + config.ARMOR_ABSORB_INVINCIBILITY
-            cx, cy = self.get_head_center_px()
-            if cx is not None: utils.emit_particles(cx, cy, 10, config.COLOR_ARMOR_HIT, (1, 4), (300, 600), (1, 3), 0, 0.05)
+            previous_armor = self.armor
+            if self.armor > 0:
+                self.armor -= 1
+                self.invincible_timer = current_time + config.ARMOR_ABSORB_INVINCIBILITY
+                cx, cy = self.get_head_center_px()
+                if cx is not None: utils.emit_particles(cx, cy, 10, config.COLOR_ARMOR_HIT, (1, 4), (300, 600), (1, 3), 0, 0.05)
 
-            # -- Modification: Déplacé la logique du warning dans add_armor --
-            # if self.armor == 0 and previous_armor > 0:
-            #     utils.play_sound("low_armor_warning")
-            #     self.low_armor_flash_active = True
-            #     self.low_armor_flash_end_time = current_time + config.LOW_ARMOR_FLASH_DURATION
-            #     self.low_armor_flash_next_toggle_time = current_time + config.LOW_ARMOR_FLASH_ON_TIME
-            #     self.low_armor_flash_visible = True
-            # else:
-            #      utils.play_sound(self.hit_sound)
-            utils.play_sound(self.hit_sound) # Joue le son de hit normal quand l'armure absorbe
+                # -- Modification: Déplacé la logique du warning dans add_armor --
+                # if self.armor == 0 and previous_armor > 0:
+                #     utils.play_sound("low_armor_warning")
+                #     self.low_armor_flash_active = True
+                #     self.low_armor_flash_end_time = current_time + config.LOW_ARMOR_FLASH_DURATION
+                #     self.low_armor_flash_next_toggle_time = current_time + config.LOW_ARMOR_FLASH_ON_TIME
+                #     self.low_armor_flash_visible = True
+                # else:
+                #      utils.play_sound(self.hit_sound)
+                utils.play_sound(self.hit_sound) # Joue le son de hit normal quand l'armure absorbe
 
-            return True
+                return True
 
         # --- MORT ---
         if self.is_player and self.combo_counter > 0: utils.play_sound("combo_break")

@@ -2194,7 +2194,7 @@ def run_pvp_setup(events, dt, screen, game_state):
             
         # --- Gestion Joystick Game Over et Navigation Menu ---
         elif event.type == pygame.JOYAXISMOTION or event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = config.JOYSTICK_THRESHOLD
@@ -2356,6 +2356,14 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     player1_name_input = game_state.get('player1_name_input', "Joueur 1")
     player2_name_input = game_state.get('player2_name_input', "Joueur 2")
     stage = game_state.get('pvp_name_entry_stage', 1) # 1 pour J1, 2 pour J2
+
+    # Joysticks autorisés pour cette étape (J1 puis J2). On garde J1 en secours si J2 est absent.
+    allowed_joysticks = {0} if stage == 1 else {1}
+    try:
+        if stage == 2 and pygame.joystick.get_count() < 2:
+            allowed_joysticks.add(0)
+    except Exception:
+        allowed_joysticks.add(0)
     
     # Positions pour le clavier virtuel
     vk_row = game_state.get('vk_row_pvp', 0)
@@ -2423,7 +2431,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
 
         # --- Gestion Joystick pour Navigation Clavier Virtuel ---
         elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id in allowed_joysticks and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = config.JOYSTICK_THRESHOLD
@@ -2578,6 +2586,8 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             
             elif event.type == pygame.JOYBUTTONDOWN:  # Vérification principale pour les boutons joystick
                 joystick_id = event.instance_id
+                if joystick_id not in allowed_joysticks:
+                    continue
                 button = event.button  # 'button' est défini ici
 
                 # Le code pour le bouton 8 doit être ici, correctement indenté
@@ -3041,7 +3051,7 @@ def run_game_over(events, dt, screen, game_state):
             
         # --- Gestion Joystick Game Over et Navigation Menu ---
         elif event.type == pygame.JOYAXISMOTION or event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if current_time - last_axis_move_time > axis_repeat_delay:
                 # Navigation haut/bas entre les options
                 if (event.type == pygame.JOYAXISMOTION and event.axis == 0):
                     value = event.value
@@ -3070,45 +3080,44 @@ def run_game_over(events, dt, screen, game_state):
                         last_axis_move_time = current_time
         
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
-                button = event.button
-                if is_confirm_button(button): # Confirmation de l'option sélectionnée
-                    try:
-                        game_state['game_over_hs_saved'] = False # Réinitialise flag sauvegarde HS
-                        selected_option = gameover_menu_options[gameover_menu_selection]
-                        
-                        if selected_option == "Rejouer":
-                            utils.play_sound("powerup_pickup")
-                            # Réinitialiser le timer de début de game over pour une future partie
-                            game_state['game_over_start_time'] = 0
+            button = event.button
+            if is_confirm_button(button): # Confirmation de l'option sélectionnée
+                try:
+                    game_state['game_over_hs_saved'] = False # Réinitialise flag sauvegarde HS
+                    selected_option = gameover_menu_options[gameover_menu_selection]
 
-                            # Conserver les noms des joueurs
-                            if player_snake:
-                                game_state['player1_name_input'] = player_snake.name
-                            if player2_snake:
-                                game_state['player2_name_input'] = player2_snake.name
+                    if selected_option == "Rejouer":
+                        utils.play_sound("powerup_pickup")
+                        # Réinitialiser le timer de début de game over pour une future partie
+                        game_state['game_over_start_time'] = 0
 
-                            if current_game_mode == config.MODE_PVP:
-                                next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
-                            else:
-                                reset_game(game_state); next_state = config.PLAYING
-                            return next_state
-                        elif selected_option == "Menu Principal":
-                            utils.play_sound("combo_break")
-                            game_state['game_over_hs_saved'] = False
-                            # Réinitialiser le timer de début de game over
-                            game_state['game_over_start_time'] = 0
-                            next_state = config.MENU
-                            return next_state
-                    except Exception as e:
-                        print(f"Erreur en tentant d'exécuter l'option via joystick: {e}"); traceback.print_exc()
-                        next_state = config.MENU; return next_state
-                        
-                elif button == 8: # Bouton 8 pour Menu (Echap) - raccourci direct
-                    logging.info("Joystick button 8 pressed in game over, returning to MENU.")
-                    game_state['game_over_hs_saved'] = False
-                    game_state['game_over_start_time'] = 0 # Réinitialiser le timer
+                        # Conserver les noms des joueurs
+                        if player_snake:
+                            game_state['player1_name_input'] = player_snake.name
+                        if player2_snake:
+                            game_state['player2_name_input'] = player2_snake.name
+
+                        if current_game_mode == config.MODE_PVP:
+                            next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
+                        else:
+                            reset_game(game_state); next_state = config.PLAYING
+                        return next_state
+                    elif selected_option == "Menu Principal":
+                        utils.play_sound("combo_break")
+                        game_state['game_over_hs_saved'] = False
+                        # Réinitialiser le timer de début de game over
+                        game_state['game_over_start_time'] = 0
+                        next_state = config.MENU
+                        return next_state
+                except Exception as e:
+                    print(f"Erreur en tentant d'exécuter l'option via joystick: {e}"); traceback.print_exc()
                     next_state = config.MENU; return next_state
+
+            elif button == 8: # Bouton 8 pour Menu (Echap) - raccourci direct
+                logging.info("Joystick button 8 pressed in game over, returning to MENU.")
+                game_state['game_over_hs_saved'] = False
+                game_state['game_over_start_time'] = 0 # Réinitialiser le timer
+                next_state = config.MENU; return next_state
         # --- FIN Gestion Joystick ---
         elif event.type == pygame.KEYDOWN:
             key = event.key
