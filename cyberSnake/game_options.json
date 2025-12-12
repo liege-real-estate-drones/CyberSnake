@@ -1,0 +1,16 @@
+{
+  "speed": "normal",
+  "growth_per_food": 1,
+  "mine_density": "normal",
+  "powerups": {
+    "poison": true,
+    "ghost": true,
+    "freeze": true,
+    "shield": true
+  },
+  "pvp": {
+    "friendly_fire": false,
+    "score_limit": 10,
+    "best_of": 0
+  }
+}

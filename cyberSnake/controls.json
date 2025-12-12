@@ -1,0 +1,18 @@
+{
+  "buttons": {
+    "PRIMARY": 0,
+    "SECONDARY": 1,
+    "TERTIARY": 2,
+    "PAUSE": 7,
+    "BACK": 8
+  },
+  "axes": {
+    "H": 0,
+    "V": 1
+  },
+  "invert_axis": {
+    "H": 0,
+    "V": 0
+  },
+  "threshold": 0.45
+}
