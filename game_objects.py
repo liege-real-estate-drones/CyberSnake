@@ -12,6 +12,17 @@ import config
 import utils
 import logging # Added for detailed score logging
 
+# Logging helper for draw errors
+logger = logging.getLogger(__name__)
+_draw_warning_labels = set()
+
+
+def _log_draw_error(label, exc):
+    """Log a draw error once per label to avoid spam in the render loop."""
+    if label not in _draw_warning_labels:
+        logger.warning("Error drawing %s: %s", label, exc)
+        _draw_warning_labels.add(label)
+
 # --- Classes Game Objects ---
 
 
@@ -53,8 +64,8 @@ class Particle:
                 pos = (math.floor(self.x), math.floor(self.y))
                 try:
                     pygame.draw.circle(surface, self.color, pos, radius)
-                except (TypeError, ValueError):
-                    pass
+                except (TypeError, ValueError) as exc:
+                    _log_draw_error("particle", exc)
 
 class Projectile:
     """Représente un projectile tiré par un serpent."""
@@ -87,8 +98,8 @@ class Projectile:
         """Dessine le projectile."""
         try:
             pygame.draw.rect(surface, self.color, self.rect)
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as exc:
+            _log_draw_error("projectile", exc)
 
     def is_off_screen(self, screen_width, screen_height):
         """Vérifie si le projectile est hors de l'écran."""
@@ -117,8 +128,8 @@ class Mine:
             pygame.draw.rect(surface, draw_color, self.rect)
             pygame.draw.line(surface, config.COLOR_BACKGROUND, self.rect.topleft, self.rect.bottomright, 2)
             pygame.draw.line(surface, config.COLOR_BACKGROUND, self.rect.topright, self.rect.bottomleft, 2)
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as exc:
+            _log_draw_error("mine", exc)
 
     def get_center_pos_px(self):
         """Retourne le centre en pixels."""
@@ -136,8 +147,8 @@ class Wall:
             pygame.draw.rect(surface, config.COLOR_WALL, self.rect)
             border_color = tuple(max(0, c - 30) for c in config.COLOR_WALL)
             pygame.draw.rect(surface, border_color, self.rect, 1)
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as exc:
+            _log_draw_error("wall", exc)
 
 class Nest:
     """Représente un nid qui peut générer des ennemis."""
@@ -225,8 +236,7 @@ class Nest:
             border_color = tuple(max(0, c - 20) for c in current_color)
             pygame.draw.ellipse(surface, border_color, self.rect, 1)
         except (pygame.error, TypeError, ValueError) as draw_err:
-            # print(f"Warning: Error drawing nest ellipse: {draw_err}") # Décommentez pour debug
-            pass
+            _log_draw_error("nest_ellipse", draw_err)
 
         # --- Affichage Infos Nid (MODIFIÉ pour timer permanent) ---
         current_time_draw = pygame.time.get_ticks()
@@ -262,8 +272,7 @@ class Nest:
             surface.blit(health_surf, health_rect)
 
         except (pygame.error, AttributeError, TypeError, ValueError) as text_err:
-            # print(f"Warning: Error rendering/blitting nest text: {text_err}") # Décommentez pour debug
-            pass
+            _log_draw_error("nest_text", text_err)
 
 
 
@@ -354,8 +363,8 @@ class MovingMine:
             pygame.draw.rect(surface, draw_color, self.rect)
             pygame.draw.line(surface, config.COLOR_BACKGROUND, self.rect.topleft, self.rect.bottomright, 2)
             pygame.draw.line(surface, config.COLOR_BACKGROUND, self.rect.topright, self.rect.bottomleft, 2)
-        except (TypeError, ValueError, pygame.error):
-            pass
+        except (TypeError, ValueError, pygame.error) as exc:
+            _log_draw_error("moving_mine", exc)
 
     def get_center_pos_px(self):
         """Retourne le centre actuel en pixels."""
