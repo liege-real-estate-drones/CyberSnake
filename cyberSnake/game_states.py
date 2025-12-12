@@ -2501,111 +2501,111 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 game_state['input_active_pvp'] = input_active
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
-                # N'accepter les boutons que si l'entrée est active
-                if input_active:
-                    if is_confirm_button(event.button): # Boutons A/B confirment la sélection actuelle
-                        # Obtenez le caractère sélectionné
-                        selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
-                        
-                if selected_char == "OK": # Confirmation du nom
-                    current_input_name = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
-                    name_entered = current_input_name.strip()[:15]
-                    name_entered = name_entered if name_entered else f"Joueur {stage}"
-                    utils.play_sound("name_input_confirm")
+            joystick_id = event.instance_id
 
-                    # ---- DEBUT BLOC CORRECTEMENT INDENTÉ ----
+            # Ne rien faire si la manette actuelle n'est pas autorisée (ex: étape 2 sans manette 2)
+            if joystick_id not in allowed_joysticks:
+                continue
+
+            button = event.button
+
+            # Bouton retour direct vers la config PvP
+            if button == 8:
+                logging.info("run_name_entry_pvp: Joystick button 8 pressed, returning to PVP_SETUP.")
+                game_state.pop('vk_row_pvp', None)
+                game_state.pop('vk_col_pvp', None)
+                game_state.pop('input_active_pvp_j1', None)
+                game_state.pop('input_active_pvp_j2', None)
+                game_state.pop('player1_name_pvp', None)
+                game_state.pop('player2_name_pvp', None)
+                game_state.pop('name_entry_stage', None)
+                game_state.pop('name_entry_start_time_pvp', None)
+
+                next_state = config.PVP_SETUP
+                game_state['current_state'] = next_state
+                return next_state
+
+            # N'accepter les autres actions que si l'entrée est active
+            if not input_active:
+                continue
+
+            selected_char = None
+            if is_confirm_button(button):  # Boutons A/B confirment la sélection actuelle
+                # Obtenez le caractère sélectionné
+                selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
+
+            if selected_char == "OK":  # Confirmation du nom
+                current_input_name = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
+                name_entered = current_input_name.strip()[:15]
+                name_entered = name_entered if name_entered else f"Joueur {stage}"
+                utils.play_sound("name_input_confirm")
+
+                if stage == 1:
+                    game_state['player1_name_input'] = name_entered
+                    logging.info(f"Nom J1 (PvP) confirmé par joystick: '{name_entered}'")
+                    game_state['pvp_name_entry_stage'] = 2
+                    game_state['vk_row_pvp'] = 0
+                    game_state['vk_col_pvp'] = 0
+                    # Réinitialiser le timer pour la nouvelle étape et s'assurer que l'entrée est active
+                    game_state['name_entry_start_time_pvp'] = current_time
+                    game_state['input_active_pvp'] = True
+                    # (conservé) ne pas effacer player2_name_input pour préserver le nom J2
+                elif stage == 2:
+                    game_state['player2_name_input'] = name_entered
+                    logging.info(f"Nom J2 (PvP) confirmé par joystick: '{name_entered}'")
+                    logging.info(f"Noms PvP finaux: J1='{game_state['player1_name_input']}', J2='{game_state['player2_name_input']}'")
+                    game_state['pvp_name_entry_stage'] = 1  # Réinitialise pour la prochaine fois
+
+                    reset_game(game_state)
+                    logging.info(f"DEBUG run_name_entry_pvp (joystick): player2_snake après reset_game: {game_state.get('player2_snake')}")
+
+                    if not game_state.get('player2_snake'):
+                        logging.error("CRITICAL (run_name_entry_pvp joystick): player2_snake non initialisé après reset_game. Retour au menu.")
+                        game_state['pvp_setup_error'] = "Erreur init. J2. Menu."
+                        next_state = config.MENU
+                    else:
+                        logging.info("run_name_entry_pvp joystick: player2_snake initialisé, passage à PLAYING.")
+                        next_state = config.PLAYING
+
+                    game_state['current_state'] = next_state
+                    return next_state  # Quitte la fonction et lance le jeu ou retourne au menu
+
+            elif selected_char == "<-":  # Effacer
+                # Récupérer la valeur la plus à jour de game_state avant de modifier
+                temp_current_input = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
+                if temp_current_input:
+                    new_value = temp_current_input[:-1]
                     if stage == 1:
-                        game_state['player1_name_input'] = name_entered
-                        logging.info(f"Nom J1 (PvP) confirmé par joystick: '{name_entered}'")
-                        game_state['pvp_name_entry_stage'] = 2 
-                        game_state['vk_row_pvp'] = 0
-                        game_state['vk_col_pvp'] = 0
-                        # Réinitialiser le timer pour la nouvelle étape et s'assurer que l'entrée est active
-                        game_state['name_entry_start_time_pvp'] = current_time 
-                        game_state['input_active_pvp'] = True
-                        # (conservé) ne pas effacer player2_name_input pour préserver le nom J2
-                    elif stage == 2:
-                        game_state['player2_name_input'] = name_entered
-                        logging.info(f"Nom J2 (PvP) confirmé par joystick: '{name_entered}'")
-                        logging.info(f"Noms PvP finaux: J1='{game_state['player1_name_input']}', J2='{game_state['player2_name_input']}'")
-                        game_state['pvp_name_entry_stage'] = 1 # Réinitialise pour la prochaine fois
-
-                        reset_game(game_state) 
-                        logging.info(f"DEBUG run_name_entry_pvp (joystick): player2_snake après reset_game: {game_state.get('player2_snake')}")
-
-                        if not game_state.get('player2_snake'):
-                            logging.error("CRITICAL (run_name_entry_pvp joystick): player2_snake non initialisé après reset_game. Retour au menu.")
-                            game_state['pvp_setup_error'] = "Erreur init. J2. Menu." 
-                            next_state = config.MENU
-                        else:
-                            logging.info("run_name_entry_pvp joystick: player2_snake initialisé, passage à PLAYING.")
-                            next_state = config.PLAYING
-
-                        game_state['current_state'] = next_state 
-                        return next_state # Quitte la fonction et lance le jeu ou retourne au menu
-                    # ---- FIN DU BLOC CORRECTEMENT INDENTÉ ----
-
-                elif selected_char == "<-": # Effacer
+                        game_state['player1_name_input'] = new_value
+                        player1_name_input = new_value  # Mettre à jour la copie locale
+                    else:
+                        game_state['player2_name_input'] = new_value
+                        player2_name_input = new_value  # Mettre à jour la copie locale
+                    current_input_value = new_value  # <--- MISE À JOUR ICI
+                    utils.play_sound("combo_break")
+            elif selected_char:  # Ajout d'un caractère
+                try:
+                    logging.debug(f"PVP Char Input: Stage {stage}, Char: '{selected_char}', vk_row: {vk_row}, vk_col: {vk_col}")
                     # Récupérer la valeur la plus à jour de game_state avant de modifier
                     temp_current_input = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
-                    if temp_current_input:
-                        new_value = temp_current_input[:-1]
+                    logging.debug(f"PVP Char Input: temp_current_input = '{temp_current_input}'")
+
+                    if len(temp_current_input) < 15:
+                        new_value = temp_current_input + selected_char
+                        logging.debug(f"PVP Char Input: new_value = '{new_value}'")
                         if stage == 1:
                             game_state['player1_name_input'] = new_value
-                            player1_name_input = new_value # Mettre à jour la copie locale
-                        else:
+                            player1_name_input = new_value  # Mettre à jour la copie locale
+                        else:  # stage == 2
                             game_state['player2_name_input'] = new_value
-                            player2_name_input = new_value # Mettre à jour la copie locale
-                        current_input_value = new_value # <--- MISE À JOUR ICI
-                        utils.play_sound("combo_break")
-                else: # Ajout d'un caractère
-                    try:
-                        logging.debug(f"PVP Char Input: Stage {stage}, Char: '{selected_char}', vk_row: {vk_row}, vk_col: {vk_col}")
-                        # Récupérer la valeur la plus à jour de game_state avant de modifier
-                        temp_current_input = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
-                        logging.debug(f"PVP Char Input: temp_current_input = '{temp_current_input}'")
-
-                        if len(temp_current_input) < 15:
-                            new_value = temp_current_input + selected_char
-                            logging.debug(f"PVP Char Input: new_value = '{new_value}'")
-                            if stage == 1:
-                                game_state['player1_name_input'] = new_value
-                                player1_name_input = new_value # Mettre à jour la copie locale
-                            else: # stage == 2
-                                game_state['player2_name_input'] = new_value
-                                player2_name_input = new_value # Mettre à jour la copie locale
-                            current_input_value = new_value 
-                            utils.play_sound("name_input_char")
-                        logging.debug("PVP Char Input: Character processed successfully.")
-                    except Exception as char_error:
-                        logging.error(f"ERREUR lors de l'ajout de caractère en PvP (stage {stage}): {char_error}", exc_info=True)
-                        # À des fins de débogage, vous pourriez temporairement forcer un état d'erreur ici
-                        # ou simplement laisser le gestionnaire principal dans cybersnake.pygame prendre le relais.
-            
-            elif event.type == pygame.JOYBUTTONDOWN:  # Vérification principale pour les boutons joystick
-                joystick_id = event.instance_id
-                if joystick_id not in allowed_joysticks:
-                    continue
-                button = event.button  # 'button' est défini ici
-
-                # Le code pour le bouton 8 doit être ici, correctement indenté
-                if button == 8:  # Utilisez 'if' ici si c'est la première vérification de bouton,
-                                # ou 'elif' si d'autres 'if button == ...' le précèdent DANS CE BLOC JOYBUTTONDOWN.
-                    logging.info("run_name_entry_pvp: Joystick button 8 pressed, returning to PVP_SETUP.")
-                    # ... (code pour nettoyer l'état de game_state si nécessaire) ...
-                    game_state.pop('vk_row_pvp', None)
-                    game_state.pop('vk_col_pvp', None)
-                    game_state.pop('input_active_pvp_j1', None)
-                    game_state.pop('input_active_pvp_j2', None)
-                    game_state.pop('player1_name_pvp', None)
-                    game_state.pop('player2_name_pvp', None)
-                    game_state.pop('name_entry_stage', None)
-                    game_state.pop('name_entry_start_time_pvp', None)
-                    
-                    next_state = config.PVP_SETUP 
-                    game_state['current_state'] = next_state
-                    return next_state
+                            player2_name_input = new_value  # Mettre à jour la copie locale
+                        current_input_value = new_value
+                        utils.play_sound("name_input_char")
+                    logging.debug("PVP Char Input: Character processed successfully.")
+                except Exception as char_error:
+                    logging.error(f"ERREUR lors de l'ajout de caractère en PvP (stage {stage}): {char_error}", exc_info=True)
+                    # À des fins de débogage, vous pourriez temporairement forcer un état d'erreur ici
+                    # ou simplement laisser le gestionnaire principal dans cybersnake.pygame prendre le relais.
 
         # --- Gestion Clavier pour rétrocompatibilité ---
         elif event.type == pygame.KEYDOWN:
