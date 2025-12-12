@@ -3101,9 +3101,9 @@ def run_game_over(events, dt, screen, game_state):
                             game_state['player2_name_input'] = player2_snake.name
 
                         if current_game_mode == config.MODE_PVP:
-                            next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
+                            next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1; game_state['current_state'] = next_state
                         else:
-                            reset_game(game_state); next_state = config.PLAYING
+                            reset_game(game_state); next_state = config.PLAYING; game_state['current_state'] = next_state
                         return next_state
                     elif selected_option == "Menu Principal":
                         utils.play_sound("combo_break")
@@ -3130,10 +3130,10 @@ def run_game_over(events, dt, screen, game_state):
                     game_state['game_over_start_time'] = 0 # Réinitialiser le timer
                     if current_game_mode == config.MODE_PVP:
                         # Pour PvP, on retourne à l'écran de saisie des noms
-                        next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1
+                        next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1; game_state['current_state'] = next_state
                     else:
                         # Pour les autres modes, on reset et on relance directement
-                        reset_game(game_state); next_state = config.PLAYING
+                        reset_game(game_state); next_state = config.PLAYING; game_state['current_state'] = next_state
                     return next_state
                 except Exception as e:
                     print(f"Erreur en tentant de rejouer: {e}"); traceback.print_exc()
