@@ -785,6 +785,10 @@ def reset_game(game_state):
     utils.clear_particles()
     utils.kill_feed.clear()
     current_game_mode = game_state.get('current_game_mode')
+    if current_game_mode is None:
+        print("current_game_mode manquant, utilisation du mode Solo par défaut pour le redémarrage.")
+        current_game_mode = config.MODE_SOLO
+        game_state['current_game_mode'] = current_game_mode
     selected_map_key = game_state.get('selected_map_key', config.DEFAULT_MAP_KEY)
     player1_name = game_state.get('player1_name_input', "Joueur 1")
     base_path = game_state.get('base_path', "")
