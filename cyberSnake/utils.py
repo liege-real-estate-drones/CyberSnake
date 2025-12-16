@@ -64,37 +64,45 @@ def load_assets(base_path):
     except Exception:
         pass
 
-    # --- Chargement des Images de Nourriture et Powerups ---
+    # --- Chargement et Optimisation des Images ---
     global images
+    images = {} # On reset le dictionnaire
     logger.info(f"Début chargement images depuis base_path: {base_path}")
 
-    for type_key, data in config.FOOD_TYPES.items():
-        if 'image_file' in data:
-            img_path = os.path.join(base_path, data['image_file'])
-            try:
-                if os.path.exists(img_path):
-                    loaded_img = pygame.image.load(img_path).convert_alpha() # Use convert_alpha for transparency
-                    images[data['image_file']] = loaded_img
-                    logger.debug(f"Image chargée avec succès: {data['image_file']}")
-                else:
-                    logger.warning(f"Attention: Image non trouvée: {img_path}")
-            except Exception as e:
-                logger.error(f"Erreur chargement image {img_path}: {e}", exc_info=True)
+    # Liste de TOUS les fichiers à charger (Nourriture + Powerups + Serpents)
+    files_to_load = [
+        # Nourriture
+        "food_energy.png", "food_ammo.png", "food_poison.png", "food_speed.png",
+        "food_multiplier.png", "food_freeze.png", "food_ghost.png", "food_bonus.png", "food_armor.png",
+        # Powerups
+        "icon_shield.png", "icon_rapid.png", "icon_emp.png", "icon_invincible.png", "icon_multishot.png",
+        # Serpents (P1)
+        "snake_p1_head.png", "snake_p1_body.png", "snake_p1_tail.png",
+        # Serpents (P2)
+        "snake_p2_head.png", "snake_p2_body.png", "snake_p2_tail.png",
+        # Serpents (Ennemi)
+        "snake_enemy_head.png", "snake_enemy_body.png", "snake_enemy_tail.png"
+    ]
 
-    for type_key, data in config.POWERUP_TYPES.items():
-        if 'image_file' in data:
-            img_path = os.path.join(base_path, data['image_file'])
+    for filename in files_to_load:
+        full_path = os.path.join(base_path, filename)
+        if os.path.exists(full_path):
             try:
-                if os.path.exists(img_path):
-                    # Éviter de recharger si déjà chargé
-                    if data['image_file'] not in images:
-                         loaded_img = pygame.image.load(img_path).convert_alpha()
-                         images[data['image_file']] = loaded_img
-                         logger.debug(f"Image powerup chargée: {data['image_file']}")
-                else:
-                    logger.warning(f"Attention: Image powerup non trouvée: {img_path}")
+                # 1. Charger l'image brute (1024x1024 ou autre)
+                raw_image = pygame.image.load(full_path).convert_alpha()
+
+                # 2. REDIMENSIONNEMENT HAUTE QUALITÉ
+                # C'est LA ligne qui change tout : smoothscale lisse les pixels pour obtenir de belles icônes 20x20
+                scaled_image = pygame.transform.smoothscale(raw_image, (config.GRID_SIZE, config.GRID_SIZE))
+
+                # 3. Stocker l'image optimisée
+                images[filename] = scaled_image
+                logger.debug(f"Chargé et optimisé : {filename}")
             except Exception as e:
-                logger.error(f"Erreur chargement image powerup {img_path}: {e}", exc_info=True)
+                logger.error(f"Erreur chargement image {filename}: {e}")
+        else:
+            # logger.warning(f"Image manquante : {filename}")
+            pass
 
     logger.info(f"Fin chargement images. {len(images)} images en mémoire.")
 

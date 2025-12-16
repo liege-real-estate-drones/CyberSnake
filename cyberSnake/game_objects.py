@@ -1439,56 +1439,144 @@ class Snake:
         elif self.poison_effect_active: base_color = config.COLOR_FOOD_POISON
         elif self.frozen: base_color = config.COLOR_FOOD_FREEZE
 
-        # --- Dessin des Segments ---
+        # --- Dessin des Segments (avec Assets et Rotation) ---
+
+        # 1. Identifier les images selon le joueur
+        prefix = "enemy"
+        if self.player_num == 1: prefix = "p1"
+        elif self.player_num == 2: prefix = "p2"
+
+        # Récupération sécurisée des images depuis utils.images
+        head_img = utils.images.get(f"snake_{prefix}_head.png")
+        body_img = utils.images.get(f"snake_{prefix}_body.png")
+        tail_img = utils.images.get(f"snake_{prefix}_tail.png")
+
         for i, p in enumerate(self.positions):
-            r = pygame.Rect((p[0]*config.GRID_SIZE, p[1]*config.GRID_SIZE), (config.GRID_SIZE, config.GRID_SIZE))
+            # Calcul position pixel (Coin haut-gauche)
+            px = p[0] * config.GRID_SIZE
+            py = p[1] * config.GRID_SIZE
+
+            # Centre de la case (CRUCIAL pour la rotation)
+            center = (px + config.GRID_SIZE // 2, py + config.GRID_SIZE // 2)
+            r = pygame.Rect(px, py, config.GRID_SIZE, config.GRID_SIZE)
+
+            # --- Couleur Fallback et Bordure ---
+            # Utilisé si l'image manque OU pour la bordure (si supporté par le design)
             draw_color = base_color
+            if i == 0 and not draw_color_override:
+                try: draw_color = tuple(min(c + 40, 255) for c in base_color)
+                except TypeError: pass
 
-            # --- Couleur Tête ---
-            if i == 0 and not draw_color_override:  # Ne pas éclaircir si déjà override (flash critique)
-                try:
-                    draw_color = tuple(min(c + 40, 255) for c in base_color)
-                except TypeError:
-                    pass  # Garde la couleur de base si erreur
-
-            # --- Bordure Armure & Bouclier Compétence Chargé ---
+            # --- Calcul Bordure Armure/Bouclier ---
             border_thickness = 1
-            try:  # Couleur bordure par défaut
-                border_color = tuple(max(0, int(c * 0.7)) for c in draw_color)
-            except TypeError:
-                border_color = config.COLOR_BLACK
+            try: border_color = tuple(max(0, int(c * 0.7)) for c in draw_color)
+            except TypeError: border_color = config.COLOR_BLACK
 
-            # --- MODIFICATION : Ajout Indicateur Visuel Charge Bouclier ---
-            if self.shield_charge_active:  # Si la charge est active
-                border_color = config.COLOR_SHIELD_POWERUP  # Bordure bleue/verte
-                # Fait pulser l'épaisseur de la bordure
+            if self.shield_charge_active:
+                border_color = config.COLOR_SHIELD_POWERUP
                 pulse_speed = 0.02
                 min_thick, max_thick = 2, config.ARMOR_MAX_BORDER_THICKNESS
                 pulse = (max_thick - min_thick) / 2 * (1 + math.sin(current_time * pulse_speed))
                 border_thickness = min_thick + int(pulse)
-            # --- FIN MODIFICATION ---
-            elif self.armor > 0 and config.MAX_ARMOR > 0:  # Sinon, affiche la bordure d'armure normale
+            elif self.armor > 0 and config.MAX_ARMOR > 0:
                 ratio = min(1.0, float(self.armor) / config.MAX_ARMOR)
-                border_thickness = max(1, min(config.ARMOR_MAX_BORDER_THICKNESS,
-                                              1 + int(ratio * (config.ARMOR_MAX_BORDER_THICKNESS - 1))))
+                border_thickness = max(1, min(config.ARMOR_MAX_BORDER_THICKNESS, 1 + int(ratio * (config.ARMOR_MAX_BORDER_THICKNESS - 1))))
                 border_color = config.COLOR_ARMOR_HIGHLIGHT
+            # --- Fin Calcul Bordure ---
 
-            # --- Dessin ---
-            try:
-                pygame.draw.rect(surface, draw_color, r)
-                if border_thickness > 0:
-                    pygame.draw.rect(surface, border_color, r, border_thickness)
-            except (TypeError, ValueError):
-                pass
+            # --- CAS 1 : LA TÊTE (Index 0) ---
+            if i == 0:
+                if head_img:
+                    # Calcul de l'angle (Base 0° = Droite)
+                    angle = 0
+                    if self.current_direction == config.UP: angle = 90
+                    elif self.current_direction == config.LEFT: angle = 180
+                    elif self.current_direction == config.DOWN: angle = 270
 
+                    # Rotation et Centrage
+                    try:
+                        rotated_head = pygame.transform.rotate(head_img, angle)
+                        new_rect = rotated_head.get_rect(center=center)
+                        surface.blit(rotated_head, new_rect)
+                    except Exception:
+                        pygame.draw.rect(surface, draw_color, r)
+                else:
+                    # Fallback si image manquante
+                    pygame.draw.rect(surface, draw_color, r)
 
-            if self.is_player and i == 0 and self.reversed_controls_active:
-                 text_color = config.COLOR_BLACK if sum(draw_color[:3]) > 384 else config.COLOR_WHITE
-                 try:
-                     q_surf = font_default.render("?", True, text_color)
-                     q_rect = q_surf.get_rect(center=r.center)
-                     surface.blit(q_surf, q_rect)
-                 except (pygame.error, AttributeError): pass
+                # Overlay "?" si controls inversés (toujours dessiner si actif)
+                if self.is_player and self.reversed_controls_active:
+                     text_color = config.COLOR_BLACK if sum(draw_color[:3]) > 384 else config.COLOR_WHITE
+                     try:
+                         q_surf = font_default.render("?", True, text_color)
+                         q_rect = q_surf.get_rect(center=center)
+                         surface.blit(q_surf, q_rect)
+                     except (pygame.error, AttributeError): pass
+
+            # --- CAS 2 : LA QUEUE (Dernier segment) ---
+            elif i == len(self.positions) - 1:
+                if tail_img:
+                    # Pour orienter la queue, on regarde vers où est le segment d'avant
+                    prev_p = self.positions[i - 1]
+
+                    # Vecteur de la queue vers le corps
+                    dx = prev_p[0] - p[0]
+                    dy = prev_p[1] - p[1]
+
+                    # Correction pour le passage à travers les murs (Wrap-around)
+                    if dx > 1: dx = -1
+                    elif dx < -1: dx = 1
+                    if dy > 1: dy = -1
+                    elif dy < -1: dy = 1
+
+                    # Calcul de l'angle
+                    # Assets queue: "Pointe à Gauche, Base à Droite".
+                    # Si le serpent va à Droite (dx=1), le corps est à droite de la queue.
+                    # L'image native (0 rotation) a la base à droite, donc pointe vers la gauche.
+                    # Wait, le prompt dit: "Base on RIGHT, sharp tip on LEFT."
+                    # Si le corps est à droite (dx=1), la queue est à gauche. La queue pointe vers la gauche (away from body).
+                    # Donc 0 rotation semble correcte si l'image est "tip left, base right".
+
+                    angle = 0
+                    if dx == 1: angle = 0       # Le corps est à droite (queue pointe gauche)
+                    elif dx == -1: angle = 180  # Le corps est à gauche (queue pointe droite)
+                    elif dy == -1: angle = 90   # Le corps est en haut (y diminue) -> queue pointe bas ?
+                                                # Rotate 90 CCW: Tip Left -> Tip Down. Correct.
+                    elif dy == 1: angle = 270   # Le corps est en bas -> queue pointe haut ?
+                                                # Rotate 270 CCW (or 90 CW): Tip Left -> Tip Up. Correct.
+
+                    try:
+                        rotated_tail = pygame.transform.rotate(tail_img, angle)
+                        tail_rect = rotated_tail.get_rect(center=center)
+                        surface.blit(rotated_tail, tail_rect)
+                    except Exception:
+                        pygame.draw.rect(surface, draw_color, r)
+                else:
+                    pygame.draw.rect(surface, draw_color, r)
+
+            # --- CAS 3 : LE CORPS (Milieu) ---
+            else:
+                if body_img:
+                    # Pas de rotation nécessaire pour des sphères/hexagones simples
+                    try:
+                        body_rect = body_img.get_rect(center=center)
+                        surface.blit(body_img, body_rect)
+                    except Exception:
+                         pygame.draw.rect(surface, draw_color, r)
+                else:
+                    pygame.draw.rect(surface, draw_color, r)
+
+            # --- Dessin de la bordure (toujours par dessus si nécessaire, ou en fallback) ---
+            # Si on a utilisé une image, on ne dessine généralement pas le rectangle plein,
+            # MAIS on peut vouloir la bordure pour l'armure/bouclier.
+            # Avec les sprites, une bordure rectangulaire peut être moche.
+            # On la dessine seulement si pas d'image OU si c'est une indication critique (armure/bouclier).
+            # Si image présente, on peut dessiner un rect 'outline' simple autour.
+
+            if border_thickness > 1: # Si armure ou bouclier actif (épaisseur > 1)
+                try:
+                     pygame.draw.rect(surface, border_color, r, border_thickness)
+                except (TypeError, ValueError): pass
 
     def die(self, current_time):
         if self.is_ai: self.death_time = current_time
