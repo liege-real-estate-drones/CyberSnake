@@ -36,6 +36,9 @@ import subprocess
 import os
 import sys
 import shutil
+import urllib.request
+import zipfile
+import io
 
 # --- Fonction Helper pour Dessiner les Panneaux UI (avec correction alpha) ---
 def draw_ui_panel(surface, rect):
@@ -4797,38 +4800,90 @@ def run_update(events, dt, screen, game_state):
             git_cmd = shutil.which("git")
 
         if not git_cmd:
-             raise FileNotFoundError("Exécutable 'git' introuvable. Veuillez installer git.")
-
-        process = subprocess.run([git_cmd, "pull"], capture_output=True, text=True, check=False)
-
-        if process.returncode == 0:
-            print(f"Git pull successful: {process.stdout}")
-            utils.draw_text_with_shadow(screen, "Succès ! Redémarrage...", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
+            print("Git not found, attempting zip download fallback...")
+            utils.draw_text_with_shadow(screen, "Git introuvable, téléchargement Zip...", font_medium, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
             pygame.display.flip()
-            pygame.time.wait(1000)
 
-            # Redémarrage
-            python = sys.executable
-            # Sur Batocera, sys.executable peut être /usr/bin/python3
-            # Le script est cybersnake.pygame ou le nom du script actuel
-            script_path = sys.argv[0]
-            # On relance le processus actuel
-            print(f"Restarting process: {python} {script_path}")
-            os.execv(python, [python, script_path])
+            repo_zip_url = "https://github.com/liege-real-estate-drones/CyberSnake/archive/refs/heads/main.zip"
+            try:
+                print(f"Downloading update from {repo_zip_url}...")
+                with urllib.request.urlopen(repo_zip_url) as response:
+                    zip_data = response.read()
+
+                print("Extracting update...")
+                with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
+                    # Extraction directe des fichiers
+                    # Structure du zip GitHub: CyberSnake-main/fichiers...
+                    # Nous voulons extraire le contenu de CyberSnake-main dans le dossier courant
+
+                    root_dir_in_zip = zip_ref.namelist()[0].split('/')[0] # Devrait être CyberSnake-main
+
+                    for member in zip_ref.namelist():
+                        if member.endswith('/'): continue # Ignore les dossiers
+
+                        # Construit le chemin de destination (retire le dossier racine du zip)
+                        # ex: CyberSnake-main/cyberSnake/game_states.py -> cyberSnake/game_states.py
+                        relative_path = member[len(root_dir_in_zip)+1:]
+                        if not relative_path: continue
+
+                        target_path = os.path.join(os.getcwd(), relative_path)
+
+                        # Crée les dossiers si nécessaire
+                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+                        # Ecrit le fichier
+                        with open(target_path, "wb") as f:
+                            f.write(zip_ref.read(member))
+
+                print("Update via zip successful.")
+                utils.draw_text_with_shadow(screen, "Succès ! Redémarrage...", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 100), "center")
+                pygame.display.flip()
+                pygame.time.wait(1000)
+
+                # Redémarrage (Code commun)
+                python = sys.executable
+                script_path = sys.argv[0]
+                print(f"Restarting process: {python} {script_path}")
+                os.execv(python, [python, script_path])
+
+            except Exception as e_zip:
+                print(f"Zip update failed: {e_zip}")
+                utils.draw_text_with_shadow(screen, f"Echec Zip: {str(e_zip)}", font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 100), "center")
+                pygame.display.flip()
+                pygame.time.wait(3000)
+                return config.MENU
 
         else:
-            print(f"Git pull failed: {process.stderr}")
-            utils.draw_text_with_shadow(screen, "Echec de la mise à jour.", font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
-            utils.draw_text_with_shadow(screen, "Appuyez sur une touche...", font_medium, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 100), "center")
-            pygame.display.flip()
+            process = subprocess.run([git_cmd, "pull"], capture_output=True, text=True, check=False)
 
-            # Attente d'une touche pour revenir au menu
-            waiting = True
-            while waiting:
-                for event in pygame.event.get():
-                    if event.type == pygame.KEYDOWN or event.type == pygame.JOYBUTTONDOWN or event.type == pygame.QUIT:
-                        waiting = False
-            return config.MENU
+            if process.returncode == 0:
+                print(f"Git pull successful: {process.stdout}")
+                utils.draw_text_with_shadow(screen, "Succès ! Redémarrage...", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
+                pygame.display.flip()
+                pygame.time.wait(1000)
+
+                # Redémarrage
+                python = sys.executable
+                # Sur Batocera, sys.executable peut être /usr/bin/python3
+                # Le script est cybersnake.pygame ou le nom du script actuel
+                script_path = sys.argv[0]
+                # On relance le processus actuel
+                print(f"Restarting process: {python} {script_path}")
+                os.execv(python, [python, script_path])
+
+            else:
+                print(f"Git pull failed: {process.stderr}")
+                utils.draw_text_with_shadow(screen, "Echec de la mise à jour.", font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
+                utils.draw_text_with_shadow(screen, "Appuyez sur une touche...", font_medium, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 100), "center")
+                pygame.display.flip()
+
+                # Attente d'une touche pour revenir au menu
+                waiting = True
+                while waiting:
+                    for event in pygame.event.get():
+                        if event.type == pygame.KEYDOWN or event.type == pygame.JOYBUTTONDOWN or event.type == pygame.QUIT:
+                            waiting = False
+                return config.MENU
 
     except Exception as e:
         print(f"Update exception: {e}")
