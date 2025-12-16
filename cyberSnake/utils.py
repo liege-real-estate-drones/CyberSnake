@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # --- Variables globales gérées par ce module ---
 # ... (inchangé) ...
 sounds = {}
+images = {}
 high_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": []}
 particles = []
 kill_feed = deque(maxlen=config.MAX_KILL_FEED_MESSAGES)
@@ -62,6 +63,37 @@ def load_assets(base_path):
             menu_bg = pygame.transform.scale(img, (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
     except Exception:
         pass
+
+    # --- Chargement des Images de Nourriture et Powerups ---
+    global images
+    for type_key, data in config.FOOD_TYPES.items():
+        if 'image_file' in data:
+            img_path = os.path.join(base_path, data['image_file'])
+            try:
+                if os.path.exists(img_path):
+                    loaded_img = pygame.image.load(img_path).convert_alpha() # Use convert_alpha for transparency
+                    # Ne pas redimensionner ici si on veut le faire dynamiquement,
+                    # MAIS pour la perf, c'est mieux si c'est déjà proche de la taille.
+                    # On stocke l'image originale, on la redimensionnera au besoin ou on suppose qu'elle est ok.
+                    # Idéalement, on pourrait pré-scaler si GRID_SIZE est fixe.
+                    images[data['image_file']] = loaded_img
+                else:
+                    print(f"Attention: Image non trouvée: {img_path}")
+            except Exception as e:
+                print(f"Erreur chargement image {img_path}: {e}")
+
+    for type_key, data in config.POWERUP_TYPES.items():
+        if 'image_file' in data:
+            img_path = os.path.join(base_path, data['image_file'])
+            try:
+                if os.path.exists(img_path):
+                    # Éviter de recharger si déjà chargé (cas où plusieurs items utilisent la même image)
+                    if data['image_file'] not in images:
+                         loaded_img = pygame.image.load(img_path).convert_alpha()
+                         images[data['image_file']] = loaded_img
+            except Exception as e:
+                print(f"Erreur chargement image powerup {img_path}: {e}")
+
     return menu_bg
 
 def play_sound(name):
