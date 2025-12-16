@@ -4866,14 +4866,17 @@ def run_update(events, dt, screen, game_state):
                 python = sys.executable
                 script_path = sys.argv[0]
                 print(f"Restarting process: {python} {script_path}")
-                os.execv(python, [python, script_path])
-
-            except Exception as e_zip:
-                print(f"Zip update failed: {e_zip}")
-                utils.draw_text_with_shadow(screen, f"Echec Zip: {str(e_zip)}", font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 100), "center")
-                pygame.display.flip()
-                pygame.time.wait(3000)
-                return config.MENU
+                try:
+                    os.execv(python, [python, script_path])
+                except Exception as e_zip:
+                    print(f"Zip update failed: {e_zip}")
+                    utils.draw_text_with_shadow(screen, f"Echec Zip: {str(e_zip)}", font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 100), "center")
+                    pygame.display.flip()
+                    pygame.time.wait(3000)
+                    return config.MENU
+                    pygame.display.flip()
+                    pygame.time.wait(3000)
+                    return config.MENU
 
         else:
             process = subprocess.run([git_cmd, "pull"], capture_output=True, text=True, check=False)
