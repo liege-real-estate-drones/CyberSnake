@@ -1954,6 +1954,22 @@ class Food:
             scaled_size = config.GRID_SIZE
         draw_rect = pygame.Rect(0, 0, scaled_size, scaled_size)
         draw_rect.center = self.rect.center
+
+        # --- Check for Image ---
+        image_file = self.type_data.get('image_file')
+        image = utils.images.get(image_file) if image_file else None
+
+        if image:
+            try:
+                # Scale image to the animated size
+                scaled_image = pygame.transform.scale(image, (scaled_size, scaled_size))
+                surface.blit(scaled_image, draw_rect)
+                return # Image drawn, skip default drawing
+            except Exception as img_err:
+                # Log error and fallback to default drawing
+                logger.warning(f"Error drawing food image {image_file}: {img_err}")
+
+        # --- Default Drawing (Fallback) ---
         color = self.type_data.get('color', config.COLOR_FOOD_NORMAL)
         symbol = self.type_data.get('symbol')
         try: border_color = tuple(max(0, int(c * 0.7)) for c in color)
@@ -2022,6 +2038,21 @@ class PowerUp:
         except (ValueError, TypeError): scaled_size = config.GRID_SIZE
         draw_rect = pygame.Rect(0, 0, scaled_size, scaled_size)
         draw_rect.center = self.rect.center
+
+        # --- Check for Image ---
+        image_file = self.data.get('image_file')
+        image = utils.images.get(image_file) if image_file else None
+
+        if image:
+            try:
+                # Scale image to the animated size
+                scaled_image = pygame.transform.scale(image, (scaled_size, scaled_size))
+                surface.blit(scaled_image, draw_rect)
+                return # Image drawn, skip default drawing
+            except Exception as img_err:
+                logger.warning(f"Error drawing powerup image {image_file}: {img_err}")
+
+        # --- Default Drawing (Fallback) ---
         color = self.data['color']
         symbol = self.data['symbol']
         try: pygame.draw.rect(surface, color, draw_rect, border_radius=3)

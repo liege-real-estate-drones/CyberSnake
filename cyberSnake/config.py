@@ -185,16 +185,16 @@ GHOST_EFFECT_DURATION = 6000
 
 
 FOOD_TYPES = {
-    "normal":           {"color": COLOR_FOOD_NORMAL,    "symbol": None, "score": 1,  "ammo": NORMAL_FOOD_AMMO_BONUS, "effect": "grow",                "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_normal"},
-    "ammo":             {"color": COLOR_FOOD_AMMO,      "symbol": "A",  "score": 0,  "ammo": AMMO_PACK_BONUS,        "effect": "ammo_only",           "multiplier_increment": 0.0, "combo_points": 0, "objective_tag": "food_ammo"},
-    "poison":           {"color": COLOR_FOOD_POISON,    "symbol": "!",  "score": -2, "ammo": 0,                      "effect": "poison",              "multiplier_increment": 0.0, "combo_points": 0, "objective_tag": "food_poison", "shrink": False},
-    "speed_boost":      {"color": COLOR_FOOD_SPEED,     "symbol": ">",  "score": 0,  "ammo": 0,                      "effect": "speed_boost",         "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_speed"},
-    "score_multiplier": {"color": COLOR_FOOD_MULTIPLIER,"symbol": "x2", "score": 0,  "ammo": 0,                      "effect": "score_multiplier",    "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_special"},
-    "freeze_opponent":  {"color": COLOR_FOOD_FREEZE,    "symbol": "*",  "score": 1,  "ammo": 0,                      "effect": "freeze_opponent",     "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_special"},
-    "ghost":            {"color": COLOR_FOOD_GHOST,     "symbol": "G",  "score": 0,  "ammo": 0,                      "effect": "ghost",               "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_ghost"},
-    "bonus_points":     {"color": COLOR_FOOD_BONUS,     "symbol": "$",  "score": 0,  "ammo": 0,                      "effect": "stacking_multiplier", "multiplier_increment": 0.15,"combo_points": 1, "objective_tag": "food_special"},
+    "normal":           {"color": COLOR_FOOD_NORMAL,    "symbol": None, "score": 1,  "ammo": NORMAL_FOOD_AMMO_BONUS, "effect": "grow",                "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_normal", "image_file": "food_energy.png"},
+    "ammo":             {"color": COLOR_FOOD_AMMO,      "symbol": "A",  "score": 0,  "ammo": AMMO_PACK_BONUS,        "effect": "ammo_only",           "multiplier_increment": 0.0, "combo_points": 0, "objective_tag": "food_ammo", "image_file": "food_ammo.png"},
+    "poison":           {"color": COLOR_FOOD_POISON,    "symbol": "!",  "score": -2, "ammo": 0,                      "effect": "poison",              "multiplier_increment": 0.0, "combo_points": 0, "objective_tag": "food_poison", "shrink": False, "image_file": "food_poison.png"},
+    "speed_boost":      {"color": COLOR_FOOD_SPEED,     "symbol": ">",  "score": 0,  "ammo": 0,                      "effect": "speed_boost",         "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_speed", "image_file": "food_speed.png"},
+    "score_multiplier": {"color": COLOR_FOOD_MULTIPLIER,"symbol": "x2", "score": 0,  "ammo": 0,                      "effect": "score_multiplier",    "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_special", "image_file": "food_multiplier.png"},
+    "freeze_opponent":  {"color": COLOR_FOOD_FREEZE,    "symbol": "*",  "score": 1,  "ammo": 0,                      "effect": "freeze_opponent",     "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_special", "image_file": "food_freeze.png"},
+    "ghost":            {"color": COLOR_FOOD_GHOST,     "symbol": "G",  "score": 0,  "ammo": 0,                      "effect": "ghost",               "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_ghost", "image_file": "food_ghost.png"},
+    "bonus_points":     {"color": COLOR_FOOD_BONUS,     "symbol": "$",  "score": 0,  "ammo": 0,                      "effect": "stacking_multiplier", "multiplier_increment": 0.15,"combo_points": 1, "objective_tag": "food_special", "image_file": "food_bonus.png"},
      # --- AJOUT NOURRITURE ARMURE ---
-    "armor_plate_food": {"color": COLOR_ARMOR_HIGHLIGHT, "symbol": "+A", "score": 0, "ammo": 0, "effect": "armor_plate", "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_special"},
+    "armor_plate_food": {"color": COLOR_ARMOR_HIGHLIGHT, "symbol": "+A", "score": 0, "ammo": 0, "effect": "armor_plate", "multiplier_increment": 0.0, "combo_points": 1, "objective_tag": "food_special", "image_file": "food_armor.png"},
 }
 
 
@@ -241,11 +241,11 @@ POWERUP_LIFETIME = 11500
 MAX_POWERUPS = 3
 # --- Suppression "armor_plate" ---
 POWERUP_TYPES = {
-    "shield": {"color": COLOR_SHIELD_POWERUP, "symbol": "S", "objective_tag": "powerup_shield", "duration": POWERUP_BASE_DURATION},
-    "rapid_fire": {"color": COLOR_RAPIDFIRE_POWERUP, "symbol": "R", "objective_tag": "powerup_generic", "duration": POWERUP_RAPID_FIRE_DURATION},
-    "emp": {"color": COLOR_EMP_POWERUP, "symbol": "E", "objective_tag": "powerup_emp", "duration": 0}, # EMP est instantané
-    "invincibility": {"color": COLOR_INVINCIBILITY_POWERUP, "symbol": "I", "objective_tag": "powerup_invinc", "duration": POWERUP_BASE_DURATION},
-    "multishot": {"color": COLOR_MULTISHOT_POWERUP, "symbol": "M", "objective_tag": "powerup_generic", "duration": POWERUP_MULTISHOT_DURATION},
+    "shield": {"color": COLOR_SHIELD_POWERUP, "symbol": "S", "objective_tag": "powerup_shield", "duration": POWERUP_BASE_DURATION, "image_file": "icon_shield.png"},
+    "rapid_fire": {"color": COLOR_RAPIDFIRE_POWERUP, "symbol": "R", "objective_tag": "powerup_generic", "duration": POWERUP_RAPID_FIRE_DURATION, "image_file": "icon_rapid.png"},
+    "emp": {"color": COLOR_EMP_POWERUP, "symbol": "E", "objective_tag": "powerup_emp", "duration": 0, "image_file": "icon_emp.png"}, # EMP est instantané
+    "invincibility": {"color": COLOR_INVINCIBILITY_POWERUP, "symbol": "I", "objective_tag": "powerup_invinc", "duration": POWERUP_BASE_DURATION, "image_file": "icon_invincible.png"},
+    "multishot": {"color": COLOR_MULTISHOT_POWERUP, "symbol": "M", "objective_tag": "powerup_generic", "duration": POWERUP_MULTISHOT_DURATION, "image_file": "icon_multishot.png"},
     # "armor_plate" a été supprimé d'ici
 }
 # --- Fin Suppression ---
