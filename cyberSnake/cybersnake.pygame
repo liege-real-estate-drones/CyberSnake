@@ -248,6 +248,7 @@ def main():
         config.PAUSED: game_states.run_pause,
         config.GAME_OVER: game_states.run_game_over,
         config.HALL_OF_FAME: game_states.run_hall_of_fame,
+        config.UPDATE: game_states.run_update,
     }
     # --- Fin Mappage États ---
 

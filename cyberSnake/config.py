@@ -47,7 +47,7 @@ ARMOR_REGEN_INTERVAL = 45000 # 45 secondes en ms
 
 
 # --- Couleurs ---
-COLOR_BACKGROUND = (255, 0, 0)
+COLOR_BACKGROUND = (0, 0, 0)
 COLOR_SNAKE_P1 = (0, 255, 150)
 COLOR_SNAKE_P2 = (255, 100, 200)
 COLOR_ENEMY_SNAKE = (255, 150, 0)
@@ -453,6 +453,7 @@ NAME_ENTRY_PVP = 5
 HALL_OF_FAME = 6
 MAP_SELECTION = 7
 NAME_ENTRY_SOLO = 8
+UPDATE = 9 # --- NOUVEAU: État pour la mise à jour ---
 
 
 # Modes de jeu (classe pour comparaison et nom)
