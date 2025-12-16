@@ -37,6 +37,39 @@ selected_music_index = 0
 
 # --- Fonctions de Chargement & Volume ---
 # ... (inchangé) ...
+def load_image_with_transparency_fix(img_path):
+    """Loads an image and attempts to fix white background issues."""
+    try:
+        # First load normally with alpha to check content
+        temp_img = pygame.image.load(img_path)
+
+        needs_fix = False
+        try:
+            if temp_img.get_width() > 0 and temp_img.get_height() > 0:
+                color_at_00 = temp_img.get_at((0, 0))
+                # Check for white (255, 255, 255) and fully opaque (alpha 255 if present)
+                # handle both RGB and RGBA source images
+                if len(color_at_00) == 4:
+                     if color_at_00 == (255, 255, 255, 255): needs_fix = True
+                elif len(color_at_00) == 3:
+                     if color_at_00 == (255, 255, 255): needs_fix = True
+        except Exception:
+            pass
+
+        if needs_fix:
+            logger.debug(f"Detected white background at (0,0) for {os.path.basename(img_path)}, using colorkey transparency.")
+            # Use convert() to create a surface without per-pixel alpha, enabling set_colorkey to work
+            final_img = temp_img.convert()
+            final_img.set_colorkey((255, 255, 255))
+        else:
+            # Standard loading for images that are already correct
+            final_img = temp_img.convert_alpha()
+
+        return final_img
+    except Exception as e:
+        logger.error(f"Error loading image {img_path}: {e}", exc_info=True)
+        return None
+
 def load_assets(base_path):
     global sounds, sound_volume
     loaded_sounds = {}
@@ -73,9 +106,10 @@ def load_assets(base_path):
             img_path = os.path.join(base_path, data['image_file'])
             try:
                 if os.path.exists(img_path):
-                    loaded_img = pygame.image.load(img_path).convert_alpha() # Use convert_alpha for transparency
-                    images[data['image_file']] = loaded_img
-                    logger.debug(f"Image chargée avec succès: {data['image_file']}")
+                    loaded_img = load_image_with_transparency_fix(img_path)
+                    if loaded_img:
+                        images[data['image_file']] = loaded_img
+                        logger.debug(f"Image chargée avec succès: {data['image_file']}")
                 else:
                     logger.warning(f"Attention: Image non trouvée: {img_path}")
             except Exception as e:
@@ -88,9 +122,10 @@ def load_assets(base_path):
                 if os.path.exists(img_path):
                     # Éviter de recharger si déjà chargé
                     if data['image_file'] not in images:
-                         loaded_img = pygame.image.load(img_path).convert_alpha()
-                         images[data['image_file']] = loaded_img
-                         logger.debug(f"Image powerup chargée: {data['image_file']}")
+                         loaded_img = load_image_with_transparency_fix(img_path)
+                         if loaded_img:
+                             images[data['image_file']] = loaded_img
+                             logger.debug(f"Image powerup chargée: {data['image_file']}")
                 else:
                     logger.warning(f"Attention: Image powerup non trouvée: {img_path}")
             except Exception as e:
