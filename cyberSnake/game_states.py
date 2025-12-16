@@ -35,6 +35,7 @@ import game_objects
 import subprocess
 import os
 import sys
+import shutil
 
 # --- Fonction Helper pour Dessiner les Panneaux UI (avec correction alpha) ---
 def draw_ui_panel(surface, rect):
@@ -4781,9 +4782,22 @@ def run_update(events, dt, screen, game_state):
         # Sinon, on pourrait utiliser game_state['base_path'] pour trouver le dossier.
         # Sur Batocera, le script cd dans le dossier avant de lancer python.
 
-        git_cmd = "/usr/bin/git"
-        if not os.path.exists(git_cmd):
-            git_cmd = "git" # Fallback si pas trouvé au chemin standard
+        git_cmd = None
+        # Liste des chemins potentiels pour git
+        potential_paths = ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"]
+
+        # 1. Vérifier les chemins absolus
+        for path in potential_paths:
+            if os.path.exists(path) and os.access(path, os.X_OK):
+                git_cmd = path
+                break
+
+        # 2. Chercher dans le PATH
+        if not git_cmd:
+            git_cmd = shutil.which("git")
+
+        if not git_cmd:
+             raise FileNotFoundError("Exécutable 'git' introuvable. Veuillez installer git.")
 
         process = subprocess.run([git_cmd, "pull"], capture_output=True, text=True, check=False)
 
