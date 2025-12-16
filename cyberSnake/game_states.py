@@ -32,6 +32,9 @@ import itertools # Added for PvP collision logic
 import config
 import utils
 import game_objects
+import subprocess
+import os
+import sys
 
 # --- Fonction Helper pour Dessiner les Panneaux UI (avec correction alpha) ---
 def draw_ui_panel(surface, rect):
@@ -1011,7 +1014,8 @@ def run_menu(events, dt, screen, game_state):
         (config.MODE_VS_AI, "Joueur vs IA", top_vsai_hs),
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),
         (config.MODE_SURVIVAL, "Mode Survie", top_surv_hs),
-        (config.HALL_OF_FAME, "Hall of Fame", "")
+        (config.HALL_OF_FAME, "Hall of Fame", ""),
+        (config.UPDATE, "Mise à jour", "")
     ]
     num_options = len(menu_options)
 
@@ -1056,6 +1060,8 @@ def run_menu(events, dt, screen, game_state):
 
                             if selected_option == config.HALL_OF_FAME:
                                 targeted_next_state = config.HALL_OF_FAME
+                            elif selected_option == config.UPDATE:
+                                targeted_next_state = config.UPDATE
                             elif isinstance(selected_option, config.GameMode):
                                 game_state['current_game_mode'] = selected_option
                                 if selected_option == config.MODE_PVP:
@@ -1136,6 +1142,8 @@ def run_menu(events, dt, screen, game_state):
 
                         if selected_option == config.HALL_OF_FAME:
                             next_state = config.HALL_OF_FAME
+                        elif selected_option == config.UPDATE:
+                            next_state = config.UPDATE
                         elif isinstance(selected_option, config.GameMode):
                             game_state['current_game_mode'] = selected_option
                             if selected_option == config.MODE_PVP:
@@ -1187,6 +1195,8 @@ def run_menu(events, dt, screen, game_state):
 
                     if selected_option == config.HALL_OF_FAME:
                         next_state = config.HALL_OF_FAME
+                    elif selected_option == config.UPDATE:
+                        next_state = config.UPDATE
                     elif isinstance(selected_option, config.GameMode):
                         game_state['current_game_mode'] = selected_option
                         if selected_option == config.MODE_PVP:
@@ -3095,15 +3105,27 @@ def run_game_over(events, dt, screen, game_state):
                         game_state['game_over_start_time'] = 0
 
                         # Conserver les noms des joueurs
-                        if player_snake:
-                            game_state['player1_name_input'] = player_snake.name
-                        if player2_snake:
-                            game_state['player2_name_input'] = player2_snake.name
+                        try:
+                            if player_snake:
+                                game_state['player1_name_input'] = player_snake.name
+                            if player2_snake:
+                                game_state['player2_name_input'] = player2_snake.name
+                        except Exception as e_names:
+                            logging.warning(f"Erreur conservation noms: {e_names}")
 
                         if current_game_mode == config.MODE_PVP:
-                            next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1; game_state['current_state'] = next_state
+                            # BUG FIX: S'assurer que le stage est bien réinitialisé
+                            game_state['pvp_name_entry_stage'] = 1
+                            # Forcer la réinitialisation du timer d'entrée pour J1
+                            game_state.pop('name_entry_start_time_pvp', None)
+                            game_state.pop('input_active_pvp', None)
+
+                            next_state = config.NAME_ENTRY_PVP
+                            game_state['current_state'] = next_state
                         else:
-                            reset_game(game_state); next_state = config.PLAYING; game_state['current_state'] = next_state
+                            reset_game(game_state)
+                            next_state = config.PLAYING
+                            game_state['current_state'] = next_state
                         return next_state
                     elif selected_option == "Menu Principal":
                         utils.play_sound("combo_break")
@@ -4727,3 +4749,62 @@ def run_game(events, dt, screen, game_state):
 
     return next_state
 # --- END: REVISED run_game function ---
+
+def run_update(events, dt, screen, game_state):
+    """Exécute la mise à jour git pull et redémarre le jeu."""
+    font_medium = game_state.get('font_medium')
+    if not font_medium:
+        try: font_medium = pygame.font.Font(None, 40)
+        except: pass
+
+    # Affichage du message "Mise à jour en cours..."
+    screen.fill(config.COLOR_BACKGROUND)
+    utils.draw_text_with_shadow(screen, "Mise à jour en cours...", font_medium, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2), "center")
+    pygame.display.flip()
+
+    # Exécution de git pull
+    try:
+        print("Starting update via git pull...")
+        # On suppose que le CWD est la racine du repo, ce qui est le cas si lancé via le script.
+        # Sinon, on pourrait utiliser game_state['base_path'] pour trouver le dossier.
+        # Sur Batocera, le script cd dans le dossier avant de lancer python.
+
+        process = subprocess.run(["git", "pull"], capture_output=True, text=True, check=False)
+
+        if process.returncode == 0:
+            print(f"Git pull successful: {process.stdout}")
+            utils.draw_text_with_shadow(screen, "Succès ! Redémarrage...", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
+            pygame.display.flip()
+            pygame.time.wait(1000)
+
+            # Redémarrage
+            python = sys.executable
+            # Sur Batocera, sys.executable peut être /usr/bin/python3
+            # Le script est cybersnake.pygame ou le nom du script actuel
+            script_path = sys.argv[0]
+            # On relance le processus actuel
+            print(f"Restarting process: {python} {script_path}")
+            os.execv(python, [python, script_path])
+
+        else:
+            print(f"Git pull failed: {process.stderr}")
+            utils.draw_text_with_shadow(screen, "Echec de la mise à jour.", font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
+            utils.draw_text_with_shadow(screen, "Appuyez sur une touche...", font_medium, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 100), "center")
+            pygame.display.flip()
+
+            # Attente d'une touche pour revenir au menu
+            waiting = True
+            while waiting:
+                for event in pygame.event.get():
+                    if event.type == pygame.KEYDOWN or event.type == pygame.JOYBUTTONDOWN or event.type == pygame.QUIT:
+                        waiting = False
+            return config.MENU
+
+    except Exception as e:
+        print(f"Update exception: {e}")
+        utils.draw_text_with_shadow(screen, f"Erreur: {str(e)}", font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
+        pygame.display.flip()
+        pygame.time.wait(3000)
+        return config.MENU
+
+    return config.UPDATE # Ne devrait pas être atteint si succès (execv remplace le process)
