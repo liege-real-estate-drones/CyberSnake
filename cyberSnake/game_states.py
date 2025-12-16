@@ -3136,6 +3136,18 @@ def run_game_over(events, dt, screen, game_state):
                         return next_state
                 except Exception as e:
                     print(f"Erreur en tentant d'exécuter l'option via joystick: {e}"); traceback.print_exc()
+                    # Affiche l'erreur à l'écran pour le débogage utilisateur
+                    try:
+                        screen.fill(config.COLOR_BACKGROUND)
+                        utils.draw_text_with_shadow(screen, "Erreur Rejouer:", font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.4), "center")
+                        utils.draw_text_with_shadow(screen, str(e), font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.5), "center")
+                        utils.draw_text_with_shadow(screen, "Appuyez sur une touche pour Menu", font_small, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.6), "center")
+                        pygame.display.flip()
+                        waiting_err = True
+                        while waiting_err:
+                            for evt_err in pygame.event.get():
+                                if evt_err.type == pygame.KEYDOWN or evt_err.type == pygame.JOYBUTTONDOWN: waiting_err = False
+                    except: pass
                     next_state = config.MENU; return next_state
 
             elif button == 8: # Bouton 8 pour Menu (Echap) - raccourci direct
@@ -4769,7 +4781,11 @@ def run_update(events, dt, screen, game_state):
         # Sinon, on pourrait utiliser game_state['base_path'] pour trouver le dossier.
         # Sur Batocera, le script cd dans le dossier avant de lancer python.
 
-        process = subprocess.run(["git", "pull"], capture_output=True, text=True, check=False)
+        git_cmd = "/usr/bin/git"
+        if not os.path.exists(git_cmd):
+            git_cmd = "git" # Fallback si pas trouvé au chemin standard
+
+        process = subprocess.run([git_cmd, "pull"], capture_output=True, text=True, check=False)
 
         if process.returncode == 0:
             print(f"Git pull successful: {process.stdout}")
