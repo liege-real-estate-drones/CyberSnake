@@ -4787,7 +4787,7 @@ def run_update(events, dt, screen, game_state):
 
         git_cmd = None
         # Liste des chemins potentiels pour git
-        potential_paths = ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"]
+        potential_paths = ["/usr/bin/git", "/bin/git", "/usr/local/bin/git", "/opt/git/bin/git", "/output/host/bin/git"]
 
         # 1. Vérifier les chemins absolus
         for path in potential_paths:
@@ -4804,12 +4804,39 @@ def run_update(events, dt, screen, game_state):
             utils.draw_text_with_shadow(screen, "Git introuvable, téléchargement Zip...", font_medium, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
             pygame.display.flip()
 
-            repo_zip_url = "https://github.com/liege-real-estate-drones/CyberSnake/archive/refs/heads/main.zip"
-            try:
-                print(f"Downloading update from {repo_zip_url}...")
-                with urllib.request.urlopen(repo_zip_url) as response:
-                    zip_data = response.read()
+            # URLs potentielles pour le zip
+            repo_zip_urls = [
+                "https://github.com/liege-real-estate-drones/CyberSnake/archive/refs/heads/main.zip",
+                "https://github.com/liege-real-estate-drones/CyberSnake/archive/main.zip"
+            ]
 
+            zip_data = None
+            last_error = None
+
+            for url in repo_zip_urls:
+                try:
+                    print(f"Downloading update from {url}...")
+                    # Ajout d'un User-Agent pour éviter certains blocages
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req) as response:
+                        zip_data = response.read()
+                    break # Succès
+                except Exception as e:
+                    print(f"Failed to download from {url}: {e}")
+                    last_error = e
+
+            if zip_data is None:
+                err_msg = f"Echec téléchargement: {last_error}"
+                if last_error and "404" in str(last_error):
+                    err_msg = "Erreur 404: Dépôt introuvable ou privé."
+
+                print(err_msg)
+                utils.draw_text_with_shadow(screen, err_msg, font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 100), "center")
+                pygame.display.flip()
+                pygame.time.wait(4000)
+                return config.MENU
+
+            try:
                 print("Extracting update...")
                 with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
                     # Extraction directe des fichiers
