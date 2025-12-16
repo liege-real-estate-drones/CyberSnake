@@ -4787,7 +4787,8 @@ def run_update(events, dt, screen, game_state):
 
         git_cmd = None
         # Liste des chemins potentiels pour git
-        potential_paths = ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"]
+        # Ajout de /opt/git/bin/git et /output/host/bin/git pour Batocera
+        potential_paths = ["/usr/bin/git", "/bin/git", "/usr/local/bin/git", "/opt/git/bin/git", "/output/host/bin/git"]
 
         # 1. Vérifier les chemins absolus
         for path in potential_paths:
@@ -4804,13 +4805,34 @@ def run_update(events, dt, screen, game_state):
             utils.draw_text_with_shadow(screen, "Git introuvable, téléchargement Zip...", font_medium, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2 + 50), "center")
             pygame.display.flip()
 
-            repo_zip_url = "https://github.com/liege-real-estate-drones/CyberSnake/archive/refs/heads/main.zip"
-            try:
-                print(f"Downloading update from {repo_zip_url}...")
-                with urllib.request.urlopen(repo_zip_url) as response:
-                    zip_data = response.read()
+            # URLs potentielles pour le zip
+            repo_zip_urls = [
+                "https://github.com/liege-real-estate-drones/CyberSnake/archive/refs/heads/main.zip",
+                "https://github.com/liege-real-estate-drones/CyberSnake/archive/main.zip"
+            ]
 
-                print("Extracting update...")
+            zip_data = None
+            success_url = ""
+
+            for url in repo_zip_urls:
+                try:
+                    print(f"Attempting download from {url}...")
+                    # Ajout d'un User-Agent pour éviter les blocages GitHub (403/404)
+                    req = urllib.request.Request(
+                        url,
+                        headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'}
+                    )
+                    with urllib.request.urlopen(req) as response:
+                        zip_data = response.read()
+                        success_url = url
+                        break # Succès, on sort de la boucle
+                except Exception as e:
+                    print(f"Failed to download from {url}: {e}")
+                    continue
+
+            if zip_data:
+                print(f"Download successful from {success_url}. Extracting update...")
+                # ... (reste du code d'extraction) ...
                 with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
                     # Extraction directe des fichiers
                     # Structure du zip GitHub: CyberSnake-main/fichiers...
