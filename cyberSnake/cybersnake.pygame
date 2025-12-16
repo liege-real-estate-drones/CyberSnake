@@ -1,50 +1,52 @@
 # -*- coding: utf-8 -*-
-import pygame
 import sys
 import os
+import logging
 import traceback
 
-# Importe nos modules personnalisés
-import config
-import utils
-import game_objects # Importé pour référence potentielle, mais classes utilisées via game_states/utils
-import game_states
-import logging # Assurez-vous que logging est importé
-
-# --- Configuration du Logging ---
-# (Il est crucial que cette section soit exécutée avant toute autre utilisation de logging)
+# --- Configuration du Logging (Early Setup) ---
+# Configuré avant les autres imports pour capturer les erreurs de chargement de modules
 try:
     # Essaye de déterminer le chemin de base du jeu
-    # __file__ est le chemin du script actuel. os.path.dirname donne le dossier.
-    # Si exécuté comme bundle (PyInstaller), __file__ peut ne pas être défini comme attendu.
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-        # Mode Bundled (PyInstaller)
         base_path_log = sys._MEIPASS
     else:
-        # Mode Script normal
         base_path_log = os.path.dirname(os.path.abspath(__file__))
 
     log_filename = 'cybersnake_debug.log'
     log_filepath = os.path.join(base_path_log, log_filename)
 
     logging.basicConfig(
-        level=logging.DEBUG, # Capture tous les messages DEBUG et supérieurs
-        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s', # Format amélioré
-        filename=log_filepath, # Chemin complet du fichier log
-        filemode='w' # 'w' = Écrase le fichier à chaque lancement; 'a' = Ajoute à la fin
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
+        filename=log_filepath,
+        filemode='w'
     )
-
-    logging.info("--- Initialisation du Logging pour CyberSnake ---")
-    # Le print ici est optionnel, utile si la console est parfois visible au démarrage.
-    # print(f"Logging configuré. Les messages iront dans : {log_filepath}")
-
+    logging.info("--- Initialisation du Logging pour CyberSnake (Early) ---")
 except Exception as log_setup_error:
-    # En cas d'échec de configuration du logging, affiche une erreur sur la console (si visible)
-    # Le jeu pourrait continuer sans logging fichier dans ce cas.
-    print(f"ERREUR CRITIQUE: Impossible de configurer le logging vers un fichier: {log_setup_error}")
-    # Alternative: sys.exit(1) si le logging est absolument requis.
+    print(f"ERREUR CRITIQUE: Impossible de configurer le logging: {log_setup_error}")
 
-# --- Fin Configuration Logging ---
+# --- Import de Pygame avec gestion d'erreur ---
+try:
+    import pygame
+    logging.info("Module pygame importé avec succès.")
+except ImportError as e:
+    logging.critical("FATAL: Impossible d'importer le module 'pygame'. Est-il installé ?", exc_info=True)
+    print("FATAL: Impossible d'importer le module 'pygame'. Vérifiez les logs.")
+    sys.exit(1)
+
+# --- Import des modules personnalisés ---
+try:
+    import config
+    import utils
+    import game_objects
+    import game_states
+    logging.info("Modules personnalisés importés avec succès.")
+except ImportError as e:
+    logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
+    print(f"FATAL: Erreur import modules jeu: {e}")
+    sys.exit(1)
+
 
 def main():
     """Fonction principale du jeu."""
@@ -58,7 +60,7 @@ def main():
 
     except pygame.error as e:
         logging.critical(f"FATAL: Erreur initialisation Pygame: {e}", exc_info=True) # Log critical
-        # print(f"FATAL: Erreur initialisation Pygame: {e}") # Garder print pour visibilité si log échoue
+        print(f"FATAL: Erreur initialisation Pygame: {e}") # Garder print pour visibilité si log échoue
         sys.exit(1)
 
     # --- Initialisation Joysticks ---
