@@ -1959,6 +1959,12 @@ class Food:
         image_file = self.type_data.get('image_file')
         image = utils.images.get(image_file) if image_file else None
 
+        # Log si l'image est manquante alors qu'elle devrait être là (throttled/debug only)
+        if image_file and not image:
+            # On utilise logger.debug pour ne pas spammer, mais ça aidera si on active le debug
+            if random.random() < 0.01: # 1% chance to log to avoid spam
+                logger.warning(f"Image manquante pour food {self.type}: {image_file}")
+
         if image:
             try:
                 # Scale image to the animated size
@@ -2042,6 +2048,11 @@ class PowerUp:
         # --- Check for Image ---
         image_file = self.data.get('image_file')
         image = utils.images.get(image_file) if image_file else None
+
+        # Log si l'image est manquante (throttled)
+        if image_file and not image:
+            if random.random() < 0.01:
+                logger.warning(f"Image manquante pour powerup {self.type}: {image_file}")
 
         if image:
             try:
