@@ -7,7 +7,7 @@ import math # Pas nécessaire ici directement
 # --- Constantes Écran & Grille ---
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
-GRID_SIZE = 20
+GRID_SIZE = 25
 GRID_WIDTH = SCREEN_WIDTH // GRID_SIZE
 GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
 
