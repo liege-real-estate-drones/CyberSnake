@@ -66,33 +66,37 @@ def load_assets(base_path):
 
     # --- Chargement des Images de Nourriture et Powerups ---
     global images
+    logger.info(f"Début chargement images depuis base_path: {base_path}")
+
     for type_key, data in config.FOOD_TYPES.items():
         if 'image_file' in data:
             img_path = os.path.join(base_path, data['image_file'])
             try:
                 if os.path.exists(img_path):
                     loaded_img = pygame.image.load(img_path).convert_alpha() # Use convert_alpha for transparency
-                    # Ne pas redimensionner ici si on veut le faire dynamiquement,
-                    # MAIS pour la perf, c'est mieux si c'est déjà proche de la taille.
-                    # On stocke l'image originale, on la redimensionnera au besoin ou on suppose qu'elle est ok.
-                    # Idéalement, on pourrait pré-scaler si GRID_SIZE est fixe.
                     images[data['image_file']] = loaded_img
+                    logger.debug(f"Image chargée avec succès: {data['image_file']}")
                 else:
-                    print(f"Attention: Image non trouvée: {img_path}")
+                    logger.warning(f"Attention: Image non trouvée: {img_path}")
             except Exception as e:
-                print(f"Erreur chargement image {img_path}: {e}")
+                logger.error(f"Erreur chargement image {img_path}: {e}", exc_info=True)
 
     for type_key, data in config.POWERUP_TYPES.items():
         if 'image_file' in data:
             img_path = os.path.join(base_path, data['image_file'])
             try:
                 if os.path.exists(img_path):
-                    # Éviter de recharger si déjà chargé (cas où plusieurs items utilisent la même image)
+                    # Éviter de recharger si déjà chargé
                     if data['image_file'] not in images:
                          loaded_img = pygame.image.load(img_path).convert_alpha()
                          images[data['image_file']] = loaded_img
+                         logger.debug(f"Image powerup chargée: {data['image_file']}")
+                else:
+                    logger.warning(f"Attention: Image powerup non trouvée: {img_path}")
             except Exception as e:
-                print(f"Erreur chargement image powerup {img_path}: {e}")
+                logger.error(f"Erreur chargement image powerup {img_path}: {e}", exc_info=True)
+
+    logger.info(f"Fin chargement images. {len(images)} images en mémoire.")
 
     return menu_bg
 
