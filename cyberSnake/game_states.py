@@ -3069,7 +3069,14 @@ def run_game_over(events, dt, screen, game_state):
             
         # --- Gestion Joystick Game Over et Navigation Menu ---
         elif event.type == pygame.JOYAXISMOTION or event.type == pygame.JOYHATMOTION:
-            if current_time - last_axis_move_time > axis_repeat_delay:
+            # --- FIX: Restreindre les inputs au joueur concerné pour éviter les inputs fantômes (drift J2) ---
+            allow_input = False
+            if current_game_mode == config.MODE_PVP:
+                allow_input = True # En PvP, J1 et J2 peuvent naviguer
+            elif event.instance_id == 0:
+                allow_input = True # En Solo/VsAI/Survie, seul J1 peut naviguer
+
+            if allow_input and current_time - last_axis_move_time > axis_repeat_delay:
                 # Navigation haut/bas entre les options
                 if (event.type == pygame.JOYAXISMOTION and event.axis == 0):
                     value = event.value
@@ -3102,7 +3109,14 @@ def run_game_over(events, dt, screen, game_state):
             button = event.button
             logging.debug(f"run_game_over: JOYBUTTONDOWN id={event.instance_id} btn={button} selection={gameover_menu_options[gameover_menu_selection]}")
 
-            if is_confirm_button(button): # Confirmation de l'option sélectionnée
+            # --- FIX: Restreindre confirmation au joueur concerné ---
+            allow_confirm = False
+            if current_game_mode == config.MODE_PVP:
+                allow_confirm = True
+            elif event.instance_id == 0:
+                allow_confirm = True
+
+            if allow_confirm and is_confirm_button(button): # Confirmation de l'option sélectionnée
                 try:
                     game_state['game_over_hs_saved'] = False # Réinitialise flag sauvegarde HS
                     selected_option = gameover_menu_options[gameover_menu_selection]
@@ -3162,7 +3176,7 @@ def run_game_over(events, dt, screen, game_state):
                     except: pass
                     next_state = config.MENU; return next_state
 
-            elif button == 8: # Bouton 8 pour Menu (Echap) - raccourci direct
+            elif allow_confirm and button == 8: # Bouton 8 pour Menu (Echap) - raccourci direct
                 logging.info(f"Joystick button 8 pressed in game over by P{event.instance_id+1}, returning to MENU.")
                 game_state['game_over_hs_saved'] = False
                 game_state['game_over_start_time'] = 0 # Réinitialiser le timer
@@ -4807,7 +4821,9 @@ def update_worker(game_state):
             game_state['update_message'] = "Git absent. Essai Zip..."
             repo_zip_urls = [
                 "https://github.com/liege-real-estate-drones/CyberSnake/archive/refs/heads/main.zip",
-                "https://github.com/liege-real-estate-drones/CyberSnake/archive/main.zip"
+                "https://github.com/liege-real-estate-drones/CyberSnake/archive/main.zip",
+                "https://github.com/liege-real-estate-drones/CyberSnake/archive/refs/heads/master.zip",
+                "https://github.com/liege-real-estate-drones/CyberSnake/archive/master.zip"
             ]
             zip_data = None
             success_url = ""
