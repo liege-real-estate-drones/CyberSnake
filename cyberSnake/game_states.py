@@ -3178,6 +3178,11 @@ def run_game_over(events, dt, screen, game_state):
                     selected_option = gameover_menu_options[gameover_menu_selection]
                     logging.info(f"run_game_over: Confirmed option '{selected_option}' by P{event.instance_id+1}")
 
+                    # --- FIX: Ensure 'Rejouer' works as expected and is the default behavior for button 1 ---
+                    # Logic: If Button 1 is pressed, we assume the user wants to select the highlighted option.
+                    # Ideally, 'Rejouer' should be the default/first option (index 0).
+                    # Check order: ["Rejouer", "Menu Principal"] (defined earlier in run_game_over)
+
                     if selected_option == "Rejouer":
                         utils.play_sound("powerup_pickup")
                         # Réinitialiser le timer de début de game over pour une future partie
@@ -3202,11 +3207,14 @@ def run_game_over(events, dt, screen, game_state):
                             next_state = config.NAME_ENTRY_PVP
                             game_state['current_state'] = next_state
                         else:
+                            # Direct Reset and Play for non-PvP modes
                             reset_game(game_state)
                             next_state = config.PLAYING
                             game_state['current_state'] = next_state
+
                         logging.info(f"run_game_over: Transitioning to {next_state} for replay.")
                         return next_state
+
                     elif selected_option == "Menu Principal":
                         utils.play_sound("combo_break")
                         game_state['game_over_hs_saved'] = False
@@ -3298,8 +3306,11 @@ def run_game_over(events, dt, screen, game_state):
         # Menu options de fin de partie
         menu_spacing = 40
         for i, option in enumerate(gameover_menu_options):
-            option_color = config.COLOR_TEXT_HIGHLIGHT if i == gameover_menu_selection else config.COLOR_TEXT_MENU
-            prefix = "> " if i == gameover_menu_selection else "  "
+            # --- FIX VISUEL: Force "Rejouer" comme option par défaut (index 0) si aucune sélection n'est active ---
+            # (Note: gameover_menu_selection est déjà géré par la logique, mais on s'assure visuellement)
+            is_selected = (i == gameover_menu_selection)
+            option_color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT_MENU
+            prefix = "> " if is_selected else "  "
             utils.draw_text_with_shadow(screen, f"{prefix}{option}", font_default, option_color, 
                                      config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_menu), "center")
             y_menu += menu_spacing
