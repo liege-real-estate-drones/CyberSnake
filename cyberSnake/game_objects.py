@@ -1365,6 +1365,124 @@ class Snake:
 
         return None  # Pas de résultat spécifique à retourner
 
+    def draw_status_effects(self, surface, current_time, font_small):
+        """Dessine les effets de statut actifs près de la tête du serpent."""
+        if not self.alive: return
+
+        head_px = self.get_head_center_px()
+        if not head_px or head_px[0] is None: return
+
+        hx, hy = head_px
+        effects_to_draw = []
+
+        # 1. Powerups
+        if self.powerup_end_time > current_time:
+            time_left = self.powerup_end_time - current_time
+            label = ""
+            color = config.COLOR_WHITE
+            duration = config.POWERUP_BASE_DURATION
+
+            if self.shield_active:
+                label, color = "SHIELD", config.COLOR_SHIELD_POWERUP
+                duration = config.POWERUP_TYPES.get('shield', {}).get('duration', duration)
+            elif self.rapid_fire_active:
+                label, color = "RAPID", config.COLOR_RAPIDFIRE_POWERUP
+                duration = config.POWERUP_TYPES.get('rapid_fire', {}).get('duration', duration)
+            elif self.invincible_powerup_active:
+                label, color = "INVINC", config.COLOR_INVINCIBILITY_POWERUP
+                duration = config.POWERUP_TYPES.get('invincibility', {}).get('duration', duration)
+            elif self.multishot_active:
+                label, color = "MULTI", config.COLOR_MULTISHOT_POWERUP
+                duration = config.POWERUP_TYPES.get('multishot', {}).get('duration', duration)
+
+            if label:
+                effects_to_draw.append((label, color, time_left, duration))
+
+        # 2. Skill Shield Charge
+        if self.shield_charge_active and self.shield_charge_expiry_time > current_time:
+             time_left = self.shield_charge_expiry_time - current_time
+             effects_to_draw.append(("CHARGE", config.COLOR_SHIELD_POWERUP, time_left, config.SHIELD_SKILL_DURATION))
+
+        # 3. Speed Boost
+        if self.speed_boost_level > 0:
+             timers = [t for t in self.effect_end_timers.get('speed_boost', []) if t > current_time]
+             if timers:
+                 time_left = min(timers) - current_time
+                 effects_to_draw.append((f"SPD x{self.speed_boost_level}", config.COLOR_FOOD_SPEED, time_left, config.FOOD_EFFECT_DURATION))
+
+        # 4. Poison
+        poison_end = self.effect_end_timers.get('poison', 0)
+        if self.poison_effect_active and poison_end > current_time:
+             effects_to_draw.append(("POISON", config.COLOR_FOOD_POISON, poison_end - current_time, config.POISON_EFFECT_DURATION))
+
+        # 5. Ghost
+        ghost_end = self.effect_end_timers.get('ghost', 0)
+        if self.ghost_active and ghost_end > current_time:
+             duration = config.GHOST_EFFECT_DURATION if self.is_player else config.ENEMY_GHOST_EFFECT_DURATION
+             effects_to_draw.append(("GHOST", config.COLOR_FOOD_GHOST, ghost_end - current_time, duration))
+
+        # 6. Score Multiplier
+        mult_end = self.effect_end_timers.get('score_multiplier', 0)
+        if self.score_multiplier_active and mult_end > current_time:
+             effects_to_draw.append(("X2", config.COLOR_FOOD_MULTIPLIER, mult_end - current_time, config.FOOD_EFFECT_DURATION))
+
+        # 7. Frozen
+        frozen_end = self.effect_end_timers.get('freeze_self', 0)
+        if self.frozen and frozen_end > current_time:
+             effects_to_draw.append(("FROZEN", config.COLOR_FOOD_FREEZE, frozen_end - current_time, config.ENEMY_FREEZE_DURATION))
+
+        if not effects_to_draw: return
+
+        # Drawing params
+        bar_width = 40
+        bar_height = 4
+        spacing = 2
+        current_y = hy - (config.GRID_SIZE // 2) - 10 # Start above head
+
+        for label, color, time_left, total_duration in effects_to_draw:
+            if time_left <= 0: continue
+
+            # Draw Bar
+            pct = max(0.0, min(1.0, time_left / max(1, total_duration)))
+            bar_rect_bg = pygame.Rect(0, 0, bar_width, bar_height)
+            bar_rect_bg.centerx = hx
+            bar_rect_bg.bottom = current_y
+
+            bar_rect_fill = pygame.Rect(bar_rect_bg.left, bar_rect_bg.top, int(bar_width * pct), bar_height)
+
+            try:
+                pygame.draw.rect(surface, (40, 40, 40), bar_rect_bg)
+                pygame.draw.rect(surface, color, bar_rect_fill)
+                pygame.draw.rect(surface, (0, 0, 0), bar_rect_bg, 1)
+            except Exception: pass
+
+            current_y -= (bar_height + spacing)
+
+            # Draw Text
+            try:
+                time_sec = time_left / 1000.0
+                text_str = f"{label} {time_sec:.1f}s"
+                text_surf = font_small.render(text_str, True, color)
+
+                w = int(text_surf.get_width() * 0.7)
+                h = int(text_surf.get_height() * 0.7)
+                text_surf = pygame.transform.smoothscale(text_surf, (w, h))
+
+                text_rect = text_surf.get_rect(centerx=hx, bottom=current_y)
+
+                # Shadow
+                shadow_surf = font_small.render(text_str, True, (0, 0, 0))
+                shadow_surf = pygame.transform.smoothscale(shadow_surf, (w, h))
+                shadow_rect = text_rect.copy()
+                shadow_rect.x += 1
+                shadow_rect.y += 1
+                surface.blit(shadow_surf, shadow_rect)
+
+                surface.blit(text_surf, text_rect)
+
+                current_y -= (h + spacing)
+            except Exception: pass
+
     def draw(self, surface, current_time, font_small, font_default):
         if self.is_player: # Log only for players to reduce noise
             logging.debug(f"DRAW CHECK: Snake {self.name}. alive={self.alive}, positions_empty={not self.positions}, current_time={current_time}")
@@ -1607,6 +1725,9 @@ class Snake:
                 try:
                      pygame.draw.rect(surface, border_color, r, border_thickness)
                 except (TypeError, ValueError): pass
+
+        # Draw status effects near head (Last to be on top)
+        self.draw_status_effects(surface, current_time, font_small)
 
     def die(self, current_time):
         if self.is_ai: self.death_time = current_time
