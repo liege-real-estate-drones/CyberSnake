@@ -1439,6 +1439,30 @@ class Snake:
         elif self.poison_effect_active: base_color = config.COLOR_FOOD_POISON
         elif self.frozen: base_color = config.COLOR_FOOD_FREEZE
 
+        # --- PREPARATION TINT SURFACE (Pour effets visuels sur images) ---
+        tint_surface = None
+        tint_color_to_use = None
+        tint_alpha = 0
+
+        # 1. Effect Tint (Si une couleur d'effet est active et différente de la couleur de base)
+        if base_color != self.color:
+             tint_color_to_use = base_color
+             tint_alpha = 120
+             if is_flashing_critically: tint_alpha = 180
+        # 2. Armor Tint (Si armure présente et pas d'autre effet majeur)
+        elif self.armor > 0:
+             tint_color_to_use = config.COLOR_ARMOR_HIGHLIGHT
+             tint_alpha = 60 # Tint subtil pour l'armure
+
+        if tint_color_to_use:
+            try:
+                tint_surface = pygame.Surface((config.GRID_SIZE, config.GRID_SIZE), pygame.SRCALPHA)
+                rgb = tint_color_to_use[:3]
+                tint_surface.fill((*rgb, tint_alpha))
+            except Exception as e:
+                logger.warning(f"Failed to create tint surface: {e}")
+                tint_surface = None
+
         # --- Dessin des Segments (avec Assets et Rotation) ---
 
         # 1. Identifier les images selon le joueur
@@ -1565,6 +1589,12 @@ class Snake:
                          pygame.draw.rect(surface, draw_color, r)
                 else:
                     pygame.draw.rect(surface, draw_color, r)
+
+            # --- OVERLAY TINT (Si actif) ---
+            if tint_surface:
+                try:
+                    surface.blit(tint_surface, r.topleft)
+                except Exception: pass
 
             # --- Dessin de la bordure (toujours par dessus si nécessaire, ou en fallback) ---
             # Si on a utilisé une image, on ne dessine généralement pas le rectangle plein,
