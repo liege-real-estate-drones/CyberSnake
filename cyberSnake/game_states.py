@@ -37,6 +37,7 @@ import os
 import sys
 import shutil
 import urllib.request
+import urllib.error
 import zipfile
 import io
 import threading
@@ -4810,6 +4811,8 @@ def update_worker(game_state):
         if not git_cmd:
             git_cmd = shutil.which("git")
 
+        logging.info(f"Git detection: cmd={git_cmd}, cwd={os.getcwd()}, .git exists={os.path.isdir('.git')}")
+
         if git_cmd:
             # Mode Git
             game_state['update_message'] = "Exécution de git pull..."
@@ -4845,6 +4848,11 @@ def update_worker(game_state):
                         zip_data = response.read()
                         success_url = url
                         break
+                except urllib.error.HTTPError as e:
+                    logging.warning(f"Failed to download {url}: HTTP {e.code} - {e.reason}")
+                    if e.code == 404:
+                         game_state['update_error_msg'] = "Erreur 404: Repo Privé ?"
+                    continue
                 except Exception as e:
                     logging.warning(f"Failed to download {url}: {e}")
                     continue
@@ -4869,7 +4877,8 @@ def update_worker(game_state):
                     game_state['update_error_msg'] = f"Extract Fail: {str(e)}"
                     game_state['update_status'] = 'error'
             else:
-                game_state['update_error_msg'] = "Échec téléchargement Zip"
+                if not game_state.get('update_error_msg'):
+                    game_state['update_error_msg'] = "Échec téléchargement Zip"
                 game_state['update_status'] = 'error'
 
     except Exception as e:
