@@ -4863,12 +4863,15 @@ def update_worker(game_state):
         if not git_cmd:
             git_cmd = shutil.which("git")
 
-        logging.info(f"Git detection: cmd={git_cmd}, cwd={os.getcwd()}, .git exists={os.path.isdir('.git')}")
+        # Determine install directory (where sys.argv[0] is located)
+        install_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        logging.info(f"Git detection: cmd={git_cmd}, install_dir={install_dir}, cwd={os.getcwd()}")
 
         if git_cmd:
             # Mode Git
             game_state['update_message'] = "Exécution de git pull..."
-            process = subprocess.run([git_cmd, "pull"], capture_output=True, text=True, check=False)
+            # Use install_dir as cwd for git command to ensure we update the right repo
+            process = subprocess.run([git_cmd, "pull"], cwd=install_dir, capture_output=True, text=True, check=False)
             if process.returncode == 0:
                 logging.info(f"Git pull successful: {process.stdout}")
                 game_state['update_message'] = "Mise à jour Git réussie !"
@@ -4913,15 +4916,44 @@ def update_worker(game_state):
                 game_state['update_message'] = "Extraction du Zip..."
                 try:
                     with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
-                        root_dir_in_zip = zip_ref.namelist()[0].split('/')[0]
+                        logging.info(f"Install dir for update: {install_dir}")
+
+                        # Find the game root inside the zip (look for cybersnake.pygame)
+                        game_root_in_zip = None
+                        for name in zip_ref.namelist():
+                            if name.endswith("cybersnake.pygame"):
+                                # If zip has 'CyberSnake-main/cyberSnake/cybersnake.pygame', root is 'CyberSnake-main/cyberSnake/'
+                                game_root_in_zip = os.path.dirname(name)
+                                if game_root_in_zip:
+                                    game_root_in_zip += "/"
+                                else:
+                                    game_root_in_zip = "" # file is at root
+                                break
+
+                        logging.info(f"Detected game root in zip: '{game_root_in_zip}'")
+
+                        if game_root_in_zip is None:
+                             # Fallback to old logic (top level folder) if main script not found
+                             game_root_in_zip = zip_ref.namelist()[0].split('/')[0] + "/"
+                             logging.warning(f"Main script not found in zip, using first folder as root: {game_root_in_zip}")
+
                         for member in zip_ref.namelist():
                             if member.endswith('/'): continue
-                            relative_path = member[len(root_dir_in_zip)+1:]
+                            if not member.startswith(game_root_in_zip): continue # Skip files outside game root
+
+                            # Strip the prefix to get relative path for install_dir
+                            relative_path = member[len(game_root_in_zip):]
                             if not relative_path: continue
-                            target_path = os.path.join(os.getcwd(), relative_path)
+
+                            target_path = os.path.join(install_dir, relative_path)
+
+                            # Ensure target dir exists
                             os.makedirs(os.path.dirname(target_path), exist_ok=True)
+
+                            # Write file
                             with open(target_path, "wb") as f:
                                 f.write(zip_ref.read(member))
+
                     game_state['update_message'] = "Extraction terminée !"
                     game_state['update_status'] = 'success'
                 except Exception as e:
