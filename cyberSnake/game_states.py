@@ -3169,7 +3169,10 @@ def run_game_over(events, dt, screen, game_state):
             elif event.instance_id == 0:
                 allow_confirm = True
 
-            if allow_confirm and is_confirm_button(button): # Confirmation de l'option sélectionnée
+            # FIX: Force support for Button 1 (Shoot) as confirm button, even if config varies
+            is_valid_confirm = is_confirm_button(button) or (button == 1)
+
+            if allow_confirm and is_valid_confirm: # Confirmation de l'option sélectionnée
                 try:
                     game_state['game_over_hs_saved'] = False # Réinitialise flag sauvegarde HS
                     selected_option = gameover_menu_options[gameover_menu_selection]

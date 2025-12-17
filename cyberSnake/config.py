@@ -485,4 +485,4 @@ BUTTON_PRIMARY_ACTION = 1      # Tirer (en jeu), Confirmer (menus)
 BUTTON_SECONDARY_ACTION = 2    # Dash (en jeu), Annuler/Retour (menus)
 BUTTON_TERTIARY_ACTION = 3     # Bouclier (en jeu)
 BUTTON_PAUSE = 7               # Pause / Reprendre (souvent le bouton Start)
-VERSION = '1.1.2'
+VERSION = '1.1.3'
