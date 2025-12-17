@@ -3364,6 +3364,12 @@ def run_game(events, dt, screen, game_state):
     moving_mines_hit_indices = set()
     enemies_died_this_frame = []
 
+    # --- Initialisation variables collision (pour éviter UnboundLocalError si mort prématurée) ---
+    nests_hit_indices_proj = set()
+    nests_collided_indices_head = set()
+    mines_hit_indices_proj = set()
+    moving_mines_hit_indices_proj = set()
+
     # --- Vérifications Critiques ---
     critical_error = False; error_message = ""
     print(f"DEBUG RUN_GAME: Mode actuel: {current_game_mode}, player_snake: {player_snake}, player2_snake: {player2_snake}")
