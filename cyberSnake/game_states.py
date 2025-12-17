@@ -10,9 +10,9 @@ import logging
 # --- Helpers boutons (configurables) ---
 def is_confirm_button(button):
     try:
-        return button in (config.BUTTON_PRIMARY_ACTION, 0, 1)
+        return button in (config.BUTTON_PRIMARY_ACTION, 0, 1, 9)
     except Exception:
-        return button in (0, 1)
+        return button in (0, 1, 9)
 
 def is_back_button(button):
     try:
@@ -3072,12 +3072,13 @@ def run_game_over(events, dt, screen, game_state):
                 # Navigation haut/bas entre les options
                 if (event.type == pygame.JOYAXISMOTION and event.axis == 0):
                     value = event.value
-                    if value < -config.JOYSTICK_THRESHOLD: # Haut - option précédente
+                    threshold = 0.8 # Higher threshold for game over menu to prevent drift issues
+                    if value < -threshold: # Haut - option précédente
                         gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
                         utils.play_sound("eat")
                         game_state['gameover_menu_selection'] = gameover_menu_selection
                         last_axis_move_time = current_time
-                    elif value > config.JOYSTICK_THRESHOLD: # Bas - option suivante
+                    elif value > threshold: # Bas - option suivante
                         gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
                         utils.play_sound("eat")
                         game_state['gameover_menu_selection'] = gameover_menu_selection
@@ -3098,10 +3099,13 @@ def run_game_over(events, dt, screen, game_state):
         
         elif event.type == pygame.JOYBUTTONDOWN:
             button = event.button
+            logging.debug(f"run_game_over: JOYBUTTONDOWN id={event.instance_id} btn={button} selection={gameover_menu_options[gameover_menu_selection]}")
+
             if is_confirm_button(button): # Confirmation de l'option sélectionnée
                 try:
                     game_state['game_over_hs_saved'] = False # Réinitialise flag sauvegarde HS
                     selected_option = gameover_menu_options[gameover_menu_selection]
+                    logging.info(f"run_game_over: Confirmed option '{selected_option}' by P{event.instance_id+1}")
 
                     if selected_option == "Rejouer":
                         utils.play_sound("powerup_pickup")
@@ -3130,6 +3134,7 @@ def run_game_over(events, dt, screen, game_state):
                             reset_game(game_state)
                             next_state = config.PLAYING
                             game_state['current_state'] = next_state
+                        logging.info(f"run_game_over: Transitioning to {next_state} for replay.")
                         return next_state
                     elif selected_option == "Menu Principal":
                         utils.play_sound("combo_break")
@@ -3137,9 +3142,11 @@ def run_game_over(events, dt, screen, game_state):
                         # Réinitialiser le timer de début de game over
                         game_state['game_over_start_time'] = 0
                         next_state = config.MENU
+                        logging.info("run_game_over: Returning to MENU.")
                         return next_state
                 except Exception as e:
                     print(f"Erreur en tentant d'exécuter l'option via joystick: {e}"); traceback.print_exc()
+                    logging.error(f"run_game_over Exception: {e}", exc_info=True)
                     # Affiche l'erreur à l'écran pour le débogage utilisateur
                     try:
                         screen.fill(config.COLOR_BACKGROUND)
@@ -3155,7 +3162,7 @@ def run_game_over(events, dt, screen, game_state):
                     next_state = config.MENU; return next_state
 
             elif button == 8: # Bouton 8 pour Menu (Echap) - raccourci direct
-                logging.info("Joystick button 8 pressed in game over, returning to MENU.")
+                logging.info(f"Joystick button 8 pressed in game over by P{event.instance_id+1}, returning to MENU.")
                 game_state['game_over_hs_saved'] = False
                 game_state['game_over_start_time'] = 0 # Réinitialiser le timer
                 next_state = config.MENU; return next_state
@@ -4822,7 +4829,7 @@ def run_update(events, dt, screen, game_state):
                         url,
                         headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'}
                     )
-                    with urllib.request.urlopen(req) as response:
+                    with urllib.request.urlopen(req, timeout=15) as response:
                         zip_data = response.read()
                         success_url = url
                         break # Succès, on sort de la boucle
