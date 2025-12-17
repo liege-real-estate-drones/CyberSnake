@@ -234,6 +234,16 @@ def main():
         'joystick_p2': joystick_p2, 'joystick_p2_name': joystick_p2_name, 'num_buttons_p2': num_buttons_p2,
         'calculated_grid_size': calculated_grid_size,
     }
+
+    # Check for update flag
+    if os.path.exists("update_success.flag"):
+        try:
+            game_state['show_version_popup'] = True
+            os.remove("update_success.flag")
+            logging.info("Update flag detected. Version popup enabled.")
+        except Exception as e:
+            logging.error(f"Error handling update flag: {e}")
+
     logging.info("État du jeu initialisé.")
     # --- Fin Initialisation État du Jeu ---
 
