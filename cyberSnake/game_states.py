@@ -1035,12 +1035,42 @@ def run_menu(events, dt, screen, game_state):
     next_state = config.MENU # Par défaut, reste dans le menu
     current_time = pygame.time.get_ticks() # Temps actuel pour gérer le délai de l'axe
 
-    # --- Gestion des événements ---
+    # --- Logic for Version Popup Overlay ---
+    if game_state.get('show_version_popup'):
+        # Only process popup events, block others
+        for event in events:
+            if event.type == pygame.QUIT:
+                return False
+            elif event.type == pygame.JOYBUTTONDOWN:
+                # User specifically asked for "Button 1" to close.
+                # Button 1 is mapped to primary action/confirm.
+                if event.button == 1 or event.button == config.BUTTON_PRIMARY_ACTION:
+                    game_state['show_version_popup'] = False
+                    utils.play_sound("powerup_pickup")
+                    # Clear events or return to prevent fall-through processing in the same frame
+                    # Returning creates a 1-frame delay which is safe
+                    return next_state
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER or event.key == pygame.K_ESCAPE:
+                    game_state['show_version_popup'] = False
+                    utils.play_sound("powerup_pickup")
+                    return next_state
+
+        # If popup is still showing, we skip normal menu processing AND drawing (except the overlay part)
+        # But we need to draw the menu first so the overlay is ON TOP.
+        # So we skip the input processing block below, but we must fall through to the drawing code.
+        # Actually, if we return next_state above, we skip drawing for this frame. That's fine.
+        # If we didn't return (no input), we fall through.
+        # We need to ensure normal menu input processing is skipped.
+        # Clearing events ensures the normal loop below sees an empty list.
+        events = []
+
+    # --- Gestion des événements (Normal Menu) ---
     for event in events:
         if event.type == pygame.QUIT:
             return False # Signal pour quitter le jeu
 
-        # --- Gestion Joystick Menu ---
+            # --- Gestion Joystick Menu ---
         elif event.type == pygame.JOYBUTTONDOWN:
             logging.debug(f"JOYBUTTONDOWN event: instance_id={event.instance_id}, button={event.button}")
             if event.instance_id == 0: # Vérifie manette 0
@@ -1260,6 +1290,28 @@ def run_menu(events, dt, screen, game_state):
         music_track_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'} (Vol: {utils.music_volume:.1f})"
         utils.draw_text(screen, music_track_text, font_small, config.COLOR_TEXT_HIGHLIGHT, (config.SCREEN_WIDTH / 2, y_instructions - 1 * instr_gap), "center")
         utils.draw_text(screen, f"Effets (Vol: {utils.sound_volume:.1f}) | Echap: Quitter", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_instructions), "center")
+
+        # --- Draw Version Popup Overlay ---
+        if game_state.get('show_version_popup'):
+            # Semi-transparent background
+            overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 200))
+            screen.blit(overlay, (0, 0))
+
+            # Popup Box
+            popup_width, popup_height = 400, 250
+            popup_rect = pygame.Rect((config.SCREEN_WIDTH - popup_width) // 2, (config.SCREEN_HEIGHT - popup_height) // 2, popup_width, popup_height)
+            draw_ui_panel(screen, popup_rect)
+
+            # Text Content
+            center_x, center_y = popup_rect.centerx, popup_rect.centery
+            utils.draw_text_with_shadow(screen, "Mise à jour réussie !", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (center_x, center_y - 60), "center")
+
+            version_text = f"Version: {getattr(config, 'VERSION', 'Inconnue')}"
+            utils.draw_text_with_shadow(screen, version_text, font_large, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (center_x, center_y), "center")
+
+            utils.draw_text_with_shadow(screen, "Appuyez sur Bouton 1 pour fermer", font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (center_x, center_y + 80), "center")
+
     except Exception as e:
         print(f"Erreur majeure lors du dessin du menu: {e}")
         try:
@@ -4931,6 +4983,13 @@ def run_update(events, dt, screen, game_state):
         # Petit délai pour lire le message
         game_state['update_timer'] += dt
         if game_state['update_timer'] > 2000: # 2 secondes
+            # Create flag file to indicate successful update restart
+            try:
+                with open("update_success.flag", "w") as f:
+                    f.write("updated")
+            except Exception as e:
+                logging.error(f"Failed to create update flag: {e}")
+
             python = sys.executable
             script_path = sys.argv[0]
             logging.info(f"Restarting process: {python} {script_path}")
