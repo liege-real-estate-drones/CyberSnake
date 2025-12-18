@@ -1168,48 +1168,6 @@ def run_menu(events, dt, screen, game_state):
                     utils.play_sound("eat")
                     last_axis_move_time = current_time # Met à jour le temps
 
-        elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0: # Vérifie manette 0
-                # Utilise bouton 0 ou 1 pour confirmer (A/B ou Croix/Rond) - Adapter si besoin
-                if is_confirm_button(event.button):
-                    try:
-                        selected_option_tuple = menu_options[menu_selection_index]
-                        selected_option = selected_option_tuple[0]
-                        utils.play_sound("powerup_pickup") # Son de confirmation
-
-                        if selected_option == config.HALL_OF_FAME:
-                            next_state = config.HALL_OF_FAME
-                        elif selected_option == config.UPDATE:
-                            next_state = config.UPDATE
-                        elif isinstance(selected_option, config.GameMode):
-                            game_state['current_game_mode'] = selected_option
-                            if selected_option == config.MODE_PVP:
-                                next_state = config.MAP_SELECTION # PvP va à la sélection de carte
-                            else:
-                                next_state = config.NAME_ENTRY_SOLO # Autres modes vont à la saisie du nom
-                        else:
-                            print(f"Option de menu joystick inconnue sélectionnée: {selected_option}")
-                            next_state = config.MENU
-
-                        # Mise à jour explicite de l'état courant dans game_state
-                        game_state['current_state'] = next_state
-                        game_state['menu_selection_index'] = menu_selection_index # Sauvegarde l'index
-                        return next_state # Change d'état
-                    except IndexError:
-                        print(f"Erreur joystick: Index de menu hors limites ({menu_selection_index})")
-                        next_state = config.MENU
-                    except Exception as e:
-                        print(f"Erreur sélection menu joystick: {e}"); traceback.print_exc()
-                        next_state = config.MENU
-                elif event.button == 4: # Bouton 4 pour changer musique
-                    music_num = (utils.selected_music_index % 9) + 1 # Cycle 1-9
-                    if utils.select_and_load_music(music_num, base_path):
-                        try: utils.play_selected_music(base_path)
-                        except pygame.error as e: print(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
-                    last_axis_move_time = current_time # Évite répétition immédiate
-                elif event.button == 8: # Bouton 8 pour quitter
-                    logging.info("Joystick button 8 pressed in menu, quitting.")
-                    return False # Quitte le jeu
         # --- FIN Gestion Joystick Menu ---
 
         elif event.type == pygame.KEYDOWN: # Gestion Clavier existante
@@ -1478,10 +1436,10 @@ def run_name_entry_solo(events, dt, screen, game_state):
                         last_axis_move_time = current_time
                         input_active = True
                 
-                game_state['vk_row_pvp'] = vk_row
-                game_state['vk_col_pvp'] = vk_col
-                game_state['last_axis_move_time_vk_pvp'] = last_axis_move_time
-                game_state['input_active_pvp'] = input_active
+                game_state['vk_row'] = vk_row
+                game_state['vk_col'] = vk_col
+                game_state['last_axis_move_time_vk'] = last_axis_move_time
+                game_state['input_active_solo'] = input_active
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -3326,6 +3284,7 @@ def run_game_over(events, dt, screen, game_state):
     except Exception as e:
         print(f"Erreur majeure lors du dessin de run_game_over: {e}"); traceback.print_exc(); return config.MENU
 
+    game_state['last_axis_move_time_gameover'] = last_axis_move_time # Sauvegarder le timer pour éviter le défilement trop rapide
     return next_state
 
 
