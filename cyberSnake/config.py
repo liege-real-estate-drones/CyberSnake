@@ -18,6 +18,16 @@ SNAKE_STYLE = "sprites"
 # Taille de l'arène en mode Classique: "full", "large", "medium", "small"
 CLASSIC_ARENA = "full"
 
+# Vitesse globale: facteur appliqué aux intervals de mouvement (1.0 = normal, >1 = plus lent, <1 = plus rapide)
+GAME_SPEED = "normal"
+GAME_SPEED_FACTOR = 1.0
+
+# Effets visuels
+PARTICLE_DENSITY = "normal"
+PARTICLE_FACTOR = 1.0
+SCREEN_SHAKE_ENABLED = True
+SHOW_FPS = False
+
 
 # --- Constantes Vitesse & Difficulté ---
 SNAKE_MOVE_INTERVAL_BASE = 140

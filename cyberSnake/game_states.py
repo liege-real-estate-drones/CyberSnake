@@ -856,6 +856,23 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     except Exception as e:
         print(f"Erreur dessin UI Bas-Centre: {e}")
         traceback.print_exc()
+
+    # --- FPS overlay (option) ---
+    try:
+        if bool(getattr(config, "SHOW_FPS", False)):
+            clock = game_state.get('clock')
+            fps = clock.get_fps() if clock else 0.0
+            utils.draw_text_with_shadow(
+                target_surface,
+                f"FPS: {fps:.0f}",
+                font_small,
+                config.COLOR_TEXT_MENU,
+                config.COLOR_UI_SHADOW,
+                (config.SCREEN_WIDTH - ui_margin, config.SCREEN_HEIGHT - ui_margin),
+                "bottomright",
+            )
+    except Exception:
+        pass
 # Fin draw_game_elements_on_surface
 
 # --- reset_game function (aucune modification nécessaire ici) ---
@@ -1508,6 +1525,12 @@ def run_options(events, dt, screen, game_state):
         or 'pending_grid_size' not in game_state
         or 'pending_snake_style' not in game_state
         or 'pending_classic_arena' not in game_state
+        or 'pending_game_speed' not in game_state
+        or 'pending_particle_density' not in game_state
+        or 'pending_screen_shake' not in game_state
+        or 'pending_show_fps' not in game_state
+        or 'pending_music_volume' not in game_state
+        or 'pending_sound_volume' not in game_state
     ):
         try:
             opts = utils.load_game_options(base_path)
@@ -1519,10 +1542,30 @@ def run_options(events, dt, screen, game_state):
             pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
         pending_snake_style = str(opts.get("snake_style", getattr(config, "SNAKE_STYLE", "sprites")))
         pending_classic_arena = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
+        pending_game_speed = str(opts.get("game_speed", getattr(config, "GAME_SPEED", "normal")))
+        pending_particle_density = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal")))
+        pending_screen_shake = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
+        pending_show_fps = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
+        try:
+            pending_music_volume = float(opts.get("music_volume", getattr(utils, "music_volume", 0.3)))
+        except Exception:
+            pending_music_volume = float(getattr(utils, "music_volume", 0.3))
+        pending_music_volume = max(0.0, min(1.0, pending_music_volume))
+        try:
+            pending_sound_volume = float(opts.get("sound_volume", getattr(utils, "sound_volume", 0.6)))
+        except Exception:
+            pending_sound_volume = float(getattr(utils, "sound_volume", 0.6))
+        pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
         game_state['pending_show_grid'] = pending_show_grid
         game_state['pending_grid_size'] = pending_grid_size
         game_state['pending_snake_style'] = pending_snake_style
         game_state['pending_classic_arena'] = pending_classic_arena
+        game_state['pending_game_speed'] = pending_game_speed
+        game_state['pending_particle_density'] = pending_particle_density
+        game_state['pending_screen_shake'] = pending_screen_shake
+        game_state['pending_show_fps'] = pending_show_fps
+        game_state['pending_music_volume'] = pending_music_volume
+        game_state['pending_sound_volume'] = pending_sound_volume
 
     pending_show_grid = bool(game_state.get('pending_show_grid', getattr(config, "SHOW_GRID", True)))
     pending_grid_size = game_state.get('pending_grid_size', getattr(config, "GRID_SIZE", 20))
@@ -1531,6 +1574,20 @@ def run_options(events, dt, screen, game_state):
 
     pending_snake_style = str(game_state.get('pending_snake_style', getattr(config, "SNAKE_STYLE", "sprites")))
     pending_classic_arena = str(game_state.get('pending_classic_arena', getattr(config, "CLASSIC_ARENA", "full")))
+    pending_game_speed = str(game_state.get('pending_game_speed', getattr(config, "GAME_SPEED", "normal")))
+    pending_particle_density = str(game_state.get('pending_particle_density', getattr(config, "PARTICLE_DENSITY", "normal")))
+    pending_screen_shake = bool(game_state.get('pending_screen_shake', getattr(config, "SCREEN_SHAKE_ENABLED", True)))
+    pending_show_fps = bool(game_state.get('pending_show_fps', getattr(config, "SHOW_FPS", False)))
+    try:
+        pending_music_volume = float(game_state.get('pending_music_volume', getattr(utils, "music_volume", 0.3)))
+    except Exception:
+        pending_music_volume = float(getattr(utils, "music_volume", 0.3))
+    pending_music_volume = max(0.0, min(1.0, pending_music_volume))
+    try:
+        pending_sound_volume = float(game_state.get('pending_sound_volume', getattr(utils, "sound_volume", 0.6)))
+    except Exception:
+        pending_sound_volume = float(getattr(utils, "sound_volume", 0.6))
+    pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
 
     grid_sizes = [12, 16, 20, 24, 30, 36, 48]
     if pending_grid_size not in grid_sizes:
@@ -1570,11 +1627,43 @@ def run_options(events, dt, screen, game_state):
         pending_classic_arena = classic_arena_keys[0]
     classic_arena_display = dict(classic_arenas).get(pending_classic_arena, pending_classic_arena)
 
+    game_speeds = [
+        ("slow", "Lent"),
+        ("normal", "Normal"),
+        ("fast", "Rapide"),
+    ]
+    game_speed_keys = [k for k, _ in game_speeds]
+    pending_game_speed = str(pending_game_speed).strip().lower()
+    if pending_game_speed not in game_speed_keys:
+        pending_game_speed = game_speed_keys[1]
+    game_speed_display = dict(game_speeds).get(pending_game_speed, pending_game_speed)
+
+    particle_densities = [
+        ("off", "Off"),
+        ("low", "Faible"),
+        ("normal", "Normal"),
+        ("high", "Élevée"),
+    ]
+    particle_density_keys = [k for k, _ in particle_densities]
+    pending_particle_density = str(pending_particle_density).strip().lower()
+    if pending_particle_density not in particle_density_keys:
+        pending_particle_density = particle_density_keys[2]
+    particle_density_display = dict(particle_densities).get(pending_particle_density, pending_particle_density)
+
+    music_volume_display = f"{int(round(pending_music_volume * 100))}%"
+    sound_volume_display = f"{int(round(pending_sound_volume * 100))}%"
+
     menu_items = [
         ("Quadrillage", "Oui" if pending_show_grid else "Non"),
         ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
         ("Style serpent", snake_style_display),
-        ("Arene classique", classic_arena_display),
+        ("Arène classique", classic_arena_display),
+        ("Vitesse jeu", game_speed_display),
+        ("Particules", particle_density_display),
+        ("Secousse écran", "Oui" if pending_screen_shake else "Non"),
+        ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
+        ("Volume musique", music_volume_display),
+        ("Volume effets", sound_volume_display),
         ("Appliquer", ""),
         ("Retour", ""),
     ]
@@ -1604,6 +1693,40 @@ def run_options(events, dt, screen, game_state):
             idx = 0
         pending_classic_arena = classic_arena_keys[(idx + delta) % len(classic_arena_keys)]
 
+    def cycle_game_speed(delta):
+        nonlocal pending_game_speed
+        try:
+            idx = game_speed_keys.index(pending_game_speed)
+        except ValueError:
+            idx = 0
+        pending_game_speed = game_speed_keys[(idx + delta) % len(game_speed_keys)]
+
+    def cycle_particle_density(delta):
+        nonlocal pending_particle_density
+        try:
+            idx = particle_density_keys.index(pending_particle_density)
+        except ValueError:
+            idx = 0
+        pending_particle_density = particle_density_keys[(idx + delta) % len(particle_density_keys)]
+
+    def adjust_music_volume(delta_steps):
+        nonlocal pending_music_volume
+        try:
+            pending_music_volume = float(pending_music_volume)
+        except Exception:
+            pending_music_volume = float(getattr(utils, "music_volume", 0.3))
+        step = 0.1
+        pending_music_volume = max(0.0, min(1.0, round(pending_music_volume + delta_steps * step, 2)))
+
+    def adjust_sound_volume(delta_steps):
+        nonlocal pending_sound_volume
+        try:
+            pending_sound_volume = float(pending_sound_volume)
+        except Exception:
+            pending_sound_volume = float(getattr(utils, "sound_volume", 0.6))
+        step = 0.1
+        pending_sound_volume = max(0.0, min(1.0, round(pending_sound_volume + delta_steps * step, 2)))
+
     def apply_options():
         nonlocal pending_show_grid, pending_grid_size, screen
         # Persist
@@ -1612,12 +1735,40 @@ def run_options(events, dt, screen, game_state):
         opts["grid_size"] = int(pending_grid_size)
         opts["snake_style"] = str(pending_snake_style)
         opts["classic_arena"] = str(pending_classic_arena)
+        opts["game_speed"] = str(pending_game_speed)
+        opts["particle_density"] = str(pending_particle_density)
+        opts["screen_shake"] = bool(pending_screen_shake)
+        opts["show_fps"] = bool(pending_show_fps)
+        try:
+            opts["music_volume"] = round(float(pending_music_volume), 2)
+        except Exception:
+            opts["music_volume"] = round(float(getattr(utils, "music_volume", 0.3)), 2)
+        try:
+            opts["sound_volume"] = round(float(pending_sound_volume), 2)
+        except Exception:
+            opts["sound_volume"] = round(float(getattr(utils, "sound_volume", 0.6)), 2)
         utils.save_game_options(opts, base_path)
 
         # Apply to config + display
         config.SHOW_GRID = bool(pending_show_grid)
         config.SNAKE_STYLE = str(pending_snake_style)
         config.CLASSIC_ARENA = str(pending_classic_arena)
+
+        speed_map = {"slow": 1.25, "normal": 1.0, "fast": 0.85}
+        config.GAME_SPEED = str(pending_game_speed).strip().lower()
+        config.GAME_SPEED_FACTOR = float(speed_map.get(config.GAME_SPEED, 1.0))
+
+        particle_map = {"off": 0.0, "low": 0.5, "normal": 1.0, "high": 1.6}
+        config.PARTICLE_DENSITY = str(pending_particle_density).strip().lower()
+        config.PARTICLE_FACTOR = float(particle_map.get(config.PARTICLE_DENSITY, 1.0))
+
+        config.SCREEN_SHAKE_ENABLED = bool(pending_screen_shake)
+        config.SHOW_FPS = bool(pending_show_fps)
+        try:
+            utils.set_music_volume(pending_music_volume)
+            utils.set_sound_volume(pending_sound_volume)
+        except Exception:
+            pass
         try:
             info = pygame.display.Info()
             new_w = (info.current_w // int(pending_grid_size)) * int(pending_grid_size)
@@ -1684,6 +1835,24 @@ def run_options(events, dt, screen, game_state):
                         elif selection_index == 3:
                             cycle_classic_arena(-1)
                             utils.play_sound("eat")
+                        elif selection_index == 4:
+                            cycle_game_speed(-1)
+                            utils.play_sound("eat")
+                        elif selection_index == 5:
+                            cycle_particle_density(-1)
+                            utils.play_sound("eat")
+                        elif selection_index == 6:
+                            pending_screen_shake = not pending_screen_shake
+                            utils.play_sound("eat")
+                        elif selection_index == 7:
+                            pending_show_fps = not pending_show_fps
+                            utils.play_sound("eat")
+                        elif selection_index == 8:
+                            adjust_music_volume(-1)
+                            utils.play_sound("eat")
+                        elif selection_index == 9:
+                            adjust_sound_volume(-1)
+                            utils.play_sound("eat")
                         last_axis_move_time = current_time
                     elif value > threshold:
                         if selection_index == 0:
@@ -1697,6 +1866,24 @@ def run_options(events, dt, screen, game_state):
                             utils.play_sound("eat")
                         elif selection_index == 3:
                             cycle_classic_arena(1)
+                            utils.play_sound("eat")
+                        elif selection_index == 4:
+                            cycle_game_speed(1)
+                            utils.play_sound("eat")
+                        elif selection_index == 5:
+                            cycle_particle_density(1)
+                            utils.play_sound("eat")
+                        elif selection_index == 6:
+                            pending_screen_shake = not pending_screen_shake
+                            utils.play_sound("eat")
+                        elif selection_index == 7:
+                            pending_show_fps = not pending_show_fps
+                            utils.play_sound("eat")
+                        elif selection_index == 8:
+                            adjust_music_volume(1)
+                            utils.play_sound("eat")
+                        elif selection_index == 9:
+                            adjust_sound_volume(1)
                             utils.play_sound("eat")
                         last_axis_move_time = current_time
 
@@ -1724,6 +1911,24 @@ def run_options(events, dt, screen, game_state):
                     elif selection_index == 3:
                         cycle_classic_arena(1 if hat_x > 0 else -1)
                         utils.play_sound("eat")
+                    elif selection_index == 4:
+                        cycle_game_speed(1 if hat_x > 0 else -1)
+                        utils.play_sound("eat")
+                    elif selection_index == 5:
+                        cycle_particle_density(1 if hat_x > 0 else -1)
+                        utils.play_sound("eat")
+                    elif selection_index == 6:
+                        pending_screen_shake = not pending_screen_shake
+                        utils.play_sound("eat")
+                    elif selection_index == 7:
+                        pending_show_fps = not pending_show_fps
+                        utils.play_sound("eat")
+                    elif selection_index == 8:
+                        adjust_music_volume(1 if hat_x > 0 else -1)
+                        utils.play_sound("eat")
+                    elif selection_index == 9:
+                        adjust_sound_volume(1 if hat_x > 0 else -1)
+                        utils.play_sound("eat")
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
@@ -1744,12 +1949,30 @@ def run_options(events, dt, screen, game_state):
                     elif selection_index == 3:
                         cycle_classic_arena(1)
                         utils.play_sound("eat")
-                    elif selection_index == 4:  # Appliquer
+                    elif selection_index == 4:
+                        cycle_game_speed(1)
+                        utils.play_sound("eat")
+                    elif selection_index == 5:
+                        cycle_particle_density(1)
+                        utils.play_sound("eat")
+                    elif selection_index == 6:
+                        pending_screen_shake = not pending_screen_shake
+                        utils.play_sound("eat")
+                    elif selection_index == 7:
+                        pending_show_fps = not pending_show_fps
+                        utils.play_sound("eat")
+                    elif selection_index == 8:
+                        adjust_music_volume(1)
+                        utils.play_sound("eat")
+                    elif selection_index == 9:
+                        adjust_sound_volume(1)
+                        utils.play_sound("eat")
+                    elif selection_index == 10:  # Appliquer
                         utils.play_sound("powerup_pickup")
                         apply_options()
                         next_state = config.MENU
                         break
-                    elif selection_index == 5:  # Retour
+                    elif selection_index == 11:  # Retour
                         utils.play_sound("combo_break")
                         next_state = config.MENU
                         break
@@ -1778,6 +2001,24 @@ def run_options(events, dt, screen, game_state):
                 elif selection_index == 3:
                     cycle_classic_arena(-1)
                     utils.play_sound("eat")
+                elif selection_index == 4:
+                    cycle_game_speed(-1)
+                    utils.play_sound("eat")
+                elif selection_index == 5:
+                    cycle_particle_density(-1)
+                    utils.play_sound("eat")
+                elif selection_index == 6:
+                    pending_screen_shake = not pending_screen_shake
+                    utils.play_sound("eat")
+                elif selection_index == 7:
+                    pending_show_fps = not pending_show_fps
+                    utils.play_sound("eat")
+                elif selection_index == 8:
+                    adjust_music_volume(-1)
+                    utils.play_sound("eat")
+                elif selection_index == 9:
+                    adjust_sound_volume(-1)
+                    utils.play_sound("eat")
             elif key == pygame.K_RIGHT:
                 if selection_index == 0:
                     pending_show_grid = not pending_show_grid
@@ -1790,6 +2031,24 @@ def run_options(events, dt, screen, game_state):
                     utils.play_sound("eat")
                 elif selection_index == 3:
                     cycle_classic_arena(1)
+                    utils.play_sound("eat")
+                elif selection_index == 4:
+                    cycle_game_speed(1)
+                    utils.play_sound("eat")
+                elif selection_index == 5:
+                    cycle_particle_density(1)
+                    utils.play_sound("eat")
+                elif selection_index == 6:
+                    pending_screen_shake = not pending_screen_shake
+                    utils.play_sound("eat")
+                elif selection_index == 7:
+                    pending_show_fps = not pending_show_fps
+                    utils.play_sound("eat")
+                elif selection_index == 8:
+                    adjust_music_volume(1)
+                    utils.play_sound("eat")
+                elif selection_index == 9:
+                    adjust_sound_volume(1)
                     utils.play_sound("eat")
             elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 if selection_index == 0:
@@ -1805,11 +2064,29 @@ def run_options(events, dt, screen, game_state):
                     cycle_classic_arena(1)
                     utils.play_sound("eat")
                 elif selection_index == 4:
+                    cycle_game_speed(1)
+                    utils.play_sound("eat")
+                elif selection_index == 5:
+                    cycle_particle_density(1)
+                    utils.play_sound("eat")
+                elif selection_index == 6:
+                    pending_screen_shake = not pending_screen_shake
+                    utils.play_sound("eat")
+                elif selection_index == 7:
+                    pending_show_fps = not pending_show_fps
+                    utils.play_sound("eat")
+                elif selection_index == 8:
+                    adjust_music_volume(1)
+                    utils.play_sound("eat")
+                elif selection_index == 9:
+                    adjust_sound_volume(1)
+                    utils.play_sound("eat")
+                elif selection_index == 10:
                     utils.play_sound("powerup_pickup")
                     apply_options()
                     next_state = config.MENU
                     break
-                elif selection_index == 5:
+                elif selection_index == 11:
                     utils.play_sound("combo_break")
                     next_state = config.MENU
                     break
@@ -1819,30 +2096,324 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_grid_size'] = pending_grid_size
     game_state['pending_snake_style'] = pending_snake_style
     game_state['pending_classic_arena'] = pending_classic_arena
+    game_state['pending_game_speed'] = pending_game_speed
+    game_state['pending_particle_density'] = pending_particle_density
+    game_state['pending_screen_shake'] = pending_screen_shake
+    game_state['pending_show_fps'] = pending_show_fps
+    game_state['pending_music_volume'] = pending_music_volume
+    game_state['pending_sound_volume'] = pending_sound_volume
     game_state['options_selection_index'] = selection_index
     game_state['last_axis_move_time_options'] = last_axis_move_time
 
     # Draw
     try:
-        screen.fill(config.COLOR_BACKGROUND)
-        title_y = config.SCREEN_HEIGHT * 0.15
-        utils.draw_text_with_shadow(screen, "Options", font_medium, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW,
-                                    (config.SCREEN_WIDTH / 2, title_y), "center")
+        menu_background_image = game_state.get('menu_background_image')
+        if menu_background_image:
+            try:
+                screen.blit(menu_background_image, (0, 0))
+            except Exception:
+                screen.fill(config.COLOR_BACKGROUND)
+        else:
+            screen.fill(config.COLOR_BACKGROUND)
 
-        start_y = config.SCREEN_HEIGHT * 0.30
-        gap_y = 50
-        for i, (label, value) in enumerate(menu_items):
-            is_selected = i == selection_index
-            color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT_MENU
-            prefix = "> " if is_selected else "  "
-            line = f"{prefix}{label}"
-            if value:
-                line += f": {value}"
-            utils.draw_text_with_shadow(screen, line, font_default, color, config.COLOR_UI_SHADOW,
-                                        (config.SCREEN_WIDTH / 2, start_y + i * gap_y), "center")
+        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        screen.blit(overlay, (0, 0))
 
-        utils.draw_text(screen, "Haut/Bas: naviguer | Gauche/Droite: changer | Entrée/A: confirmer | Echap/B: retour",
-                        font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.92), "center")
+        sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
+
+        # --- Title ---
+        title_y = int(sh * 0.12)
+        utils.draw_text_with_shadow(
+            screen, "Options", font_medium, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW,
+            (sw / 2, title_y), "center"
+        )
+
+        # --- Derived preview values (based on pending settings) ---
+        preview_w, preview_h = preview_dims(pending_grid_size)
+        try:
+            info = pygame.display.Info()
+            preview_px_w = (info.current_w // int(pending_grid_size)) * int(pending_grid_size)
+            preview_px_h = (info.current_h // int(pending_grid_size)) * int(pending_grid_size)
+            preview_px_w = max(int(pending_grid_size), int(preview_px_w))
+            preview_px_h = max(int(pending_grid_size), int(preview_px_h))
+        except Exception:
+            preview_px_w, preview_px_h = sw, sh
+
+        snake_style_display = dict(snake_styles).get(pending_snake_style, pending_snake_style)
+        classic_arena_display = dict(classic_arenas).get(pending_classic_arena, pending_classic_arena)
+        game_speed_display = dict(game_speeds).get(pending_game_speed, pending_game_speed)
+        particle_density_display = dict(particle_densities).get(pending_particle_density, pending_particle_density)
+        music_volume_display = f"{int(round(pending_music_volume * 100))}%"
+        sound_volume_display = f"{int(round(pending_sound_volume * 100))}%"
+
+        # Rebuild menu text (no 1-frame lag)
+        menu_items_draw = [
+            ("Quadrillage", "Oui" if pending_show_grid else "Non"),
+            ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
+            ("Style serpent", snake_style_display),
+            ("Arène classique", classic_arena_display),
+            ("Vitesse jeu", game_speed_display),
+            ("Particules", particle_density_display),
+            ("Secousse écran", "Oui" if pending_screen_shake else "Non"),
+            ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
+            ("Volume musique", music_volume_display),
+            ("Volume effets", sound_volume_display),
+            ("Appliquer", ""),
+            ("Retour", ""),
+        ]
+
+        # --- Layout ---
+        margin = max(24, int(sw * 0.04))
+        gap = max(18, int(sw * 0.03))
+        panel_top = int(sh * 0.22)
+        panel_h = max(200, int(sh * 0.64))
+
+        avail_w = max(200, sw - margin * 2 - gap)
+        left_w = int(avail_w * 0.48)
+        right_w = avail_w - left_w
+
+        options_rect = pygame.Rect(margin, panel_top, left_w, panel_h)
+        preview_rect = pygame.Rect(options_rect.right + gap, panel_top, right_w, panel_h)
+
+        draw_ui_panel(screen, options_rect)
+        draw_ui_panel(screen, preview_rect)
+
+        # --- Options list (left) ---
+        pad = max(14, int(options_rect.width * 0.05))
+        row_h = max(42, int(font_default.get_height() * 1.55))
+        list_rect = options_rect.inflate(-pad * 2, -pad * 2)
+
+        max_visible = max(1, int(list_rect.height // row_h))
+        first_index = 0
+        if len(menu_items_draw) > max_visible:
+            first_index = max(0, min(selection_index - max_visible // 2, len(menu_items_draw) - max_visible))
+
+        for local_i, (label, value) in enumerate(menu_items_draw[first_index:first_index + max_visible]):
+            i = first_index + local_i
+            row_rect = pygame.Rect(list_rect.left, list_rect.top + local_i * row_h, list_rect.width, row_h)
+            selected = (i == selection_index)
+            action_start = max(0, len(menu_items_draw) - 2)
+            is_action = i >= action_start
+
+            if selected:
+                hi = pygame.Surface(row_rect.size, pygame.SRCALPHA)
+                hi.fill((255, 255, 0, 35))
+                screen.blit(hi, row_rect.topleft)
+
+            if is_action:
+                btn_rect = row_rect.inflate(-int(row_rect.width * 0.25), -int(row_rect.height * 0.22))
+                try:
+                    btn_color = (25, 25, 35)
+                    pygame.draw.rect(screen, btn_color, btn_rect, border_radius=8)
+                    pygame.draw.rect(screen, config.COLOR_GRID, btn_rect, 2, border_radius=8)
+                except Exception:
+                    pass
+                color = config.COLOR_TEXT_HIGHLIGHT if selected else config.COLOR_TEXT_MENU
+                utils.draw_text_with_shadow(screen, label, font_default, color, config.COLOR_UI_SHADOW, btn_rect.center, "center")
+                continue
+
+            color = config.COLOR_TEXT_HIGHLIGHT if selected else config.COLOR_TEXT_MENU
+            utils.draw_text_with_shadow(
+                screen, label, font_default, color, config.COLOR_UI_SHADOW,
+                (row_rect.left + 12, row_rect.centery), "midleft"
+            )
+
+            value_text = value
+            if selected and value_text:
+                value_text = f"< {value_text} >"
+
+            utils.draw_text_with_shadow(
+                screen, value_text, font_default, color, config.COLOR_UI_SHADOW,
+                (row_rect.right - 12, row_rect.centery), "midright"
+            )
+
+        # --- Preview panel (right) ---
+        ppad = max(14, int(preview_rect.width * 0.06))
+        inner = preview_rect.inflate(-ppad * 2, -ppad * 2)
+        cursor_y = inner.top
+
+        utils.draw_text_with_shadow(screen, "Aperçu", font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (inner.left, cursor_y), "topleft")
+        cursor_y += int(font_default.get_height() * 1.4)
+
+        # Summary lines
+        summary_lines = [
+            f"Fenêtre: {preview_px_w}x{preview_px_h}px",
+            f"Grille: {preview_w}x{preview_h} cases  (case: {pending_grid_size}px)",
+            f"Classique: {classic_arena_display}",
+            f"Style: {snake_style_display} | Vitesse: {game_speed_display}",
+            f"Particules: {particle_density_display} | Secousse: {'Oui' if pending_screen_shake else 'Non'}",
+            f"FPS: {'Oui' if pending_show_fps else 'Non'} | Musique: {music_volume_display} | Effets: {sound_volume_display}",
+        ]
+        for line in summary_lines:
+            utils.draw_text_with_shadow(screen, line, font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (inner.left, cursor_y), "topleft")
+            cursor_y += int(font_small.get_height() * 1.25)
+
+        cursor_y += 6
+
+        # Map preview (grid + classic arena)
+        map_h = max(110, int(inner.height * 0.40))
+        map_rect = pygame.Rect(inner.left, cursor_y, inner.width, map_h)
+        cursor_y = map_rect.bottom + 10
+
+        try:
+            pygame.draw.rect(screen, (10, 10, 18), map_rect, border_radius=10)
+            pygame.draw.rect(screen, config.COLOR_GRID, map_rect, 2, border_radius=10)
+        except Exception:
+            pass
+
+        # Keep aspect ratio of grid in the map preview box
+        gw, gh = max(1, int(preview_w)), max(1, int(preview_h))
+        aspect = gw / float(gh)
+        max_w = map_rect.width - 24
+        max_h = map_rect.height - 24
+        if max_h <= 0 or max_w <= 0:
+            arena_outer = map_rect.copy()
+        elif (max_w / float(max_h)) > aspect:
+            draw_h = max_h
+            draw_w = int(draw_h * aspect)
+            arena_outer = pygame.Rect(0, 0, draw_w, draw_h)
+            arena_outer.center = map_rect.center
+        else:
+            draw_w = max_w
+            draw_h = int(draw_w / aspect) if aspect > 0 else max_h
+            arena_outer = pygame.Rect(0, 0, draw_w, draw_h)
+            arena_outer.center = map_rect.center
+
+        try:
+            pygame.draw.rect(screen, (0, 0, 0), arena_outer)
+            pygame.draw.rect(screen, config.COLOR_TEXT_MENU, arena_outer, 1)
+        except Exception:
+            pass
+
+        if pending_show_grid and arena_outer.width > 20 and arena_outer.height > 20:
+            try:
+                grid_lines = 10
+                for gx in range(1, grid_lines):
+                    x = arena_outer.left + int(gx * arena_outer.width / grid_lines)
+                    pygame.draw.line(screen, (0, 40, 70), (x, arena_outer.top), (x, arena_outer.bottom), 1)
+                for gy in range(1, grid_lines):
+                    y = arena_outer.top + int(gy * arena_outer.height / grid_lines)
+                    pygame.draw.line(screen, (0, 40, 70), (arena_outer.left, y), (arena_outer.right, y), 1)
+            except Exception:
+                pass
+
+        # Classic arena inner bounds
+        try:
+            preset = str(pending_classic_arena or "full").strip().lower()
+            scale_map = {"full": 1.0, "large": 0.85, "medium": 0.7, "small": 0.55}
+            scale = float(scale_map.get(preset, 1.0))
+            if scale < 0.999:
+                arena_w = max(10, min(gw, int(round(gw * scale))))
+                arena_h = max(10, min(gh, int(round(gh * scale))))
+                inner_w = max(2, int(round(arena_outer.width * (arena_w / float(gw)))))
+                inner_h = max(2, int(round(arena_outer.height * (arena_h / float(gh)))))
+                arena_inner = pygame.Rect(0, 0, inner_w, inner_h)
+                arena_inner.center = arena_outer.center
+                pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT, arena_inner, 2)
+        except Exception:
+            pass
+
+        # Snake preview (style)
+        snake_rect = pygame.Rect(inner.left, cursor_y, inner.width, max(80, inner.bottom - cursor_y))
+        try:
+            pygame.draw.rect(screen, (12, 12, 18), snake_rect, border_radius=10)
+            pygame.draw.rect(screen, config.COLOR_GRID, snake_rect, 2, border_radius=10)
+        except Exception:
+            pass
+
+        # Compute preview cell size (scaled from pending grid size)
+        try:
+            max_cell_w = int((snake_rect.width * 0.80) / 6)
+            max_cell_h = int((snake_rect.height * 0.70) / 2)
+            max_cell = max(6, min(max_cell_w, max_cell_h))
+            cell_px = int(round(max_cell * (int(pending_grid_size) / 20.0)))
+            cell_px = max(6, min(cell_px, max_cell))
+        except Exception:
+            cell_px = 12
+
+        # Sample snake segments (grid-ish coords)
+        rel = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (4, 1)]
+        start_x = snake_rect.centerx - int((4.5) * cell_px)
+        start_y = snake_rect.centery - int(0.5 * cell_px)
+        seg_rects = [pygame.Rect(start_x + rx * cell_px, start_y + ry * cell_px, cell_px, cell_px) for rx, ry in rel]
+
+        base_color = config.COLOR_SNAKE_P1
+        head_color = tuple(min(255, c + 40) for c in base_color[:3])
+
+        preview_cache = game_state.setdefault('options_preview_cache', {})
+        style_key = str(pending_snake_style).strip().lower()
+
+        if style_key == "sprites":
+            try:
+                def _get_sprite(name):
+                    key = (name, cell_px)
+                    if key in preview_cache:
+                        return preview_cache[key]
+                    src = utils.images.get(name)
+                    if not src:
+                        preview_cache[key] = None
+                        return None
+                    try:
+                        preview_cache[key] = pygame.transform.smoothscale(src, (cell_px, cell_px))
+                    except Exception:
+                        preview_cache[key] = pygame.transform.scale(src, (cell_px, cell_px))
+                    return preview_cache[key]
+
+                head = _get_sprite("snake_p1_head.png")
+                body = _get_sprite("snake_p1_body.png")
+                tail = _get_sprite("snake_p1_tail.png")
+
+                for idx, r in enumerate(seg_rects):
+                    if idx == 0 and head:
+                        screen.blit(head, r)
+                    elif idx == len(seg_rects) - 1 and tail:
+                        screen.blit(tail, r)
+                    elif body:
+                        screen.blit(body, r)
+                    else:
+                        pygame.draw.rect(screen, head_color if idx == 0 else base_color, r)
+                        pygame.draw.rect(screen, (0, 0, 0), r, 1)
+            except Exception:
+                pass
+        else:
+            try:
+                pad_px = max(1, cell_px // 8)
+                radius = max(1, (cell_px - pad_px * 2) // 3)
+                for idx, r in enumerate(seg_rects):
+                    color = head_color if idx == 0 else base_color
+                    if style_key == "wire":
+                        if idx < len(seg_rects) - 1:
+                            a = r.center
+                            b = seg_rects[idx + 1].center
+                            pygame.draw.line(screen, base_color, a, b, max(2, cell_px // 4))
+                        pygame.draw.circle(screen, color, r.center, max(2, cell_px // 3 if idx == 0 else cell_px // 4))
+                        pygame.draw.circle(screen, (0, 0, 0), r.center, max(2, cell_px // 3 if idx == 0 else cell_px // 4), 2)
+                        continue
+
+                    if style_key == "blocks":
+                        pygame.draw.rect(screen, color, r)
+                        pygame.draw.rect(screen, (0, 0, 0), r, 1)
+                        continue
+
+                    draw_rect = r.inflate(-pad_px * 2, -pad_px * 2)
+                    if draw_rect.width <= 0 or draw_rect.height <= 0:
+                        draw_rect = r
+
+                    if style_key == "neon":
+                        glow = pygame.Surface((cell_px, cell_px), pygame.SRCALPHA)
+                        glow_color = (color[0], color[1], color[2], 90)
+                        local_rect = draw_rect.move(-r.left, -r.top).inflate(pad_px, pad_px)
+                        pygame.draw.rect(glow, glow_color, local_rect, border_radius=radius + 2)
+                        screen.blit(glow, r.topleft)
+
+                    pygame.draw.rect(screen, color, draw_rect, border_radius=radius)
+                    pygame.draw.rect(screen, (0, 0, 0), draw_rect, 1, border_radius=radius)
+            except Exception:
+                pass
+
+        hint = "Haut/Bas: naviguer | Gauche/Droite: changer | Entrée/A: confirmer | Echap/B: retour"
+        utils.draw_text(screen, hint, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception as e:
         print(f"Erreur dessin run_options: {e}")
 
@@ -1852,6 +2423,13 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_grid_size', None)
         game_state.pop('pending_snake_style', None)
         game_state.pop('pending_classic_arena', None)
+        game_state.pop('pending_game_speed', None)
+        game_state.pop('pending_particle_density', None)
+        game_state.pop('pending_screen_shake', None)
+        game_state.pop('pending_show_fps', None)
+        game_state.pop('pending_music_volume', None)
+        game_state.pop('pending_sound_volume', None)
+        game_state.pop('options_preview_cache', None)
 
     game_state['current_state'] = next_state
     return next_state

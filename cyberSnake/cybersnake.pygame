@@ -125,6 +125,25 @@ def main():
         config.SHOW_GRID = bool(opts.get("show_grid", getattr(config, "SHOW_GRID", True)))
         config.SNAKE_STYLE = str(opts.get("snake_style", getattr(config, "SNAKE_STYLE", "sprites")))
         config.CLASSIC_ARENA = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
+
+        speed_key = str(opts.get("game_speed", getattr(config, "GAME_SPEED", "normal"))).strip().lower()
+        speed_map = {"slow": 1.25, "normal": 1.0, "fast": 0.85}
+        config.GAME_SPEED = speed_key if speed_key in speed_map else "normal"
+        config.GAME_SPEED_FACTOR = float(speed_map.get(config.GAME_SPEED, 1.0))
+
+        particle_key = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal"))).strip().lower()
+        particle_map = {"off": 0.0, "low": 0.5, "normal": 1.0, "high": 1.6}
+        config.PARTICLE_DENSITY = particle_key if particle_key in particle_map else "normal"
+        config.PARTICLE_FACTOR = float(particle_map.get(config.PARTICLE_DENSITY, 1.0))
+
+        config.SCREEN_SHAKE_ENABLED = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
+        config.SHOW_FPS = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
+
+        try:
+            utils.set_music_volume(opts.get("music_volume", utils.music_volume))
+            utils.set_sound_volume(opts.get("sound_volume", utils.sound_volume))
+        except Exception:
+            pass
         grid_size_override = opts.get("grid_size", None)
     except Exception as e:
         logging.warning(f"Attention: Impossible de charger {config.GAME_OPTIONS_FILE}: {e}", exc_info=True)

@@ -16,5 +16,11 @@
   "show_grid": true,
   "grid_size": null,
   "snake_style": "sprites",
-  "classic_arena": "full"
+  "classic_arena": "full",
+  "game_speed": "normal",
+  "particle_density": "normal",
+  "screen_shake": true,
+  "music_volume": 0.3,
+  "sound_volume": 0.6,
+  "show_fps": false
 }

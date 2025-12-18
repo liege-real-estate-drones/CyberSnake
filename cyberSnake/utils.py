@@ -43,6 +43,14 @@ DEFAULT_GAME_OPTIONS = {
     "grid_size": None,
     "snake_style": "sprites",
     "classic_arena": "full",
+    "game_speed": "normal",
+    "particle_density": "normal",
+    "screen_shake": True,
+    # Audio
+    "music_volume": 0.3,
+    "sound_volume": 0.6,
+    # UI
+    "show_fps": False,
 }
 
 
@@ -221,6 +229,29 @@ def update_music_volume(change):
         pygame.mixer.music.set_volume(music_volume)
     except pygame.error as e:
         print(f"Erreur réglage volume musique: {e}")
+
+
+def set_sound_volume(value):
+    """Définit le volume des effets (0.0 à 1.0) sans spam console."""
+    global sound_volume
+    try:
+        sound_volume = max(0.0, min(1.0, float(value)))
+    except Exception:
+        return
+    _apply_sound_volume_internal()
+
+
+def set_music_volume(value):
+    """Définit le volume de la musique (0.0 à 1.0) sans spam console."""
+    global music_volume
+    try:
+        music_volume = max(0.0, min(1.0, float(value)))
+    except Exception:
+        return
+    try:
+        pygame.mixer.music.set_volume(music_volume)
+    except Exception:
+        pass
 
 # --- Fonctions High Score ---
 # ... (inchangé) ...
@@ -428,6 +459,23 @@ def emit_particles(x, y, count, color, speed_range=(1, 5), lifetime_range=(300, 
     """Émet des particules à une position donnée. Ajoute à la liste globale `particles`."""
     global particles # Modifie la liste globale
     if x is None or y is None: return
+
+    # Densité globale (options)
+    try:
+        factor = float(getattr(config, "PARTICLE_FACTOR", 1.0))
+    except Exception:
+        factor = 1.0
+
+    if factor <= 0:
+        return
+
+    try:
+        count = int(round(float(count) * factor))
+    except Exception:
+        count = int(count) if isinstance(count, int) else 0
+
+    if count <= 0:
+        return
 
     if not isinstance(angle_range, (list, tuple)) or len(angle_range) != 2:
         angle_range = (0, 360)
@@ -717,6 +765,8 @@ def draw_text_with_shadow(surface, text, font, color, shadow_color, pos, align="
 def trigger_shake(intensity=config.SCREEN_SHAKE_DEFAULT_INTENSITY, duration=config.SCREEN_SHAKE_DEFAULT_DURATION):
     """Initialise ou met à jour un effet de secousse d'écran."""
     global screen_shake_intensity, screen_shake_timer, screen_shake_start_time # Modifie les globales
+    if not bool(getattr(config, "SCREEN_SHAKE_ENABLED", True)):
+        return
     current_time = pygame.time.get_ticks()
     if intensity >= screen_shake_intensity or current_time > screen_shake_start_time + screen_shake_timer:
         screen_shake_intensity = intensity

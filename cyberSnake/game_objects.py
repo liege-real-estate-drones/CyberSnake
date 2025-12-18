@@ -795,6 +795,11 @@ class Snake:
             base_interval *= config.SNAKE_SLOW_FACTOR
         if self.frozen:
             return float('inf')
+
+        try:
+            base_interval *= float(getattr(config, "GAME_SPEED_FACTOR", 1.0))
+        except Exception:
+            pass
         return base_interval
 
     def move(self, obstacles, current_time): # `obstacles` est un set ici
