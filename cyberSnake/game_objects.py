@@ -1653,6 +1653,17 @@ class Snake:
         # --- Dessin des Segments (avec Assets et Rotation) ---
 
         style = str(getattr(config, "SNAKE_STYLE", "sprites") or "sprites").strip().lower()
+        try:
+            if self.player_num == 1:
+                p1_style = getattr(config, "SNAKE_STYLE_P1", None)
+                if p1_style:
+                    style = str(p1_style).strip().lower()
+            elif self.player_num == 2:
+                p2_style = getattr(config, "SNAKE_STYLE_P2", None)
+                if p2_style:
+                    style = str(p2_style).strip().lower()
+        except Exception:
+            pass
         if style in ("blocks", "rounded", "neon", "wire"):
             grid_px = int(getattr(config, "GRID_SIZE", 20))
 

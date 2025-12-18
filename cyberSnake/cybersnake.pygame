@@ -124,6 +124,17 @@ def main():
         opts = utils.load_game_options(base_path_assets)
         config.SHOW_GRID = bool(opts.get("show_grid", getattr(config, "SHOW_GRID", True)))
         config.SNAKE_STYLE = str(opts.get("snake_style", getattr(config, "SNAKE_STYLE", "sprites")))
+        p1_style = opts.get("snake_style_p1", None)
+        p2_style = opts.get("snake_style_p2", None)
+        config.SNAKE_STYLE_P1 = str(p1_style).strip().lower() if p1_style else None
+        config.SNAKE_STYLE_P2 = str(p2_style).strip().lower() if p2_style else None
+
+        try:
+            p1_col = opts.get("snake_color_p1", getattr(config, "SNAKE_COLOR_PRESET_P1", "cyber"))
+            p2_col = opts.get("snake_color_p2", getattr(config, "SNAKE_COLOR_PRESET_P2", "pink"))
+            config.apply_snake_color_presets(p1_col, p2_col)
+        except Exception:
+            pass
         config.CLASSIC_ARENA = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
 
         speed_key = str(opts.get("game_speed", getattr(config, "GAME_SPEED", "normal"))).strip().lower()

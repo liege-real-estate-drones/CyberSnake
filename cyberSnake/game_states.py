@@ -248,6 +248,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
 
             # Score et Nom (Handles Respawn Timer Display)
             p1_name_display = player_snake.name
+            p1_score_color = getattr(config, "COLOR_SNAKE_P1", config.COLOR_TEXT)
             p1_is_respawning = current_game_mode == config.MODE_PVP and p1_death_time > 0
             if p1_is_respawning:
                 time_since_death_p1 = current_time - p1_death_time
@@ -259,13 +260,25 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                                                 (x_p1_ui, y_p1_ui), "topleft")
                 else:
                     # Timer finished but respawn might be pending frame, show normal score
-                    utils.draw_text_with_shadow(target_surface, f"{p1_name_display} Score: {player_snake.score}",
-                                                font_default, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui),
-                                                "topleft")
-            else: # Not respawning or not PvP
-                utils.draw_text_with_shadow(target_surface, f"{p1_name_display} Score: {player_snake.score}",
-                                            font_default, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui),
-                                            "topleft")
+                    utils.draw_text_with_shadow(
+                        target_surface,
+                        f"{p1_name_display} Score: {player_snake.score}",
+                        font_default,
+                        p1_score_color,
+                        config.COLOR_UI_SHADOW,
+                        (x_p1_ui, y_p1_ui),
+                        "topleft",
+                    )
+            else:  # Not respawning or not PvP
+                utils.draw_text_with_shadow(
+                    target_surface,
+                    f"{p1_name_display} Score: {player_snake.score}",
+                    font_default,
+                    p1_score_color,
+                    config.COLOR_UI_SHADOW,
+                    (x_p1_ui, y_p1_ui),
+                    "topleft",
+                )
             y_p1_ui += line_height_default + gap
 
             # Munitions / Taille (Classique)
@@ -599,8 +612,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
         print(f"Erreur dessin UI Top-Right: {e}")
         traceback.print_exc()
 
-    # --- ** Panneau UI Joueur 2 (Bottom-Left) ** ---
-   
+    # --- ** Panneau UI Joueur 2 (Bottom-Right) ** ---
+    
     if current_game_mode == config.MODE_PVP and player2_snake:
         try:
             p2_ui_elements_height = 0
@@ -625,7 +638,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             # if player2_snake.alive and player2_snake.skill_type: p2_ui_elements_height += line_height_default + gap
             p2_panel_width = 280
             p2_panel_height = p2_ui_elements_height + ui_padding  # Recalcul auto
-            p2_panel_x = ui_margin
+            p2_panel_x = config.SCREEN_WIDTH - p2_panel_width - ui_margin
             p2_panel_y = config.SCREEN_HEIGHT - p2_panel_height - ui_margin
             p2_panel_rect = pygame.Rect(p2_panel_x, p2_panel_y, p2_panel_width, p2_panel_height)
             draw_ui_panel(target_surface, p2_panel_rect)
@@ -633,6 +646,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             x_p2_ui = p2_panel_rect.left + ui_padding
             p2_icon_x = p2_panel_rect.right - 60
             p2_name_display = player2_snake.name
+            p2_score_color = getattr(config, "COLOR_SNAKE_P2", config.COLOR_TEXT)
             PvpCondition = getattr(config, 'PvpCondition', None)
             # --- Suppression Affichage UI Compétence J2 ---
             # if player2_snake.alive and player2_snake.skill_type:
@@ -772,12 +786,12 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                     # Timer finished but respawn might be pending frame, show normal score
                     p2_score_rect = utils.draw_text_with_shadow(target_surface,
                                                                 f"{p2_name_display} Score: {player2_snake.score}",
-                                                                font_default, config.COLOR_TEXT, config.COLOR_UI_SHADOW,
+                                                                font_default, p2_score_color, config.COLOR_UI_SHADOW,
                                                                 (x_p2_ui, y_p2_ui), "bottomleft")
             else: # Not respawning or not PvP
                 p2_score_rect = utils.draw_text_with_shadow(target_surface,
                                                             f"{p2_name_display} Score: {player2_snake.score}",
-                                                            font_default, config.COLOR_TEXT, config.COLOR_UI_SHADOW,
+                                                            font_default, p2_score_color, config.COLOR_UI_SHADOW,
                                                             (x_p2_ui, y_p2_ui), "bottomleft")
             if player2_snake.alive and p2_score_rect:
                 p2_icon_y = p2_score_rect.top
@@ -1523,7 +1537,10 @@ def run_options(events, dt, screen, game_state):
     if (
         'pending_show_grid' not in game_state
         or 'pending_grid_size' not in game_state
-        or 'pending_snake_style' not in game_state
+        or 'pending_snake_style_p1' not in game_state
+        or 'pending_snake_style_p2' not in game_state
+        or 'pending_snake_color_p1' not in game_state
+        or 'pending_snake_color_p2' not in game_state
         or 'pending_classic_arena' not in game_state
         or 'pending_game_speed' not in game_state
         or 'pending_particle_density' not in game_state
@@ -1540,7 +1557,19 @@ def run_options(events, dt, screen, game_state):
         pending_grid_size = opts.get("grid_size", None)
         if not isinstance(pending_grid_size, int) or pending_grid_size <= 0:
             pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
-        pending_snake_style = str(opts.get("snake_style", getattr(config, "SNAKE_STYLE", "sprites")))
+
+        p1_style = opts.get("snake_style_p1", None)
+        if isinstance(p1_style, str):
+            p1_style = p1_style.strip().lower() or None
+        pending_snake_style_p1 = str(p1_style).strip().lower() if p1_style else None
+
+        p2_style = opts.get("snake_style_p2", None)
+        if isinstance(p2_style, str):
+            p2_style = p2_style.strip().lower() or None
+        pending_snake_style_p2 = str(p2_style).strip().lower() if p2_style else None
+
+        pending_snake_color_p1 = str(opts.get("snake_color_p1", getattr(config, "SNAKE_COLOR_PRESET_P1", "cyber"))).strip().lower()
+        pending_snake_color_p2 = str(opts.get("snake_color_p2", getattr(config, "SNAKE_COLOR_PRESET_P2", "pink"))).strip().lower()
         pending_classic_arena = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
         pending_game_speed = str(opts.get("game_speed", getattr(config, "GAME_SPEED", "normal")))
         pending_particle_density = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal")))
@@ -1558,7 +1587,10 @@ def run_options(events, dt, screen, game_state):
         pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
         game_state['pending_show_grid'] = pending_show_grid
         game_state['pending_grid_size'] = pending_grid_size
-        game_state['pending_snake_style'] = pending_snake_style
+        game_state['pending_snake_style_p1'] = pending_snake_style_p1
+        game_state['pending_snake_style_p2'] = pending_snake_style_p2
+        game_state['pending_snake_color_p1'] = pending_snake_color_p1
+        game_state['pending_snake_color_p2'] = pending_snake_color_p2
         game_state['pending_classic_arena'] = pending_classic_arena
         game_state['pending_game_speed'] = pending_game_speed
         game_state['pending_particle_density'] = pending_particle_density
@@ -1572,7 +1604,20 @@ def run_options(events, dt, screen, game_state):
     if not isinstance(pending_grid_size, int) or pending_grid_size <= 0:
         pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
 
-    pending_snake_style = str(game_state.get('pending_snake_style', getattr(config, "SNAKE_STYLE", "sprites")))
+    pending_snake_style_p1 = game_state.get('pending_snake_style_p1', None)
+    if isinstance(pending_snake_style_p1, str):
+        pending_snake_style_p1 = pending_snake_style_p1.strip().lower() or None
+    else:
+        pending_snake_style_p1 = None
+
+    pending_snake_style_p2 = game_state.get('pending_snake_style_p2', None)
+    if isinstance(pending_snake_style_p2, str):
+        pending_snake_style_p2 = pending_snake_style_p2.strip().lower() or None
+    else:
+        pending_snake_style_p2 = None
+
+    pending_snake_color_p1 = str(game_state.get('pending_snake_color_p1', getattr(config, "SNAKE_COLOR_PRESET_P1", "cyber"))).strip().lower()
+    pending_snake_color_p2 = str(game_state.get('pending_snake_color_p2', getattr(config, "SNAKE_COLOR_PRESET_P2", "pink"))).strip().lower()
     pending_classic_arena = str(game_state.get('pending_classic_arena', getattr(config, "CLASSIC_ARENA", "full")))
     pending_game_speed = str(game_state.get('pending_game_speed', getattr(config, "GAME_SPEED", "normal")))
     pending_particle_density = str(game_state.get('pending_particle_density', getattr(config, "PARTICLE_DENSITY", "normal")))
@@ -1605,6 +1650,7 @@ def run_options(events, dt, screen, game_state):
     preview_w, preview_h = preview_dims(pending_grid_size)
 
     snake_styles = [
+        (None, "Auto"),
         ("sprites", "Sprites"),
         ("blocks", "Blocs"),
         ("rounded", "Arrondi"),
@@ -1612,9 +1658,40 @@ def run_options(events, dt, screen, game_state):
         ("wire", "Fil"),
     ]
     snake_style_keys = [k for k, _ in snake_styles]
-    if pending_snake_style not in snake_style_keys:
-        pending_snake_style = snake_style_keys[0]
-    snake_style_display = dict(snake_styles).get(pending_snake_style, pending_snake_style)
+    if pending_snake_style_p1 not in snake_style_keys:
+        pending_snake_style_p1 = None
+    if pending_snake_style_p2 not in snake_style_keys:
+        pending_snake_style_p2 = None
+
+    snake_style_display_map = dict(snake_styles)
+    global_style_key = str(getattr(config, "SNAKE_STYLE", "sprites") or "sprites").strip().lower()
+
+    def format_style(style_key):
+        if style_key is None:
+            return f"Auto ({snake_style_display_map.get(global_style_key, global_style_key)})"
+        return snake_style_display_map.get(style_key, style_key)
+
+    snake_style_display_p1 = format_style(pending_snake_style_p1)
+    snake_style_display_p2 = format_style(pending_snake_style_p2)
+
+    snake_colors = [
+        ("cyber", "Vert Cyber"),
+        ("pink", "Rose Néon"),
+        ("blue", "Bleu électrique"),
+        ("orange", "Orange"),
+        ("purple", "Violet"),
+        ("red", "Rouge"),
+        ("white", "Blanc"),
+        ("yellow", "Jaune"),
+    ]
+    snake_color_keys = [k for k, _ in snake_colors]
+    if pending_snake_color_p1 not in snake_color_keys:
+        pending_snake_color_p1 = snake_color_keys[0]
+    if pending_snake_color_p2 not in snake_color_keys:
+        pending_snake_color_p2 = snake_color_keys[1] if len(snake_color_keys) > 1 else snake_color_keys[0]
+    snake_color_display_map = dict(snake_colors)
+    snake_color_display_p1 = snake_color_display_map.get(pending_snake_color_p1, pending_snake_color_p1)
+    snake_color_display_p2 = snake_color_display_map.get(pending_snake_color_p2, pending_snake_color_p2)
 
     classic_arenas = [
         ("full", "Pleine"),
@@ -1656,7 +1733,10 @@ def run_options(events, dt, screen, game_state):
     menu_items = [
         ("Quadrillage", "Oui" if pending_show_grid else "Non"),
         ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
-        ("Style serpent", snake_style_display),
+        ("Style serpent J1", snake_style_display_p1),
+        ("Style serpent J2", snake_style_display_p2),
+        ("Couleur J1", snake_color_display_p1),
+        ("Couleur J2", snake_color_display_p2),
         ("Arène classique", classic_arena_display),
         ("Vitesse jeu", game_speed_display),
         ("Particules", particle_density_display),
@@ -1664,9 +1744,28 @@ def run_options(events, dt, screen, game_state):
         ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
         ("Volume musique", music_volume_display),
         ("Volume effets", sound_volume_display),
+        ("Réinitialiser", ""),
         ("Appliquer", ""),
         ("Retour", ""),
     ]
+
+    IDX_SHOW_GRID = 0
+    IDX_GRID_SIZE = 1
+    IDX_STYLE_P1 = 2
+    IDX_STYLE_P2 = 3
+    IDX_COLOR_P1 = 4
+    IDX_COLOR_P2 = 5
+    IDX_CLASSIC_ARENA = 6
+    IDX_GAME_SPEED = 7
+    IDX_PARTICLES = 8
+    IDX_SHAKE = 9
+    IDX_SHOW_FPS = 10
+    IDX_MUSIC_VOL = 11
+    IDX_SOUND_VOL = 12
+    IDX_RESET = 13
+    IDX_APPLY = 14
+    IDX_BACK = 15
+
     selection_index = max(0, min(selection_index, len(menu_items) - 1))
 
     def cycle_grid_size(delta):
@@ -1677,13 +1776,37 @@ def run_options(events, dt, screen, game_state):
             idx = 0
         pending_grid_size = grid_sizes[(idx + delta) % len(grid_sizes)]
 
-    def cycle_snake_style(delta):
-        nonlocal pending_snake_style
+    def cycle_snake_style_p1(delta):
+        nonlocal pending_snake_style_p1
         try:
-            idx = snake_style_keys.index(pending_snake_style)
+            idx = snake_style_keys.index(pending_snake_style_p1)
         except ValueError:
             idx = 0
-        pending_snake_style = snake_style_keys[(idx + delta) % len(snake_style_keys)]
+        pending_snake_style_p1 = snake_style_keys[(idx + delta) % len(snake_style_keys)]
+
+    def cycle_snake_style_p2(delta):
+        nonlocal pending_snake_style_p2
+        try:
+            idx = snake_style_keys.index(pending_snake_style_p2)
+        except ValueError:
+            idx = 0
+        pending_snake_style_p2 = snake_style_keys[(idx + delta) % len(snake_style_keys)]
+
+    def cycle_snake_color_p1(delta):
+        nonlocal pending_snake_color_p1
+        try:
+            idx = snake_color_keys.index(pending_snake_color_p1)
+        except ValueError:
+            idx = 0
+        pending_snake_color_p1 = snake_color_keys[(idx + delta) % len(snake_color_keys)]
+
+    def cycle_snake_color_p2(delta):
+        nonlocal pending_snake_color_p2
+        try:
+            idx = snake_color_keys.index(pending_snake_color_p2)
+        except ValueError:
+            idx = 0
+        pending_snake_color_p2 = snake_color_keys[(idx + delta) % len(snake_color_keys)]
 
     def cycle_classic_arena(delta):
         nonlocal pending_classic_arena
@@ -1733,7 +1856,10 @@ def run_options(events, dt, screen, game_state):
         opts = utils.load_game_options(base_path)
         opts["show_grid"] = bool(pending_show_grid)
         opts["grid_size"] = int(pending_grid_size)
-        opts["snake_style"] = str(pending_snake_style)
+        opts["snake_style_p1"] = pending_snake_style_p1 if pending_snake_style_p1 else None
+        opts["snake_style_p2"] = pending_snake_style_p2 if pending_snake_style_p2 else None
+        opts["snake_color_p1"] = str(pending_snake_color_p1)
+        opts["snake_color_p2"] = str(pending_snake_color_p2)
         opts["classic_arena"] = str(pending_classic_arena)
         opts["game_speed"] = str(pending_game_speed)
         opts["particle_density"] = str(pending_particle_density)
@@ -1751,7 +1877,12 @@ def run_options(events, dt, screen, game_state):
 
         # Apply to config + display
         config.SHOW_GRID = bool(pending_show_grid)
-        config.SNAKE_STYLE = str(pending_snake_style)
+        config.SNAKE_STYLE_P1 = str(pending_snake_style_p1).strip().lower() if pending_snake_style_p1 else None
+        config.SNAKE_STYLE_P2 = str(pending_snake_style_p2).strip().lower() if pending_snake_style_p2 else None
+        try:
+            config.apply_snake_color_presets(pending_snake_color_p1, pending_snake_color_p2)
+        except Exception:
+            pass
         config.CLASSIC_ARENA = str(pending_classic_arena)
 
         speed_map = {"slow": 1.25, "normal": 1.0, "fast": 0.85}
@@ -1802,6 +1933,113 @@ def run_options(events, dt, screen, game_state):
         _map_selection_needs_update = True
 
     next_state = config.OPTIONS
+    reset_confirm_until = int(game_state.get('options_reset_confirm_until', 0) or 0)
+
+    def reset_to_defaults():
+        nonlocal pending_show_grid, pending_grid_size
+        nonlocal pending_snake_style_p1, pending_snake_style_p2, pending_snake_color_p1, pending_snake_color_p2
+        nonlocal pending_classic_arena, pending_game_speed, pending_particle_density
+        nonlocal pending_screen_shake, pending_show_fps, pending_music_volume, pending_sound_volume
+
+        defaults = getattr(utils, "DEFAULT_GAME_OPTIONS", {}) if hasattr(utils, "DEFAULT_GAME_OPTIONS") else {}
+
+        pending_show_grid = bool(defaults.get("show_grid", True))
+
+        gs = defaults.get("grid_size", None)
+        if isinstance(gs, int) and gs > 0:
+            pending_grid_size = int(gs)
+        else:
+            pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
+
+        p1s = defaults.get("snake_style_p1", None)
+        if isinstance(p1s, str):
+            p1s = p1s.strip().lower() or None
+        pending_snake_style_p1 = str(p1s).strip().lower() if p1s else None
+
+        p2s = defaults.get("snake_style_p2", None)
+        if isinstance(p2s, str):
+            p2s = p2s.strip().lower() or None
+        pending_snake_style_p2 = str(p2s).strip().lower() if p2s else None
+
+        pending_snake_color_p1 = str(defaults.get("snake_color_p1", "cyber")).strip().lower()
+        pending_snake_color_p2 = str(defaults.get("snake_color_p2", "pink")).strip().lower()
+
+        pending_classic_arena = str(defaults.get("classic_arena", "full")).strip().lower()
+        pending_game_speed = str(defaults.get("game_speed", "normal")).strip().lower()
+        pending_particle_density = str(defaults.get("particle_density", "normal")).strip().lower()
+
+        pending_screen_shake = bool(defaults.get("screen_shake", True))
+        pending_show_fps = bool(defaults.get("show_fps", False))
+
+        try:
+            pending_music_volume = float(defaults.get("music_volume", getattr(utils, "music_volume", 0.3)))
+        except Exception:
+            pending_music_volume = float(getattr(utils, "music_volume", 0.3))
+        pending_music_volume = max(0.0, min(1.0, pending_music_volume))
+
+        try:
+            pending_sound_volume = float(defaults.get("sound_volume", getattr(utils, "sound_volume", 0.6)))
+        except Exception:
+            pending_sound_volume = float(getattr(utils, "sound_volume", 0.6))
+        pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
+
+    def adjust_current(delta):
+        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps
+
+        if selection_index == IDX_SHOW_GRID:
+            pending_show_grid = not pending_show_grid
+        elif selection_index == IDX_GRID_SIZE:
+            cycle_grid_size(delta)
+        elif selection_index == IDX_STYLE_P1:
+            cycle_snake_style_p1(delta)
+        elif selection_index == IDX_STYLE_P2:
+            cycle_snake_style_p2(delta)
+        elif selection_index == IDX_COLOR_P1:
+            cycle_snake_color_p1(delta)
+        elif selection_index == IDX_COLOR_P2:
+            cycle_snake_color_p2(delta)
+        elif selection_index == IDX_CLASSIC_ARENA:
+            cycle_classic_arena(delta)
+        elif selection_index == IDX_GAME_SPEED:
+            cycle_game_speed(delta)
+        elif selection_index == IDX_PARTICLES:
+            cycle_particle_density(delta)
+        elif selection_index == IDX_SHAKE:
+            pending_screen_shake = not pending_screen_shake
+        elif selection_index == IDX_SHOW_FPS:
+            pending_show_fps = not pending_show_fps
+        elif selection_index == IDX_MUSIC_VOL:
+            adjust_music_volume(delta)
+        elif selection_index == IDX_SOUND_VOL:
+            adjust_sound_volume(delta)
+
+    def handle_confirm():
+        nonlocal next_state, reset_confirm_until
+
+        if selection_index == IDX_APPLY:
+            utils.play_sound("powerup_pickup")
+            apply_options()
+            next_state = config.MENU
+            return True
+
+        if selection_index == IDX_BACK:
+            utils.play_sound("combo_break")
+            next_state = config.MENU
+            return True
+
+        if selection_index == IDX_RESET:
+            if current_time <= reset_confirm_until:
+                reset_confirm_until = 0
+                reset_to_defaults()
+                utils.play_sound("powerup_pickup")
+            else:
+                reset_confirm_until = current_time + 2000
+                utils.play_sound("combo_break")
+            return False
+
+        adjust_current(1)
+        utils.play_sound("eat")
+        return False
 
     for event in events:
         if event.type == pygame.QUIT:
@@ -1812,7 +2050,7 @@ def run_options(events, dt, screen, game_state):
                 axis = event.axis
                 value = event.value
                 threshold = config.JOYSTICK_THRESHOLD
-                if axis == 0:  # Vertical: haut/bas
+                if axis == 0:  # Vertical
                     if value < -threshold:
                         selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
                         utils.play_sound("eat")
@@ -1821,70 +2059,14 @@ def run_options(events, dt, screen, game_state):
                         selection_index = (selection_index + 1) % len(menu_items)
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
-                elif axis == 1:  # Horizontal: gauche/droite
+                elif axis == 1:  # Horizontal
                     if value < -threshold:
-                        if selection_index == 0:
-                            pending_show_grid = not pending_show_grid
-                            utils.play_sound("eat")
-                        elif selection_index == 1:
-                            cycle_grid_size(-1)
-                            utils.play_sound("eat")
-                        elif selection_index == 2:
-                            cycle_snake_style(-1)
-                            utils.play_sound("eat")
-                        elif selection_index == 3:
-                            cycle_classic_arena(-1)
-                            utils.play_sound("eat")
-                        elif selection_index == 4:
-                            cycle_game_speed(-1)
-                            utils.play_sound("eat")
-                        elif selection_index == 5:
-                            cycle_particle_density(-1)
-                            utils.play_sound("eat")
-                        elif selection_index == 6:
-                            pending_screen_shake = not pending_screen_shake
-                            utils.play_sound("eat")
-                        elif selection_index == 7:
-                            pending_show_fps = not pending_show_fps
-                            utils.play_sound("eat")
-                        elif selection_index == 8:
-                            adjust_music_volume(-1)
-                            utils.play_sound("eat")
-                        elif selection_index == 9:
-                            adjust_sound_volume(-1)
-                            utils.play_sound("eat")
+                        adjust_current(-1)
+                        utils.play_sound("eat")
                         last_axis_move_time = current_time
                     elif value > threshold:
-                        if selection_index == 0:
-                            pending_show_grid = not pending_show_grid
-                            utils.play_sound("eat")
-                        elif selection_index == 1:
-                            cycle_grid_size(1)
-                            utils.play_sound("eat")
-                        elif selection_index == 2:
-                            cycle_snake_style(1)
-                            utils.play_sound("eat")
-                        elif selection_index == 3:
-                            cycle_classic_arena(1)
-                            utils.play_sound("eat")
-                        elif selection_index == 4:
-                            cycle_game_speed(1)
-                            utils.play_sound("eat")
-                        elif selection_index == 5:
-                            cycle_particle_density(1)
-                            utils.play_sound("eat")
-                        elif selection_index == 6:
-                            pending_screen_shake = not pending_screen_shake
-                            utils.play_sound("eat")
-                        elif selection_index == 7:
-                            pending_show_fps = not pending_show_fps
-                            utils.play_sound("eat")
-                        elif selection_index == 8:
-                            adjust_music_volume(1)
-                            utils.play_sound("eat")
-                        elif selection_index == 9:
-                            adjust_sound_volume(1)
-                            utils.play_sound("eat")
+                        adjust_current(1)
+                        utils.play_sound("eat")
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
@@ -1899,36 +2081,8 @@ def run_options(events, dt, screen, game_state):
                     utils.play_sound("eat")
                     last_axis_move_time = current_time
                 elif hat_x != 0:
-                    if selection_index == 0:
-                        pending_show_grid = not pending_show_grid
-                        utils.play_sound("eat")
-                    elif selection_index == 1:
-                        cycle_grid_size(1 if hat_x > 0 else -1)
-                        utils.play_sound("eat")
-                    elif selection_index == 2:
-                        cycle_snake_style(1 if hat_x > 0 else -1)
-                        utils.play_sound("eat")
-                    elif selection_index == 3:
-                        cycle_classic_arena(1 if hat_x > 0 else -1)
-                        utils.play_sound("eat")
-                    elif selection_index == 4:
-                        cycle_game_speed(1 if hat_x > 0 else -1)
-                        utils.play_sound("eat")
-                    elif selection_index == 5:
-                        cycle_particle_density(1 if hat_x > 0 else -1)
-                        utils.play_sound("eat")
-                    elif selection_index == 6:
-                        pending_screen_shake = not pending_screen_shake
-                        utils.play_sound("eat")
-                    elif selection_index == 7:
-                        pending_show_fps = not pending_show_fps
-                        utils.play_sound("eat")
-                    elif selection_index == 8:
-                        adjust_music_volume(1 if hat_x > 0 else -1)
-                        utils.play_sound("eat")
-                    elif selection_index == 9:
-                        adjust_sound_volume(1 if hat_x > 0 else -1)
-                        utils.play_sound("eat")
+                    adjust_current(1 if hat_x > 0 else -1)
+                    utils.play_sound("eat")
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
@@ -1937,44 +2091,7 @@ def run_options(events, dt, screen, game_state):
                     next_state = config.MENU
                     break
                 if is_confirm_button(event.button):
-                    if selection_index == 0:
-                        pending_show_grid = not pending_show_grid
-                        utils.play_sound("eat")
-                    elif selection_index == 1:
-                        cycle_grid_size(1)
-                        utils.play_sound("eat")
-                    elif selection_index == 2:
-                        cycle_snake_style(1)
-                        utils.play_sound("eat")
-                    elif selection_index == 3:
-                        cycle_classic_arena(1)
-                        utils.play_sound("eat")
-                    elif selection_index == 4:
-                        cycle_game_speed(1)
-                        utils.play_sound("eat")
-                    elif selection_index == 5:
-                        cycle_particle_density(1)
-                        utils.play_sound("eat")
-                    elif selection_index == 6:
-                        pending_screen_shake = not pending_screen_shake
-                        utils.play_sound("eat")
-                    elif selection_index == 7:
-                        pending_show_fps = not pending_show_fps
-                        utils.play_sound("eat")
-                    elif selection_index == 8:
-                        adjust_music_volume(1)
-                        utils.play_sound("eat")
-                    elif selection_index == 9:
-                        adjust_sound_volume(1)
-                        utils.play_sound("eat")
-                    elif selection_index == 10:  # Appliquer
-                        utils.play_sound("powerup_pickup")
-                        apply_options()
-                        next_state = config.MENU
-                        break
-                    elif selection_index == 11:  # Retour
-                        utils.play_sound("combo_break")
-                        next_state = config.MENU
+                    if handle_confirm():
                         break
 
         elif event.type == pygame.KEYDOWN:
@@ -1989,112 +2106,26 @@ def run_options(events, dt, screen, game_state):
                 selection_index = (selection_index + 1) % len(menu_items)
                 utils.play_sound("eat")
             elif key == pygame.K_LEFT:
-                if selection_index == 0:
-                    pending_show_grid = not pending_show_grid
-                    utils.play_sound("eat")
-                elif selection_index == 1:
-                    cycle_grid_size(-1)
-                    utils.play_sound("eat")
-                elif selection_index == 2:
-                    cycle_snake_style(-1)
-                    utils.play_sound("eat")
-                elif selection_index == 3:
-                    cycle_classic_arena(-1)
-                    utils.play_sound("eat")
-                elif selection_index == 4:
-                    cycle_game_speed(-1)
-                    utils.play_sound("eat")
-                elif selection_index == 5:
-                    cycle_particle_density(-1)
-                    utils.play_sound("eat")
-                elif selection_index == 6:
-                    pending_screen_shake = not pending_screen_shake
-                    utils.play_sound("eat")
-                elif selection_index == 7:
-                    pending_show_fps = not pending_show_fps
-                    utils.play_sound("eat")
-                elif selection_index == 8:
-                    adjust_music_volume(-1)
-                    utils.play_sound("eat")
-                elif selection_index == 9:
-                    adjust_sound_volume(-1)
-                    utils.play_sound("eat")
+                adjust_current(-1)
+                utils.play_sound("eat")
             elif key == pygame.K_RIGHT:
-                if selection_index == 0:
-                    pending_show_grid = not pending_show_grid
-                    utils.play_sound("eat")
-                elif selection_index == 1:
-                    cycle_grid_size(1)
-                    utils.play_sound("eat")
-                elif selection_index == 2:
-                    cycle_snake_style(1)
-                    utils.play_sound("eat")
-                elif selection_index == 3:
-                    cycle_classic_arena(1)
-                    utils.play_sound("eat")
-                elif selection_index == 4:
-                    cycle_game_speed(1)
-                    utils.play_sound("eat")
-                elif selection_index == 5:
-                    cycle_particle_density(1)
-                    utils.play_sound("eat")
-                elif selection_index == 6:
-                    pending_screen_shake = not pending_screen_shake
-                    utils.play_sound("eat")
-                elif selection_index == 7:
-                    pending_show_fps = not pending_show_fps
-                    utils.play_sound("eat")
-                elif selection_index == 8:
-                    adjust_music_volume(1)
-                    utils.play_sound("eat")
-                elif selection_index == 9:
-                    adjust_sound_volume(1)
-                    utils.play_sound("eat")
+                adjust_current(1)
+                utils.play_sound("eat")
             elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                if selection_index == 0:
-                    pending_show_grid = not pending_show_grid
-                    utils.play_sound("eat")
-                elif selection_index == 1:
-                    cycle_grid_size(1)
-                    utils.play_sound("eat")
-                elif selection_index == 2:
-                    cycle_snake_style(1)
-                    utils.play_sound("eat")
-                elif selection_index == 3:
-                    cycle_classic_arena(1)
-                    utils.play_sound("eat")
-                elif selection_index == 4:
-                    cycle_game_speed(1)
-                    utils.play_sound("eat")
-                elif selection_index == 5:
-                    cycle_particle_density(1)
-                    utils.play_sound("eat")
-                elif selection_index == 6:
-                    pending_screen_shake = not pending_screen_shake
-                    utils.play_sound("eat")
-                elif selection_index == 7:
-                    pending_show_fps = not pending_show_fps
-                    utils.play_sound("eat")
-                elif selection_index == 8:
-                    adjust_music_volume(1)
-                    utils.play_sound("eat")
-                elif selection_index == 9:
-                    adjust_sound_volume(1)
-                    utils.play_sound("eat")
-                elif selection_index == 10:
-                    utils.play_sound("powerup_pickup")
-                    apply_options()
-                    next_state = config.MENU
+                if handle_confirm():
                     break
-                elif selection_index == 11:
-                    utils.play_sound("combo_break")
-                    next_state = config.MENU
-                    break
+
+    if selection_index != IDX_RESET:
+        reset_confirm_until = 0
+    game_state['options_reset_confirm_until'] = reset_confirm_until
 
     # Update pending values back into state
     game_state['pending_show_grid'] = pending_show_grid
     game_state['pending_grid_size'] = pending_grid_size
-    game_state['pending_snake_style'] = pending_snake_style
+    game_state['pending_snake_style_p1'] = pending_snake_style_p1
+    game_state['pending_snake_style_p2'] = pending_snake_style_p2
+    game_state['pending_snake_color_p1'] = pending_snake_color_p1
+    game_state['pending_snake_color_p2'] = pending_snake_color_p2
     game_state['pending_classic_arena'] = pending_classic_arena
     game_state['pending_game_speed'] = pending_game_speed
     game_state['pending_particle_density'] = pending_particle_density
@@ -2140,18 +2171,28 @@ def run_options(events, dt, screen, game_state):
         except Exception:
             preview_px_w, preview_px_h = sw, sh
 
-        snake_style_display = dict(snake_styles).get(pending_snake_style, pending_snake_style)
+        snake_style_display_p1 = format_style(pending_snake_style_p1)
+        snake_style_display_p2 = format_style(pending_snake_style_p2)
+        snake_color_display_p1 = snake_color_display_map.get(pending_snake_color_p1, pending_snake_color_p1)
+        snake_color_display_p2 = snake_color_display_map.get(pending_snake_color_p2, pending_snake_color_p2)
+
         classic_arena_display = dict(classic_arenas).get(pending_classic_arena, pending_classic_arena)
         game_speed_display = dict(game_speeds).get(pending_game_speed, pending_game_speed)
         particle_density_display = dict(particle_densities).get(pending_particle_density, pending_particle_density)
         music_volume_display = f"{int(round(pending_music_volume * 100))}%"
         sound_volume_display = f"{int(round(pending_sound_volume * 100))}%"
 
+        reset_armed = current_time <= reset_confirm_until
+        reset_label = "Réinitialiser" if not reset_armed else "Réinitialiser (CONFIRMER)"
+
         # Rebuild menu text (no 1-frame lag)
         menu_items_draw = [
             ("Quadrillage", "Oui" if pending_show_grid else "Non"),
             ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
-            ("Style serpent", snake_style_display),
+            ("Style serpent J1", snake_style_display_p1),
+            ("Style serpent J2", snake_style_display_p2),
+            ("Couleur J1", snake_color_display_p1),
+            ("Couleur J2", snake_color_display_p2),
             ("Arène classique", classic_arena_display),
             ("Vitesse jeu", game_speed_display),
             ("Particules", particle_density_display),
@@ -2159,6 +2200,7 @@ def run_options(events, dt, screen, game_state):
             ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
+            (reset_label, ""),
             ("Appliquer", ""),
             ("Retour", ""),
         ]
@@ -2193,7 +2235,7 @@ def run_options(events, dt, screen, game_state):
             i = first_index + local_i
             row_rect = pygame.Rect(list_rect.left, list_rect.top + local_i * row_h, list_rect.width, row_h)
             selected = (i == selection_index)
-            action_start = max(0, len(menu_items_draw) - 2)
+            action_start = max(0, len(menu_items_draw) - 3)
             is_action = i >= action_start
 
             if selected:
@@ -2240,10 +2282,12 @@ def run_options(events, dt, screen, game_state):
         summary_lines = [
             f"Fenêtre: {preview_px_w}x{preview_px_h}px",
             f"Grille: {preview_w}x{preview_h} cases  (case: {pending_grid_size}px)",
+            f"J1: {snake_style_display_p1} | {snake_color_display_p1}",
+            f"J2: {snake_style_display_p2} | {snake_color_display_p2}",
             f"Classique: {classic_arena_display}",
-            f"Style: {snake_style_display} | Vitesse: {game_speed_display}",
-            f"Particules: {particle_density_display} | Secousse: {'Oui' if pending_screen_shake else 'Non'}",
-            f"FPS: {'Oui' if pending_show_fps else 'Non'} | Musique: {music_volume_display} | Effets: {sound_volume_display}",
+            f"Vitesse: {game_speed_display} | Particules: {particle_density_display}",
+            f"Secousse: {'Oui' if pending_screen_shake else 'Non'} | FPS: {'Oui' if pending_show_fps else 'Non'}",
+            f"Musique: {music_volume_display} | Effets: {sound_volume_display}",
         ]
         for line in summary_lines:
             utils.draw_text_with_shadow(screen, line, font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (inner.left, cursor_y), "topleft")
@@ -2314,38 +2358,45 @@ def run_options(events, dt, screen, game_state):
         except Exception:
             pass
 
-        # Snake preview (style)
-        snake_rect = pygame.Rect(inner.left, cursor_y, inner.width, max(80, inner.bottom - cursor_y))
+        # Snake preview (J1/J2)
+        snake_rect = pygame.Rect(inner.left, cursor_y, inner.width, max(120, inner.bottom - cursor_y))
         try:
             pygame.draw.rect(screen, (12, 12, 18), snake_rect, border_radius=10)
             pygame.draw.rect(screen, config.COLOR_GRID, snake_rect, 2, border_radius=10)
         except Exception:
             pass
 
-        # Compute preview cell size (scaled from pending grid size)
-        try:
-            max_cell_w = int((snake_rect.width * 0.80) / 6)
-            max_cell_h = int((snake_rect.height * 0.70) / 2)
-            max_cell = max(6, min(max_cell_w, max_cell_h))
-            cell_px = int(round(max_cell * (int(pending_grid_size) / 20.0)))
-            cell_px = max(6, min(cell_px, max_cell))
-        except Exception:
-            cell_px = 12
-
-        # Sample snake segments (grid-ish coords)
-        rel = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (4, 1)]
-        start_x = snake_rect.centerx - int((4.5) * cell_px)
-        start_y = snake_rect.centery - int(0.5 * cell_px)
-        seg_rects = [pygame.Rect(start_x + rx * cell_px, start_y + ry * cell_px, cell_px, cell_px) for rx, ry in rel]
-
-        base_color = config.COLOR_SNAKE_P1
-        head_color = tuple(min(255, c + 40) for c in base_color[:3])
-
         preview_cache = game_state.setdefault('options_preview_cache', {})
-        style_key = str(pending_snake_style).strip().lower()
 
-        if style_key == "sprites":
+        def draw_preview_snake(area_rect, style_override, color_key, sprite_prefix, fallback_color):
             try:
+                eff_style = global_style_key if style_override is None else str(style_override).strip().lower()
+            except Exception:
+                eff_style = global_style_key
+
+            try:
+                presets = getattr(config, "SNAKE_COLOR_PRESETS", {})
+                base_color = presets.get(str(color_key).strip().lower(), fallback_color) if isinstance(presets, dict) else fallback_color
+            except Exception:
+                base_color = fallback_color
+
+            head_color = tuple(min(255, c + 40) for c in base_color[:3])
+
+            try:
+                max_cell_w = int((area_rect.width * 0.90) / 6)
+                max_cell_h = int((area_rect.height * 0.90) / 2)
+                max_cell = max(6, min(max_cell_w, max_cell_h))
+                cell_px = int(round(max_cell * (int(pending_grid_size) / 20.0)))
+                cell_px = max(6, min(cell_px, max_cell))
+            except Exception:
+                cell_px = 12
+
+            rel = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (4, 1)]
+            start_x = area_rect.centerx - int(4.5 * cell_px)
+            start_y = area_rect.centery - int(0.5 * cell_px)
+            seg_rects = [pygame.Rect(start_x + rx * cell_px, start_y + ry * cell_px, cell_px, cell_px) for rx, ry in rel]
+
+            if eff_style == "sprites":
                 def _get_sprite(name):
                     key = (name, cell_px)
                     if key in preview_cache:
@@ -2360,9 +2411,9 @@ def run_options(events, dt, screen, game_state):
                         preview_cache[key] = pygame.transform.scale(src, (cell_px, cell_px))
                     return preview_cache[key]
 
-                head = _get_sprite("snake_p1_head.png")
-                body = _get_sprite("snake_p1_body.png")
-                tail = _get_sprite("snake_p1_tail.png")
+                head = _get_sprite(f"snake_{sprite_prefix}_head.png")
+                body = _get_sprite(f"snake_{sprite_prefix}_body.png")
+                tail = _get_sprite(f"snake_{sprite_prefix}_tail.png")
 
                 for idx, r in enumerate(seg_rects):
                     if idx == 0 and head:
@@ -2374,45 +2425,71 @@ def run_options(events, dt, screen, game_state):
                     else:
                         pygame.draw.rect(screen, head_color if idx == 0 else base_color, r)
                         pygame.draw.rect(screen, (0, 0, 0), r, 1)
-            except Exception:
-                pass
-        else:
-            try:
-                pad_px = max(1, cell_px // 8)
-                radius = max(1, (cell_px - pad_px * 2) // 3)
-                for idx, r in enumerate(seg_rects):
-                    color = head_color if idx == 0 else base_color
-                    if style_key == "wire":
-                        if idx < len(seg_rects) - 1:
-                            a = r.center
-                            b = seg_rects[idx + 1].center
-                            pygame.draw.line(screen, base_color, a, b, max(2, cell_px // 4))
-                        pygame.draw.circle(screen, color, r.center, max(2, cell_px // 3 if idx == 0 else cell_px // 4))
-                        pygame.draw.circle(screen, (0, 0, 0), r.center, max(2, cell_px // 3 if idx == 0 else cell_px // 4), 2)
-                        continue
+                return
 
-                    if style_key == "blocks":
-                        pygame.draw.rect(screen, color, r)
-                        pygame.draw.rect(screen, (0, 0, 0), r, 1)
-                        continue
+            pad_px = max(1, cell_px // 8)
+            radius = max(1, (cell_px - pad_px * 2) // 3)
+            for idx, r in enumerate(seg_rects):
+                color = head_color if idx == 0 else base_color
+                if eff_style == "wire":
+                    if idx < len(seg_rects) - 1:
+                        a = r.center
+                        b = seg_rects[idx + 1].center
+                        pygame.draw.line(screen, base_color, a, b, max(2, cell_px // 4))
+                    pygame.draw.circle(screen, color, r.center, max(2, cell_px // 3 if idx == 0 else cell_px // 4))
+                    pygame.draw.circle(screen, (0, 0, 0), r.center, max(2, cell_px // 3 if idx == 0 else cell_px // 4), 2)
+                    continue
 
-                    draw_rect = r.inflate(-pad_px * 2, -pad_px * 2)
-                    if draw_rect.width <= 0 or draw_rect.height <= 0:
-                        draw_rect = r
+                if eff_style == "blocks":
+                    pygame.draw.rect(screen, color, r)
+                    pygame.draw.rect(screen, (0, 0, 0), r, 1)
+                    continue
 
-                    if style_key == "neon":
-                        glow = pygame.Surface((cell_px, cell_px), pygame.SRCALPHA)
-                        glow_color = (color[0], color[1], color[2], 90)
-                        local_rect = draw_rect.move(-r.left, -r.top).inflate(pad_px, pad_px)
-                        pygame.draw.rect(glow, glow_color, local_rect, border_radius=radius + 2)
-                        screen.blit(glow, r.topleft)
+                draw_rect = r.inflate(-pad_px * 2, -pad_px * 2)
+                if draw_rect.width <= 0 or draw_rect.height <= 0:
+                    draw_rect = r
 
-                    pygame.draw.rect(screen, color, draw_rect, border_radius=radius)
-                    pygame.draw.rect(screen, (0, 0, 0), draw_rect, 1, border_radius=radius)
-            except Exception:
-                pass
+                if eff_style == "neon":
+                    glow = pygame.Surface((cell_px, cell_px), pygame.SRCALPHA)
+                    glow_color = (color[0], color[1], color[2], 90)
+                    local_rect = draw_rect.move(-r.left, -r.top).inflate(pad_px, pad_px)
+                    pygame.draw.rect(glow, glow_color, local_rect, border_radius=radius + 2)
+                    screen.blit(glow, r.topleft)
+
+                pygame.draw.rect(screen, color, draw_rect, border_radius=radius)
+                pygame.draw.rect(screen, (0, 0, 0), draw_rect, 1, border_radius=radius)
+
+        try:
+            content = snake_rect.inflate(-14, -14)
+            gap_snake = 12
+            half_w = max(60, int((content.width - gap_snake) / 2))
+            p1_box = pygame.Rect(content.left, content.top, half_w, content.height)
+            p2_box = pygame.Rect(p1_box.right + gap_snake, content.top, content.right - (p1_box.right + gap_snake), content.height)
+
+            for label, box, s_style, s_col, prefix, fallback in [
+                ("J1", p1_box, pending_snake_style_p1, pending_snake_color_p1, "p1", config.COLOR_SNAKE_P1),
+                ("J2", p2_box, pending_snake_style_p2, pending_snake_color_p2, "p2", config.COLOR_SNAKE_P2),
+            ]:
+                try:
+                    pygame.draw.rect(screen, (10, 10, 14), box, border_radius=10)
+                    pygame.draw.rect(screen, config.COLOR_GRID, box, 1, border_radius=10)
+                except Exception:
+                    pass
+
+                label_h = int(font_small.get_height() * 1.1)
+                label_rect = pygame.Rect(box.left + 8, box.top + 6, box.width - 16, label_h)
+                utils.draw_text_with_shadow(screen, label, font_small, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, label_rect.midtop, "midtop")
+
+                area = pygame.Rect(box.left + 8, label_rect.bottom + 6, box.width - 16, box.bottom - (label_rect.bottom + 10))
+                draw_preview_snake(area, s_style, s_col, prefix, fallback)
+        except Exception:
+            pass
 
         hint = "Haut/Bas: naviguer | Gauche/Droite: changer | Entrée/A: confirmer | Echap/B: retour"
+        if selection_index == IDX_RESET:
+            hint = "Entrée/A: réinitialiser (x2) | Echap/B: retour"
+            if reset_armed:
+                hint = "Entrée/A: CONFIRMER réinitialisation | Echap/B: retour"
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception as e:
         print(f"Erreur dessin run_options: {e}")
@@ -2421,7 +2498,10 @@ def run_options(events, dt, screen, game_state):
     if next_state != config.OPTIONS:
         game_state.pop('pending_show_grid', None)
         game_state.pop('pending_grid_size', None)
-        game_state.pop('pending_snake_style', None)
+        game_state.pop('pending_snake_style_p1', None)
+        game_state.pop('pending_snake_style_p2', None)
+        game_state.pop('pending_snake_color_p1', None)
+        game_state.pop('pending_snake_color_p2', None)
         game_state.pop('pending_classic_arena', None)
         game_state.pop('pending_game_speed', None)
         game_state.pop('pending_particle_density', None)
@@ -2429,6 +2509,7 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_show_fps', None)
         game_state.pop('pending_music_volume', None)
         game_state.pop('pending_sound_volume', None)
+        game_state.pop('options_reset_confirm_until', None)
         game_state.pop('options_preview_cache', None)
 
     game_state['current_state'] = next_state
@@ -4894,13 +4975,49 @@ def run_game(events, dt, screen, game_state):
     # --- Respawn IA Principale (Mode Vs AI) ---
     if current_game_mode == config.MODE_VS_AI and enemy_snake and not enemy_snake.alive:
         if enemy_snake.death_time > 0 and current_time - enemy_snake.death_time >= config.ENEMY_RESPAWN_TIME:
-            all_occupied_respawn = utils.get_all_occupied_positions(player_snake, None, None, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-            respawn_pos = utils.get_random_empty_position(all_occupied_respawn)
+            all_occupied_respawn = utils.get_all_occupied_positions(
+                player_snake, None, None, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies
+            )
+
+            walls_for_respawn = game_state.get('current_map_walls', [])
+            walls_set = set(walls_for_respawn)
+            mine_positions = {m.position for m in mines if m and getattr(m, "position", None)}
+            p1_positions = set(player_snake.positions) if player_snake and player_snake.alive else set()
+
+            respawn_pos = None
+            safe_dir = None
+
+            for _ in range(60):
+                candidate_pos = utils.get_random_empty_position(all_occupied_respawn)
+                if not candidate_pos:
+                    break
+
+                # Évite les respawns "injustes": mine trop proche (wrap-around)
+                if mine_positions and any(
+                    utils.grid_manhattan_distance(candidate_pos, mp, wrap=True) < 2 for mp in mine_positions
+                ):
+                    continue
+
+                # Choisit une direction initiale qui n'envoie pas l'IA directement sur une mine/un mur/le joueur
+                dir_candidates = []
+                for d in config.DIRECTIONS:
+                    nx = (candidate_pos[0] + d[0] + config.GRID_WIDTH) % config.GRID_WIDTH
+                    ny = (candidate_pos[1] + d[1] + config.GRID_HEIGHT) % config.GRID_HEIGHT
+                    next_pos = (nx, ny)
+                    if next_pos in walls_set or next_pos in mine_positions or next_pos in p1_positions:
+                        continue
+                    dir_candidates.append(d)
+
+                if dir_candidates:
+                    respawn_pos = candidate_pos
+                    safe_dir = config.LEFT if config.LEFT in dir_candidates else random.choice(dir_candidates)
+                    break
+
             if respawn_pos:
-                walls_for_respawn = game_state.get('current_map_walls', [])
                 enemy_snake.reset(current_game_mode, walls_for_respawn)
                 enemy_snake.positions = [respawn_pos]
-                safe_dir = enemy_snake._find_safe_initial_direction(respawn_pos, walls_for_respawn, config.LEFT)
+                if safe_dir is None:
+                    safe_dir = enemy_snake._find_safe_initial_direction(respawn_pos, walls_for_respawn, config.LEFT)
                 enemy_snake.current_direction = safe_dir
                 enemy_snake.next_direction = safe_dir
                 enemy_snake.alive = True
@@ -5070,7 +5187,10 @@ def run_game(events, dt, screen, game_state):
                             if baby and baby.alive:
                                 all_snake_bodies.extend(baby.positions)
 
-                        too_close = any(abs(spawn_pos[0]-body_part[0]) + abs(spawn_pos[1]-body_part[1]) < 3 for body_part in all_snake_bodies)
+                        too_close = any(
+                            utils.grid_manhattan_distance(spawn_pos, body_part, wrap=True) < 3
+                            for body_part in all_snake_bodies
+                        )
                         if not too_close: mines.append(game_objects.Mine(spawn_pos)); current_occupied.add(spawn_pos); spawned_count += 1
                 if spawned_count > 0: game_state['last_mine_spawn_time'] = current_time
 
@@ -5090,7 +5210,9 @@ def run_game(events, dt, screen, game_state):
                         spawn_pos = utils.get_random_empty_position(current_occupied)
                         if spawn_pos:
                             heads = [s.get_head_position() for s in [player_snake, player2_snake, enemy_snake] if s and s.alive] + [baby.get_head_position() for baby in active_enemies if baby and baby.alive]
-                            too_close = any(h and abs(spawn_pos[0]-h[0]) + abs(spawn_pos[1]-h[1]) < 4 for h in heads)
+                            too_close = any(
+                                h and utils.grid_manhattan_distance(spawn_pos, h, wrap=True) < 4 for h in heads
+                            )
                             if not too_close:
                                 available_powerups = list(config.POWERUP_TYPES.keys())
                                 if available_powerups: powerup_type = random.choice(available_powerups); powerups.append(game_objects.PowerUp(spawn_pos, powerup_type)); current_occupied.add(spawn_pos); spawned_count += 1

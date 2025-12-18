@@ -42,6 +42,12 @@ DEFAULT_GAME_OPTIONS = {
     # Si null/absent: comportement auto (calcul dynamique existant)
     "grid_size": None,
     "snake_style": "sprites",
+    # Styles séparés (si null: utilise snake_style)
+    "snake_style_p1": None,
+    "snake_style_p2": None,
+    # Couleurs (presets)
+    "snake_color_p1": "cyber",
+    "snake_color_p2": "pink",
     "classic_arena": "full",
     "game_speed": "normal",
     "particle_density": "normal",
@@ -575,6 +581,44 @@ def get_random_empty_position(occupied_positions):
             return pos
     # print("Warning: Could not find guaranteed empty position, skipping spawn.") # Optionnel
     return None
+
+def grid_manhattan_distance(a, b, wrap=False, width=None, height=None):
+    """Distance de Manhattan sur une grille, avec option wrap-around (tore)."""
+    try:
+        ax, ay = a
+        bx, by = b
+    except Exception:
+        return float("inf")
+
+    try:
+        dx = abs(int(ax) - int(bx))
+        dy = abs(int(ay) - int(by))
+    except Exception:
+        return float("inf")
+
+    if wrap:
+        if width is None:
+            width = getattr(config, "GRID_WIDTH", 0)
+        if height is None:
+            height = getattr(config, "GRID_HEIGHT", 0)
+
+        try:
+            w = int(width)
+            if w > 0:
+                dx_mod = dx % w
+                dx = min(dx_mod, w - dx_mod)
+        except Exception:
+            pass
+
+        try:
+            h = int(height)
+            if h > 0:
+                dy_mod = dy % h
+                dy = min(dy_mod, h - dy_mod)
+        except Exception:
+            pass
+
+    return dx + dy
 
 def get_random_empty_position_in_bounds(occupied_positions, bounds, max_attempts=None):
     """Trouve une position aléatoire vide dans un rectangle (x0, y0, x1, y1) inclus."""

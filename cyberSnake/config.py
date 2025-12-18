@@ -15,6 +15,9 @@ SHOW_GRID = True
 # --- Options (chargées depuis game_options.json) ---
 # Style de rendu du serpent: "sprites", "blocks", "rounded", "neon", "wire"
 SNAKE_STYLE = "sprites"
+# Styles par joueur (si None: utilise SNAKE_STYLE)
+SNAKE_STYLE_P1 = None
+SNAKE_STYLE_P2 = None
 # Taille de l'arène en mode Classique: "full", "large", "medium", "small"
 CLASSIC_ARENA = "full"
 
@@ -27,6 +30,65 @@ PARTICLE_DENSITY = "normal"
 PARTICLE_FACTOR = 1.0
 SCREEN_SHAKE_ENABLED = True
 SHOW_FPS = False
+
+# Couleurs (customisation)
+SNAKE_COLOR_PRESETS = {
+    "cyber": (0, 255, 150),
+    "pink": (255, 100, 200),
+    "blue": (0, 180, 255),
+    "orange": (255, 150, 0),
+    "purple": (190, 80, 255),
+    "red": (255, 80, 80),
+    "white": (240, 240, 240),
+    "yellow": (255, 255, 0),
+}
+SNAKE_COLOR_PRESET_P1 = "cyber"
+SNAKE_COLOR_PRESET_P2 = "pink"
+
+
+def _get_snake_color_from_preset(key, fallback):
+    try:
+        k = str(key).strip().lower()
+    except Exception:
+        return fallback
+    return SNAKE_COLOR_PRESETS.get(k, fallback)
+
+
+def apply_snake_color_presets(p1_key=None, p2_key=None):
+    """Applique les presets couleur aux couleurs runtime (UI + serpent)."""
+    global SNAKE_COLOR_PRESET_P1, SNAKE_COLOR_PRESET_P2
+    global COLOR_SNAKE_P1, COLOR_SNAKE_P2, COLOR_KILLS_TEXT_P1, COLOR_KILLS_TEXT_P2
+    global COLOR_SNAKE_TRAIL_P1, COLOR_SNAKE_TRAIL_P2, COLOR_PLAYER_DEATH_P1, COLOR_PLAYER_DEATH_P2
+
+    if p1_key is not None:
+        SNAKE_COLOR_PRESET_P1 = str(p1_key).strip().lower()
+    if p2_key is not None:
+        SNAKE_COLOR_PRESET_P2 = str(p2_key).strip().lower()
+
+    COLOR_SNAKE_P1 = _get_snake_color_from_preset(SNAKE_COLOR_PRESET_P1, COLOR_SNAKE_P1)
+    COLOR_SNAKE_P2 = _get_snake_color_from_preset(SNAKE_COLOR_PRESET_P2, COLOR_SNAKE_P2)
+
+    # Couleurs UI dérivées
+    COLOR_KILLS_TEXT_P1 = COLOR_SNAKE_P1
+    COLOR_KILLS_TEXT_P2 = COLOR_SNAKE_P2
+
+    try:
+        COLOR_SNAKE_TRAIL_P1 = [(c // 2) for c in COLOR_SNAKE_P1]
+        COLOR_SNAKE_TRAIL_P2 = [(c // 2) for c in COLOR_SNAKE_P2]
+    except Exception:
+        pass
+
+    def _lighten(col, amt=80):
+        try:
+            return tuple(min(255, int(c) + int(amt)) for c in col[:3])
+        except Exception:
+            return col
+
+    try:
+        COLOR_PLAYER_DEATH_P1 = [COLOR_SNAKE_P1, _lighten(COLOR_SNAKE_P1, 80), COLOR_WHITE]
+        COLOR_PLAYER_DEATH_P2 = [COLOR_SNAKE_P2, _lighten(COLOR_SNAKE_P2, 80), COLOR_WHITE]
+    except Exception:
+        pass
 
 
 # --- Constantes Vitesse & Difficulté ---
