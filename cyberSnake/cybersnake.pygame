@@ -123,6 +123,8 @@ def main():
     try:
         opts = utils.load_game_options(base_path_assets)
         config.SHOW_GRID = bool(opts.get("show_grid", getattr(config, "SHOW_GRID", True)))
+        config.SNAKE_STYLE = str(opts.get("snake_style", getattr(config, "SNAKE_STYLE", "sprites")))
+        config.CLASSIC_ARENA = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
         grid_size_override = opts.get("grid_size", None)
     except Exception as e:
         logging.warning(f"Attention: Impossible de charger {config.GAME_OPTIONS_FILE}: {e}", exc_info=True)

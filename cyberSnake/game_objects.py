@@ -1647,12 +1647,76 @@ class Snake:
 
         # --- Dessin des Segments (avec Assets et Rotation) ---
 
-        # Mode classique: rendu simple (sans sprites)
-        if self.game_mode == getattr(config, "MODE_CLASSIC", None):
+        style = str(getattr(config, "SNAKE_STYLE", "sprites") or "sprites").strip().lower()
+        if style in ("blocks", "rounded", "neon", "wire"):
+            grid_px = int(getattr(config, "GRID_SIZE", 20))
+
+            # Bordure (armure / charge bouclier) - commune à tous les styles
+            border_thickness = 1
+            try:
+                border_color = tuple(max(0, int(c * 0.7)) for c in base_color[:3])
+            except Exception:
+                border_color = config.COLOR_BLACK
+
+            if self.shield_charge_active:
+                border_color = config.COLOR_SHIELD_POWERUP
+                pulse_speed = 0.02
+                min_thick, max_thick = 2, getattr(config, "ARMOR_MAX_BORDER_THICKNESS", 4)
+                pulse = (max_thick - min_thick) / 2 * (1 + math.sin(current_time * pulse_speed))
+                border_thickness = min_thick + int(pulse)
+            elif self.armor > 0 and getattr(config, "MAX_ARMOR", 0) > 0:
+                ratio = min(1.0, float(self.armor) / max(1, config.MAX_ARMOR))
+                max_thick = getattr(config, "ARMOR_MAX_BORDER_THICKNESS", 4)
+                border_thickness = max(1, min(max_thick, 1 + int(ratio * (max_thick - 1))))
+                border_color = config.COLOR_ARMOR_HIGHLIGHT
+
+            pad = max(1, grid_px // 8)
+            radius = max(1, (grid_px - pad * 2) // 3)
+
+            # --- Style "wire" : ligne + nœuds, sans traits à travers le wrap ---
+            if style == "wire":
+                try:
+                    centers = [(p[0] * grid_px + grid_px // 2, p[1] * grid_px + grid_px // 2) for p in self.positions]
+                    line_width = max(2, grid_px // 4)
+
+                    for idx in range(len(self.positions) - 1):
+                        a = self.positions[idx]
+                        b = self.positions[idx + 1]
+                        if abs(b[0] - a[0]) > 1 or abs(b[1] - a[1]) > 1:
+                            continue
+                        pygame.draw.line(surface, base_color, centers[idx], centers[idx + 1], line_width)
+
+                    for i, (cx, cy) in enumerate(centers):
+                        seg_color = base_color
+                        if i == 0 and not draw_color_override:
+                            try:
+                                seg_color = tuple(min(c + 40, 255) for c in base_color[:3])
+                            except Exception:
+                                seg_color = base_color
+                        r_node = max(2, grid_px // 3) if i == 0 else max(2, grid_px // 4)
+                        pygame.draw.circle(surface, seg_color, (int(cx), int(cy)), r_node)
+                        if border_thickness > 1:
+                            pygame.draw.circle(surface, border_color, (int(cx), int(cy)), r_node, border_thickness)
+                except Exception:
+                    pass
+
+                if self.is_player and self.reversed_controls_active:
+                    try:
+                        hx, hy = centers[0]
+                        q_surf = font_default.render("?", True, config.COLOR_WHITE)
+                        q_rect = q_surf.get_rect(center=(hx, hy))
+                        surface.blit(q_surf, q_rect)
+                    except Exception:
+                        pass
+
+                self.draw_status_effects(surface, current_time, font_small)
+                return
+
+            # --- Styles "blocks" / "rounded" / "neon" ---
             for i, p in enumerate(self.positions):
-                px = p[0] * config.GRID_SIZE
-                py = p[1] * config.GRID_SIZE
-                r = pygame.Rect(px, py, config.GRID_SIZE, config.GRID_SIZE)
+                px = p[0] * grid_px
+                py = p[1] * grid_px
+                r = pygame.Rect(px, py, grid_px, grid_px)
 
                 seg_color = base_color
                 if i == 0 and not draw_color_override:
@@ -1662,11 +1726,44 @@ class Snake:
                         seg_color = base_color
 
                 try:
-                    pygame.draw.rect(surface, seg_color, r)
-                    border = tuple(max(0, int(c * 0.6)) for c in seg_color[:3]) if isinstance(seg_color, (list, tuple)) else config.COLOR_BLACK
-                    pygame.draw.rect(surface, border, r, 1)
+                    if style == "blocks":
+                        draw_rect = r
+                        draw_radius = 0
+                        pygame.draw.rect(surface, seg_color, draw_rect)
+                    else:
+                        draw_rect = r.inflate(-pad * 2, -pad * 2)
+                        if draw_rect.width <= 0 or draw_rect.height <= 0:
+                            draw_rect = r
+                        draw_radius = radius
+
+                        if style == "neon":
+                            glow = pygame.Surface((grid_px, grid_px), pygame.SRCALPHA)
+                            glow_color = (seg_color[0], seg_color[1], seg_color[2], 90) if isinstance(seg_color, (list, tuple)) and len(seg_color) >= 3 else (255, 255, 255, 90)
+                            local_rect = draw_rect.move(-px, -py).inflate(pad, pad)
+                            pygame.draw.rect(glow, glow_color, local_rect, border_radius=draw_radius + 2)
+                            surface.blit(glow, (px, py))
+
+                        pygame.draw.rect(surface, seg_color, draw_rect, border_radius=draw_radius)
+
+                    if border_thickness > 1:
+                        pygame.draw.rect(surface, border_color, draw_rect, border_thickness, border_radius=draw_radius)
+                    else:
+                        border = tuple(max(0, int(c * 0.6)) for c in seg_color[:3]) if isinstance(seg_color, (list, tuple)) else config.COLOR_BLACK
+                        pygame.draw.rect(surface, border, draw_rect, 1, border_radius=draw_radius)
                 except Exception:
                     pass
+
+            if self.is_player and self.reversed_controls_active:
+                try:
+                    hx = self.positions[0][0] * grid_px + grid_px // 2
+                    hy = self.positions[0][1] * grid_px + grid_px // 2
+                    q_surf = font_default.render("?", True, config.COLOR_WHITE)
+                    q_rect = q_surf.get_rect(center=(hx, hy))
+                    surface.blit(q_surf, q_rect)
+                except Exception:
+                    pass
+
+            self.draw_status_effects(surface, current_time, font_small)
             return
 
         # 1. Identifier les images selon le joueur
@@ -2183,6 +2280,13 @@ class EnemySnake(Snake):
 
         # Combine les obstacles
         obstacles = set(self.current_walls)
+
+        # Mines fixes = obstacles (sauf si IA fantôme)
+        if not self.ghost_active:
+            try:
+                obstacles.update(m.position for m in mines if m and getattr(m, "position", None))
+            except Exception:
+                pass
         # Ajoute les positions des autres serpents (sauf soi-même)
         for snake_obj in [p1_snake, p2_snake] + all_active_enemies:
             if snake_obj and snake_obj.alive and snake_obj is not self:

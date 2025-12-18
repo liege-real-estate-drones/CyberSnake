@@ -41,6 +41,8 @@ DEFAULT_GAME_OPTIONS = {
     "show_grid": True,
     # Si null/absent: comportement auto (calcul dynamique existant)
     "grid_size": None,
+    "snake_style": "sprites",
+    "classic_arena": "full",
 }
 
 
@@ -524,6 +526,29 @@ def get_random_empty_position(occupied_positions):
         if pos not in occupied_positions:
             return pos
     # print("Warning: Could not find guaranteed empty position, skipping spawn.") # Optionnel
+    return None
+
+def get_random_empty_position_in_bounds(occupied_positions, bounds, max_attempts=None):
+    """Trouve une position aléatoire vide dans un rectangle (x0, y0, x1, y1) inclus."""
+    try:
+        x0, y0, x1, y1 = bounds
+        x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
+    except Exception:
+        return get_random_empty_position(occupied_positions)
+
+    if x1 < x0 or y1 < y0:
+        return None
+
+    width = (x1 - x0 + 1)
+    height = (y1 - y0 + 1)
+    area = max(1, width * height)
+    attempts = int(max_attempts) if isinstance(max_attempts, int) and max_attempts > 0 else max(10, area // 2)
+
+    for _ in range(attempts):
+        pos = (random.randint(x0, x1), random.randint(y0, y1))
+        if pos not in occupied_positions:
+            return pos
+
     return None
 
 def get_all_occupied_positions(p1_snake, p2_snake, ai_snake, current_mines, current_foods, current_powerups_list, walls, current_nests=None, current_moving_mines=None, current_active_enemies=None):

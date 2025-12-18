@@ -14,5 +14,7 @@
     "best_of": 0
   },
   "show_grid": true,
-  "grid_size": null
+  "grid_size": null,
+  "snake_style": "sprites",
+  "classic_arena": "full"
 }

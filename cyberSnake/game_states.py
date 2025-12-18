@@ -188,6 +188,25 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
         try: p.draw(target_surface)
         except Exception as e: print(f"Erreur dessin particule: {e}")
 
+    # --- Mise en valeur de l'arène (Classique) : assombrit l'extérieur ---
+    if current_game_mode == config.MODE_CLASSIC:
+        arena_bounds = game_state.get('classic_arena_bounds')
+        if arena_bounds:
+            try:
+                x0, y0, x1, y1 = arena_bounds
+                arena_rect_px = pygame.Rect(
+                    int(x0) * config.GRID_SIZE,
+                    int(y0) * config.GRID_SIZE,
+                    (int(x1) - int(x0) + 1) * config.GRID_SIZE,
+                    (int(y1) - int(y0) + 1) * config.GRID_SIZE,
+                )
+                overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 140))
+                overlay.fill((0, 0, 0, 0), arena_rect_px)
+                target_surface.blit(overlay, (0, 0))
+            except Exception:
+                pass
+
     # --- *** UI Elements *** ---
     ui_padding = 12
     ui_margin = 8
@@ -205,10 +224,10 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             # Calcul hauteur initiale pour Score, Ammo, Armor
             p1_ui_elements_height += (line_height_default + gap) * 3
             # Ajouts conditionnels
-            if player_snake.alive and player_snake.ammo_regen_rate > 0: p1_ui_elements_height += line_height_small + gap
+            if current_game_mode != config.MODE_CLASSIC and player_snake.alive and player_snake.ammo_regen_rate > 0: p1_ui_elements_height += line_height_small + gap
             if current_game_mode == config.MODE_PVP: p1_ui_elements_height += line_height_default + gap
-            if player_snake.alive and player_snake.persistent_score_multiplier > 1.001: p1_ui_elements_height += line_height_small + gap
-            if player_snake.alive and player_snake.combo_counter > 1: p1_ui_elements_height += line_height_default + gap
+            if current_game_mode != config.MODE_CLASSIC and player_snake.alive and player_snake.persistent_score_multiplier > 1.001: p1_ui_elements_height += line_height_small + gap
+            if current_game_mode != config.MODE_CLASSIC and player_snake.alive and player_snake.combo_counter > 1: p1_ui_elements_height += line_height_default + gap
             # --- AJOUT HAUTEUR POUR COMPÉTENCES & REGEN ARMURE ---
             if player_snake.alive and player_snake.is_player and current_game_mode != config.MODE_CLASSIC:  # Seuls les joueurs ont ces compétences/infos
                 p1_ui_elements_height += line_height_default + gap  # Pour Dash
@@ -249,24 +268,46 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                                             "topleft")
             y_p1_ui += line_height_default + gap
 
-            # Munitions
-            ammo_color = config.COLOR_AMMO_TEXT
-            if player_snake.alive and player_snake.ammo <= 5 and (
-                    current_time // 300) % 2 == 0: ammo_color = config.COLOR_LOW_AMMO_WARN
-            utils.draw_text_with_shadow(target_surface, f"Ammo: {player_snake.ammo}", font_default, ammo_color,
+            # Munitions / Taille (Classique)
+            if current_game_mode == config.MODE_CLASSIC:
+                length_value = getattr(player_snake, "length", None)
+                if not isinstance(length_value, int):
+                    length_value = len(getattr(player_snake, "positions", []) or [])
+                ammo_text = f"Taille: {length_value}"
+                ammo_color = config.COLOR_TEXT
+            else:
+                ammo_text = f"Ammo: {player_snake.ammo}"
+                ammo_color = config.COLOR_AMMO_TEXT
+                if player_snake.alive and player_snake.ammo <= 5 and (
+                        current_time // 300) % 2 == 0:
+                    ammo_color = config.COLOR_LOW_AMMO_WARN
+            utils.draw_text_with_shadow(target_surface, ammo_text, font_default, ammo_color,
                                         config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui), "topleft")
             y_p1_ui += line_height_default + gap
 
             # Armure
-            armor_color = config.COLOR_ARMOR_TEXT
+            if current_game_mode == config.MODE_CLASSIC:
+                best_text = "Meilleur: ---"
+                hs_list = utils.high_scores.get("classic")
+                if hs_list:
+                    try:
+                        top_entry = hs_list[0]
+                        best_text = f"Meilleur: {top_entry.get('name','???')} {top_entry.get('score', 0)}"
+                    except Exception:
+                        pass
+                armor_text = best_text
+                armor_color = config.COLOR_TEXT_HIGHLIGHT
+            else:
+                armor_text = f"Armor: {player_snake.armor}"
+                armor_color = config.COLOR_ARMOR_TEXT
             # Flash géré directement dans snake.draw, ici juste la couleur de base
-            if player_snake.alive and player_snake.armor <= 0: armor_color = config.COLOR_LOW_ARMOR_WARN
-            utils.draw_text_with_shadow(target_surface, f"Armor: {player_snake.armor}", font_default, armor_color,
+            if current_game_mode != config.MODE_CLASSIC and player_snake.alive and player_snake.armor <= 0: armor_color = config.COLOR_LOW_ARMOR_WARN
+            utils.draw_text_with_shadow(target_surface, armor_text, font_default, armor_color,
                                         config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui), "topleft")
             y_p1_ui += line_height_default + gap
 
             # Regen Munitions (si actif)
-            if player_snake.alive and player_snake.ammo_regen_rate > 0:
+            if current_game_mode != config.MODE_CLASSIC and player_snake.alive and player_snake.ammo_regen_rate > 0:
                 regen_text = f"Regen: +{player_snake.ammo_regen_rate} / {player_snake.ammo_regen_interval / 1000:.0f}s"
                 utils.draw_text_with_shadow(target_surface, regen_text, font_small, config.COLOR_AMMO_TEXT,
                                             config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui), "topleft")
@@ -283,14 +324,14 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                 y_p1_ui += line_height_default + gap
 
             # Multiplicateur Persistant
-            if player_snake.alive and player_snake.persistent_score_multiplier > 1.001:
+            if current_game_mode != config.MODE_CLASSIC and player_snake.alive and player_snake.persistent_score_multiplier > 1.001:
                 mult_text = f"Mult: x{player_snake.persistent_score_multiplier:.2f}"
                 utils.draw_text_with_shadow(target_surface, mult_text, font_small, config.COLOR_FOOD_BONUS,
                                             config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui), "topleft")
                 y_p1_ui += line_height_small + gap
 
             # Combo
-            if player_snake.alive and player_snake.combo_counter > 1:
+            if current_game_mode != config.MODE_CLASSIC and player_snake.alive and player_snake.combo_counter > 1:
                 utils.draw_text_with_shadow(target_surface, f"Combo: x{player_snake.combo_counter}", font_default,
                                             config.COLOR_COMBO_TEXT, config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui),
                                             "topleft")
@@ -309,9 +350,6 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                     # Calculate cooldown progress percentage, clamped between 0.0 and 1.0
                     cooldown_duration = max(1, config.SKILL_COOLDOWN_DASH) # Avoid division by zero
                     cd_percent = min(1.0, float(elapsed_time) / cooldown_duration)
-                    # --- DEBUG PRINT ---
-                    print(f"DEBUG Dash UI: time={current_time}, last_dash={player_snake.last_dash_time}, elapsed={elapsed_time}, cooldown={cooldown_duration}, percent={cd_percent:.2f}")
-                    # --- FIN DEBUG ---
                     bar_x = text_rect_dash.right + 8
                     bar_y = text_rect_dash.top + (line_height_default // 2) - (bar_height_ui // 2)
                     current_bar_width = int(bar_max_width_ui * cd_percent)
@@ -344,9 +382,6 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                      # Calculate cooldown progress percentage, clamped between 0.0 and 1.0
                     cooldown_duration = max(1, config.SKILL_COOLDOWN_SHIELD) # Avoid division by zero
                     cd_percent = min(1.0, float(elapsed_time) / cooldown_duration)
-                    # --- DEBUG PRINT ---
-                    print(f"DEBUG Shield UI: time={current_time}, last_shield={player_snake.last_shield_time}, elapsed={elapsed_time}, cooldown={cooldown_duration}, percent={cd_percent:.2f}")
-                    # --- FIN DEBUG ---
                     bar_x = text_rect_shield.right + 8
                     bar_y = text_rect_shield.top + (line_height_default // 2) - (bar_height_ui // 2)
                     current_bar_width = int(bar_max_width_ui * cd_percent)
@@ -391,28 +426,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                     y_p1_ui += line_height_default + gap
 
                 # Indicateur Régénération Armure (+A)
-                if player_snake.is_armor_regen_pending:
-                    regen_armor_color = config.COLOR_ARMOR_HIGHLIGHT
-                    regen_armor_text = "Regen (+A)"
-                    text_rect_regen = utils.draw_text_with_shadow(target_surface, regen_armor_text, font_default,
-                                                                  regen_armor_color, config.COLOR_UI_SHADOW,
-                                                                  (x_p1_ui, y_p1_ui), "topleft")
-                    # Barre de progression jusqu'au prochain tick
-                    time_since_last_tick = current_time - player_snake.last_armor_regen_tick_time
-                    regen_percent = max(0.0,
-                                        min(1.0, float(time_since_last_tick) / max(1, config.ARMOR_REGEN_INTERVAL)))
-                    bar_x = text_rect_regen.right + 8
-                    bar_y = text_rect_regen.top + (line_height_default // 2) - (bar_height_ui // 2)
-                    current_bar_width = int(bar_max_width_ui * regen_percent)
-                    try:
-                        pygame.draw.rect(target_surface, config.COLOR_TIMER_BAR_BG,
-                                         (bar_x, bar_y, bar_max_width_ui, bar_height_ui), border_radius=bar_radius)
-                        if current_bar_width > 0: pygame.draw.rect(target_surface, regen_armor_color,
-                                                                   (bar_x, bar_y, current_bar_width, bar_height_ui),
-                                                                   border_radius=bar_radius)
-                    except Exception:
-                        pass
-                    y_p1_ui += line_height_default + gap
+
             # --- FIN AFFICHAGE COMPÉTENCES ---
 
             # Icônes Powerups 
@@ -444,6 +458,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     # --- ** Panneau UI Top-Right (Kill Feed, HS, Effects) ** ---
     
     try:
+        if current_game_mode == config.MODE_CLASSIC:
+            raise StopIteration
         top_right_panel_width = 280
         top_right_panel_height = config.SCREEN_HEIGHT * 0.45
         top_right_panel_x = config.SCREEN_WIDTH - top_right_panel_width - ui_margin
@@ -577,6 +593,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                     current_y_top_right += font_small.get_height() + 5
                 elif current_y_top_right + font_small.get_height() >= top_right_panel_rect.bottom - ui_padding:
                     break
+    except StopIteration:
+        pass
     except Exception as e:
         print(f"Erreur dessin UI Top-Right: {e}")
         traceback.print_exc()
@@ -648,8 +666,24 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                     regen_color_p2 = config.COLOR_ARMOR_HIGHLIGHT
                     if player2_snake.armor >= config.ARMOR_REGEN_MAX_STACKS:
                         regen_color_p2 = config.COLOR_SKILL_COOLDOWN
-                    utils.draw_text_with_shadow(target_surface, "+A: Regen Armure", font_default, regen_color_p2,
+                    text_rect_regen_p2 = utils.draw_text_with_shadow(target_surface, "+A: Regen Armure", font_default, regen_color_p2,
                                                 config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
+                    if text_rect_regen_p2:
+                        regen_percent = 1.0 if player2_snake.armor >= config.ARMOR_REGEN_MAX_STACKS else 0.0
+                        if player2_snake.armor < config.ARMOR_REGEN_MAX_STACKS:
+                            time_since_last_tick = current_time - player2_snake.last_armor_regen_tick_time
+                            regen_percent = max(0.0, min(1.0, float(time_since_last_tick) / max(1, config.ARMOR_REGEN_INTERVAL)))
+                        bar_x = text_rect_regen_p2.right + 8
+                        bar_y = text_rect_regen_p2.top + (line_height_default // 2) - (bar_height_ui // 2)
+                        current_bar_width = int(bar_max_width_ui * regen_percent)
+                        try:
+                            pygame.draw.rect(target_surface, config.COLOR_TIMER_BAR_BG,
+                                             (bar_x, bar_y, bar_max_width_ui, bar_height_ui), border_radius=bar_radius)
+                            if current_bar_width > 0: pygame.draw.rect(target_surface, regen_color_p2,
+                                                                       (bar_x, bar_y, current_bar_width, bar_height_ui),
+                                                                       border_radius=bar_radius)
+                        except Exception:
+                            pass
 
                 # Shield
                 y_p2_ui -= gap
@@ -660,16 +694,46 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                     shield_status_text_p2 = " CHARGE"
                     shield_color_p2 = config.COLOR_SHIELD_POWERUP
                 shield_text_p2 = f"SHIELD:{' PRET' if player2_snake.shield_ready else ' CD'}{shield_status_text_p2}"
-                utils.draw_text_with_shadow(target_surface, shield_text_p2, font_default, shield_color_p2,
+                text_rect_shield_p2 = utils.draw_text_with_shadow(target_surface, shield_text_p2, font_default, shield_color_p2,
                                             config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
+                if text_rect_shield_p2 and not player2_snake.shield_ready:
+                    elapsed_time = max(0, current_time - player2_snake.last_shield_time)
+                    cooldown_duration = max(1, config.SKILL_COOLDOWN_SHIELD)
+                    cd_percent = min(1.0, float(elapsed_time) / cooldown_duration)
+                    bar_x = text_rect_shield_p2.right + 8
+                    bar_y = text_rect_shield_p2.top + (line_height_default // 2) - (bar_height_ui // 2)
+                    current_bar_width = int(bar_max_width_ui * cd_percent)
+                    try:
+                        pygame.draw.rect(target_surface, config.COLOR_TIMER_BAR_BG,
+                                         (bar_x, bar_y, bar_max_width_ui, bar_height_ui), border_radius=bar_radius)
+                        if current_bar_width > 0: pygame.draw.rect(target_surface, config.COLOR_SKILL_COOLDOWN,
+                                                                   (bar_x, bar_y, current_bar_width, bar_height_ui),
+                                                                   border_radius=bar_radius)
+                    except Exception:
+                        pass
 
                 # Dash
                 y_p2_ui -= gap
                 y_p2_ui -= line_height_default
                 dash_color_p2 = config.COLOR_SKILL_READY if player2_snake.dash_ready else config.COLOR_SKILL_COOLDOWN
                 dash_text_p2 = f"DASH: {'PRET' if player2_snake.dash_ready else 'CD'}"
-                utils.draw_text_with_shadow(target_surface, dash_text_p2, font_default, dash_color_p2,
+                text_rect_dash_p2 = utils.draw_text_with_shadow(target_surface, dash_text_p2, font_default, dash_color_p2,
                                             config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
+                if text_rect_dash_p2 and not player2_snake.dash_ready:
+                    elapsed_time = max(0, current_time - player2_snake.last_dash_time)
+                    cooldown_duration = max(1, config.SKILL_COOLDOWN_DASH)
+                    cd_percent = min(1.0, float(elapsed_time) / cooldown_duration)
+                    bar_x = text_rect_dash_p2.right + 8
+                    bar_y = text_rect_dash_p2.top + (line_height_default // 2) - (bar_height_ui // 2)
+                    current_bar_width = int(bar_max_width_ui * cd_percent)
+                    try:
+                        pygame.draw.rect(target_surface, config.COLOR_TIMER_BAR_BG,
+                                         (bar_x, bar_y, bar_max_width_ui, bar_height_ui), border_radius=bar_radius)
+                        if current_bar_width > 0: pygame.draw.rect(target_surface, config.COLOR_SKILL_COOLDOWN,
+                                                                   (bar_x, bar_y, current_bar_width, bar_height_ui),
+                                                                   border_radius=bar_radius)
+                    except Exception:
+                        pass
             is_timer_condition_p2 = (PvpCondition is not None and pvp_condition_type == PvpCondition.TIMER)
             kill_target_display_p2 = str(pvp_target_kills) if not is_timer_condition_p2 else '-'
             y_p2_ui -= gap
@@ -832,6 +896,8 @@ def reset_game(game_state):
     # --- FIN AJOUT ---
     utils.clear_particles()
     utils.kill_feed.clear()
+    game_state.pop('classic_arena_bounds', None)
+    game_state.pop('spawn_bounds', None)
     current_game_mode = game_state.get('current_game_mode')
     if current_game_mode is None:
         print("current_game_mode manquant, utilisation du mode Solo par défaut pour le redémarrage.")
@@ -882,6 +948,41 @@ def reset_game(game_state):
     except Exception as e:
         print(f"Erreur calcul positions départ map '{selected_map_key}': {e}")
         # Garde les positions par défaut si erreur
+    # --- Arène Classique (taille réglable via options) ---
+    if current_game_mode == config.MODE_CLASSIC:
+        preset = str(getattr(config, "CLASSIC_ARENA", "full") or "full").strip().lower()
+        scale_map = {"full": 1.0, "large": 0.85, "medium": 0.7, "small": 0.55}
+        scale = float(scale_map.get(preset, 1.0))
+
+        if scale < 0.999:
+            gw, gh = int(config.GRID_WIDTH), int(config.GRID_HEIGHT)
+            arena_w = max(10, min(gw, int(round(gw * scale))))
+            arena_h = max(10, min(gh, int(round(gh * scale))))
+
+            min_x = (gw - arena_w) // 2
+            min_y = (gh - arena_h) // 2
+            max_x = min_x + arena_w - 1
+            max_y = min_y + arena_h - 1
+
+            walls_set = set(current_map_walls_list)
+            for x in range(min_x, max_x + 1):
+                walls_set.add((x, min_y))
+                walls_set.add((x, max_y))
+            for y in range(min_y, max_y + 1):
+                walls_set.add((min_x, y))
+                walls_set.add((max_x, y))
+
+            current_map_walls_list = list(walls_set)
+            game_state['current_map_walls'] = current_map_walls_list
+
+            game_state['classic_arena_bounds'] = (min_x, min_y, max_x, max_y)
+            if max_x - min_x >= 2 and max_y - min_y >= 2:
+                spawn_bounds = (min_x + 1, min_y + 1, max_x - 1, max_y - 1)
+                game_state['spawn_bounds'] = spawn_bounds
+
+                sx0, sy0, sx1, sy1 = spawn_bounds
+                p1_start = (sx0 + max(1, (sx1 - sx0 + 1) // 4), sy0 + (sy1 - sy0 + 1) // 2)
+
     game_state['player_snake'] = None
     game_state['player2_snake'] = None
     game_state['enemy_snake'] = None
@@ -987,7 +1088,11 @@ def reset_game(game_state):
     )
     initial_food_count = 1 if current_game_mode == config.MODE_CLASSIC else max(1, config.MAX_FOOD_ITEMS // 3)
     for _ in range(initial_food_count):
-        pos = utils.get_random_empty_position(initial_occupied)
+        spawn_bounds = game_state.get('spawn_bounds')
+        if current_game_mode == config.MODE_CLASSIC and spawn_bounds:
+            pos = utils.get_random_empty_position_in_bounds(initial_occupied, spawn_bounds)
+        else:
+            pos = utils.get_random_empty_position(initial_occupied)
         if pos:
             try:
                 # --- MODIFICATION APPEL ---
@@ -1398,7 +1503,12 @@ def run_options(events, dt, screen, game_state):
     selection_index = game_state.get('options_selection_index', 0)
 
     # Initialise les valeurs "pending" à l'entrée
-    if 'pending_show_grid' not in game_state or 'pending_grid_size' not in game_state:
+    if (
+        'pending_show_grid' not in game_state
+        or 'pending_grid_size' not in game_state
+        or 'pending_snake_style' not in game_state
+        or 'pending_classic_arena' not in game_state
+    ):
         try:
             opts = utils.load_game_options(base_path)
         except Exception:
@@ -1407,13 +1517,20 @@ def run_options(events, dt, screen, game_state):
         pending_grid_size = opts.get("grid_size", None)
         if not isinstance(pending_grid_size, int) or pending_grid_size <= 0:
             pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
+        pending_snake_style = str(opts.get("snake_style", getattr(config, "SNAKE_STYLE", "sprites")))
+        pending_classic_arena = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
         game_state['pending_show_grid'] = pending_show_grid
         game_state['pending_grid_size'] = pending_grid_size
+        game_state['pending_snake_style'] = pending_snake_style
+        game_state['pending_classic_arena'] = pending_classic_arena
 
     pending_show_grid = bool(game_state.get('pending_show_grid', getattr(config, "SHOW_GRID", True)))
     pending_grid_size = game_state.get('pending_grid_size', getattr(config, "GRID_SIZE", 20))
     if not isinstance(pending_grid_size, int) or pending_grid_size <= 0:
         pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
+
+    pending_snake_style = str(game_state.get('pending_snake_style', getattr(config, "SNAKE_STYLE", "sprites")))
+    pending_classic_arena = str(game_state.get('pending_classic_arena', getattr(config, "CLASSIC_ARENA", "full")))
 
     grid_sizes = [12, 16, 20, 24, 30, 36, 48]
     if pending_grid_size not in grid_sizes:
@@ -1430,9 +1547,34 @@ def run_options(events, dt, screen, game_state):
 
     preview_w, preview_h = preview_dims(pending_grid_size)
 
+    snake_styles = [
+        ("sprites", "Sprites"),
+        ("blocks", "Blocs"),
+        ("rounded", "Arrondi"),
+        ("neon", "Neon"),
+        ("wire", "Fil"),
+    ]
+    snake_style_keys = [k for k, _ in snake_styles]
+    if pending_snake_style not in snake_style_keys:
+        pending_snake_style = snake_style_keys[0]
+    snake_style_display = dict(snake_styles).get(pending_snake_style, pending_snake_style)
+
+    classic_arenas = [
+        ("full", "Pleine"),
+        ("large", "Grande"),
+        ("medium", "Moyenne"),
+        ("small", "Petite"),
+    ]
+    classic_arena_keys = [k for k, _ in classic_arenas]
+    if pending_classic_arena not in classic_arena_keys:
+        pending_classic_arena = classic_arena_keys[0]
+    classic_arena_display = dict(classic_arenas).get(pending_classic_arena, pending_classic_arena)
+
     menu_items = [
         ("Quadrillage", "Oui" if pending_show_grid else "Non"),
         ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
+        ("Style serpent", snake_style_display),
+        ("Arene classique", classic_arena_display),
         ("Appliquer", ""),
         ("Retour", ""),
     ]
@@ -1446,16 +1588,36 @@ def run_options(events, dt, screen, game_state):
             idx = 0
         pending_grid_size = grid_sizes[(idx + delta) % len(grid_sizes)]
 
+    def cycle_snake_style(delta):
+        nonlocal pending_snake_style
+        try:
+            idx = snake_style_keys.index(pending_snake_style)
+        except ValueError:
+            idx = 0
+        pending_snake_style = snake_style_keys[(idx + delta) % len(snake_style_keys)]
+
+    def cycle_classic_arena(delta):
+        nonlocal pending_classic_arena
+        try:
+            idx = classic_arena_keys.index(pending_classic_arena)
+        except ValueError:
+            idx = 0
+        pending_classic_arena = classic_arena_keys[(idx + delta) % len(classic_arena_keys)]
+
     def apply_options():
         nonlocal pending_show_grid, pending_grid_size, screen
         # Persist
         opts = utils.load_game_options(base_path)
         opts["show_grid"] = bool(pending_show_grid)
         opts["grid_size"] = int(pending_grid_size)
+        opts["snake_style"] = str(pending_snake_style)
+        opts["classic_arena"] = str(pending_classic_arena)
         utils.save_game_options(opts, base_path)
 
         # Apply to config + display
         config.SHOW_GRID = bool(pending_show_grid)
+        config.SNAKE_STYLE = str(pending_snake_style)
+        config.CLASSIC_ARENA = str(pending_classic_arena)
         try:
             info = pygame.display.Info()
             new_w = (info.current_w // int(pending_grid_size)) * int(pending_grid_size)
@@ -1516,6 +1678,12 @@ def run_options(events, dt, screen, game_state):
                         elif selection_index == 1:
                             cycle_grid_size(-1)
                             utils.play_sound("eat")
+                        elif selection_index == 2:
+                            cycle_snake_style(-1)
+                            utils.play_sound("eat")
+                        elif selection_index == 3:
+                            cycle_classic_arena(-1)
+                            utils.play_sound("eat")
                         last_axis_move_time = current_time
                     elif value > threshold:
                         if selection_index == 0:
@@ -1523,6 +1691,12 @@ def run_options(events, dt, screen, game_state):
                             utils.play_sound("eat")
                         elif selection_index == 1:
                             cycle_grid_size(1)
+                            utils.play_sound("eat")
+                        elif selection_index == 2:
+                            cycle_snake_style(1)
+                            utils.play_sound("eat")
+                        elif selection_index == 3:
+                            cycle_classic_arena(1)
                             utils.play_sound("eat")
                         last_axis_move_time = current_time
 
@@ -1544,6 +1718,12 @@ def run_options(events, dt, screen, game_state):
                     elif selection_index == 1:
                         cycle_grid_size(1 if hat_x > 0 else -1)
                         utils.play_sound("eat")
+                    elif selection_index == 2:
+                        cycle_snake_style(1 if hat_x > 0 else -1)
+                        utils.play_sound("eat")
+                    elif selection_index == 3:
+                        cycle_classic_arena(1 if hat_x > 0 else -1)
+                        utils.play_sound("eat")
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
@@ -1555,12 +1735,21 @@ def run_options(events, dt, screen, game_state):
                     if selection_index == 0:
                         pending_show_grid = not pending_show_grid
                         utils.play_sound("eat")
-                    elif selection_index == 2:  # Appliquer
+                    elif selection_index == 1:
+                        cycle_grid_size(1)
+                        utils.play_sound("eat")
+                    elif selection_index == 2:
+                        cycle_snake_style(1)
+                        utils.play_sound("eat")
+                    elif selection_index == 3:
+                        cycle_classic_arena(1)
+                        utils.play_sound("eat")
+                    elif selection_index == 4:  # Appliquer
                         utils.play_sound("powerup_pickup")
                         apply_options()
                         next_state = config.MENU
                         break
-                    elif selection_index == 3:  # Retour
+                    elif selection_index == 5:  # Retour
                         utils.play_sound("combo_break")
                         next_state = config.MENU
                         break
@@ -1583,6 +1772,12 @@ def run_options(events, dt, screen, game_state):
                 elif selection_index == 1:
                     cycle_grid_size(-1)
                     utils.play_sound("eat")
+                elif selection_index == 2:
+                    cycle_snake_style(-1)
+                    utils.play_sound("eat")
+                elif selection_index == 3:
+                    cycle_classic_arena(-1)
+                    utils.play_sound("eat")
             elif key == pygame.K_RIGHT:
                 if selection_index == 0:
                     pending_show_grid = not pending_show_grid
@@ -1590,16 +1785,31 @@ def run_options(events, dt, screen, game_state):
                 elif selection_index == 1:
                     cycle_grid_size(1)
                     utils.play_sound("eat")
+                elif selection_index == 2:
+                    cycle_snake_style(1)
+                    utils.play_sound("eat")
+                elif selection_index == 3:
+                    cycle_classic_arena(1)
+                    utils.play_sound("eat")
             elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 if selection_index == 0:
                     pending_show_grid = not pending_show_grid
                     utils.play_sound("eat")
+                elif selection_index == 1:
+                    cycle_grid_size(1)
+                    utils.play_sound("eat")
                 elif selection_index == 2:
+                    cycle_snake_style(1)
+                    utils.play_sound("eat")
+                elif selection_index == 3:
+                    cycle_classic_arena(1)
+                    utils.play_sound("eat")
+                elif selection_index == 4:
                     utils.play_sound("powerup_pickup")
                     apply_options()
                     next_state = config.MENU
                     break
-                elif selection_index == 3:
+                elif selection_index == 5:
                     utils.play_sound("combo_break")
                     next_state = config.MENU
                     break
@@ -1607,6 +1817,8 @@ def run_options(events, dt, screen, game_state):
     # Update pending values back into state
     game_state['pending_show_grid'] = pending_show_grid
     game_state['pending_grid_size'] = pending_grid_size
+    game_state['pending_snake_style'] = pending_snake_style
+    game_state['pending_classic_arena'] = pending_classic_arena
     game_state['options_selection_index'] = selection_index
     game_state['last_axis_move_time_options'] = last_axis_move_time
 
@@ -1638,6 +1850,8 @@ def run_options(events, dt, screen, game_state):
     if next_state != config.OPTIONS:
         game_state.pop('pending_show_grid', None)
         game_state.pop('pending_grid_size', None)
+        game_state.pop('pending_snake_style', None)
+        game_state.pop('pending_classic_arena', None)
 
     game_state['current_state'] = next_state
     return next_state
@@ -4254,7 +4468,11 @@ def run_game(events, dt, screen, game_state):
 
             max_food_items = 1 if current_game_mode == config.MODE_CLASSIC else config.MAX_FOOD_ITEMS
             if len(foods) < max_food_items and current_time - last_food_spawn_time > food_interval:
-                spawn_pos = utils.get_random_empty_position(current_occupied)
+                spawn_bounds = game_state.get('spawn_bounds')
+                if current_game_mode == config.MODE_CLASSIC and spawn_bounds:
+                    spawn_pos = utils.get_random_empty_position_in_bounds(current_occupied, spawn_bounds)
+                else:
+                    spawn_pos = utils.get_random_empty_position(current_occupied)
                 if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
 
             if current_game_mode != config.MODE_CLASSIC and current_time - last_mine_spawn_time > mine_interval:

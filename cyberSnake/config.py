@@ -12,6 +12,12 @@ GRID_WIDTH = SCREEN_WIDTH // GRID_SIZE
 GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
 SHOW_GRID = True
 
+# --- Options (chargées depuis game_options.json) ---
+# Style de rendu du serpent: "sprites", "blocks", "rounded", "neon", "wire"
+SNAKE_STYLE = "sprites"
+# Taille de l'arène en mode Classique: "full", "large", "medium", "small"
+CLASSIC_ARENA = "full"
+
 
 # --- Constantes Vitesse & Difficulté ---
 SNAKE_MOVE_INTERVAL_BASE = 140
