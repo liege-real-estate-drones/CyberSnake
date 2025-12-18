@@ -104,6 +104,30 @@ def main():
         logging.warning("Aucun joystick trouvé pour Joueur 2.")
     # --- Fin Initialisation Joysticks ---
 
+    # --- Calcul du Chemin de Base pour Assets ---
+    base_path_assets = ""
+    try:
+        if getattr(sys, "frozen", False) and hasattr(sys, '_MEIPASS'):
+            base_path_assets = sys._MEIPASS
+            logging.info(f"Mode Bundled détecté. Base path assets: {base_path_assets}")
+        else:
+            base_path_assets = os.path.dirname(os.path.abspath(__file__))
+            logging.info(f"Mode Script détecté. Base path assets: {base_path_assets}")
+    except Exception as e:
+        logging.warning(f"Attention: Impossible de déterminer base_path assets: {e}", exc_info=True)
+        base_path_assets = os.getcwd()
+    # --- Fin Calcul Chemin de Base ---
+
+    # --- Chargement Options (vidéo) ---
+    grid_size_override = None
+    try:
+        opts = utils.load_game_options(base_path_assets)
+        config.SHOW_GRID = bool(opts.get("show_grid", getattr(config, "SHOW_GRID", True)))
+        grid_size_override = opts.get("grid_size", None)
+    except Exception as e:
+        logging.warning(f"Attention: Impossible de charger {config.GAME_OPTIONS_FILE}: {e}", exc_info=True)
+    # --- Fin Chargement Options ---
+
     # --- Détection Taille Écran & Calcul Grille Dynamique ---
     detected_width, detected_height = 800, 600
     try:
@@ -112,11 +136,14 @@ def main():
         detected_height = display_info.current_h
         logging.info(f"Taille écran détectée: {detected_width}x{detected_height}")
 
-        TARGET_GRID_W = 40
-        TARGET_GRID_H = 30
-        grid_size_w = detected_width // TARGET_GRID_W
-        grid_size_h = detected_height // TARGET_GRID_H
-        calculated_grid_size = max(1, min(grid_size_w, grid_size_h))
+        if isinstance(grid_size_override, int) and grid_size_override > 0:
+            calculated_grid_size = int(grid_size_override)
+        else:
+            TARGET_GRID_W = 40
+            TARGET_GRID_H = 30
+            grid_size_w = detected_width // TARGET_GRID_W
+            grid_size_h = detected_height // TARGET_GRID_H
+            calculated_grid_size = max(1, min(grid_size_w, grid_size_h))
         adjusted_width = (detected_width // calculated_grid_size) * calculated_grid_size
         adjusted_height = (detected_height // calculated_grid_size) * calculated_grid_size
 
@@ -137,20 +164,6 @@ def main():
         config.GRID_HEIGHT = config.SCREEN_HEIGHT // config.GRID_SIZE
         calculated_grid_size = config.GRID_SIZE
     # --- Fin Détection Taille Écran ---
-
-    # --- Calcul du Chemin de Base pour Assets ---
-    base_path_assets = ""
-    try:
-        if getattr(sys, "frozen", False) and hasattr(sys, '_MEIPASS'):
-            base_path_assets = sys._MEIPASS
-            logging.info(f"Mode Bundled détecté. Base path assets: {base_path_assets}")
-        else:
-            base_path_assets = os.path.dirname(os.path.abspath(__file__))
-            logging.info(f"Mode Script détecté. Base path assets: {base_path_assets}")
-    except Exception as e:
-        logging.warning(f"Attention: Impossible de déterminer base_path assets: {e}", exc_info=True)
-        base_path_assets = os.getcwd()
-    # --- Fin Calcul Chemin de Base ---
 
     # --- Configuration Fenêtre & Horloge ---
     try:
@@ -250,6 +263,7 @@ def main():
     # --- Mappage des États aux Fonctions ---
     state_functions = {
         config.MENU: game_states.run_menu,
+        config.OPTIONS: game_states.run_options,
         config.NAME_ENTRY_SOLO: game_states.run_name_entry_solo,
         config.MAP_SELECTION: game_states.run_map_selection,
         config.PVP_SETUP: game_states.run_pvp_setup,
@@ -299,6 +313,9 @@ def main():
             # MODIFIÉ: Log l'erreur d'état inconnu
             logging.error(f"État de jeu inconnu ou fonction non trouvée pour clé: {current_state_key}. Retour au menu.")
             game_state['current_state'] = config.MENU
+
+        # Permet à un état (ex: Options) de recréer la surface écran
+        screen = game_state.get('screen', screen)
 
         if running:
             try:

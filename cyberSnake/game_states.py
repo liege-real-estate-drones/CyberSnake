@@ -115,12 +115,13 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     try:
         target_surface.fill(config.COLOR_BACKGROUND)
     except Exception as e: print(f"Erreur fill screen: {e}"); return
-    for x in range(0, config.SCREEN_WIDTH, config.GRID_SIZE):
-        try: pygame.draw.line(target_surface, config.COLOR_GRID, (x, 0), (x, config.SCREEN_HEIGHT))
-        except Exception: pass
-    for y in range(0, config.SCREEN_HEIGHT, config.GRID_SIZE):
-        try: pygame.draw.line(target_surface, config.COLOR_GRID, (0, y), (config.SCREEN_WIDTH, y))
-        except Exception: pass
+    if getattr(config, "SHOW_GRID", True):
+        for x in range(0, config.SCREEN_WIDTH, config.GRID_SIZE):
+            try: pygame.draw.line(target_surface, config.COLOR_GRID, (x, 0), (x, config.SCREEN_HEIGHT))
+            except Exception: pass
+        for y in range(0, config.SCREEN_HEIGHT, config.GRID_SIZE):
+            try: pygame.draw.line(target_surface, config.COLOR_GRID, (0, y), (config.SCREEN_WIDTH, y))
+            except Exception: pass
 
     # --- Dessin Murs ---
     for wall_pos in current_map_walls:
@@ -209,7 +210,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             if player_snake.alive and player_snake.persistent_score_multiplier > 1.001: p1_ui_elements_height += line_height_small + gap
             if player_snake.alive and player_snake.combo_counter > 1: p1_ui_elements_height += line_height_default + gap
             # --- AJOUT HAUTEUR POUR COMPÉTENCES & REGEN ARMURE ---
-            if player_snake.alive and player_snake.is_player:  # Seuls les joueurs ont ces compétences/infos
+            if player_snake.alive and player_snake.is_player and current_game_mode != config.MODE_CLASSIC:  # Seuls les joueurs ont ces compétences/infos
                 p1_ui_elements_height += line_height_default + gap  # Pour Dash
                 p1_ui_elements_height += line_height_default + gap  # Pour Shield
                 if player_snake.is_armor_regen_pending:
@@ -296,7 +297,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                 y_p1_ui += line_height_default + gap
 
                 # --- AFFICHAGE COMPÉTENCES & REGEN ARMURE ---
-            if player_snake.alive and player_snake.is_player:
+            if player_snake.alive and player_snake.is_player and current_game_mode != config.MODE_CLASSIC:
                 # Compétence Dash
                 dash_color = config.COLOR_SKILL_READY if player_snake.dash_ready else config.COLOR_SKILL_COOLDOWN
                 dash_text = f"DASH: {'PRET' if player_snake.dash_ready else 'CD'}"
@@ -474,8 +475,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                 except Exception as e:
                     print(f"Erreur dessin message Kill Feed '{message}': {e}"); current_y_top_right += kf_line_height
             current_y_top_right += 5
-        mode_key_map = {config.MODE_SOLO: "solo", config.MODE_VS_AI: "vs_ai", config.MODE_PVP: "pvp",
-                        config.MODE_SURVIVAL: "survie"}
+        mode_key_map = {config.MODE_SOLO: "solo", config.MODE_CLASSIC: "classic", config.MODE_VS_AI: "vs_ai",
+                        config.MODE_PVP: "pvp", config.MODE_SURVIVAL: "survie"}
         mode_key = mode_key_map.get(current_game_mode, "solo")
         mode_display_name = getattr(current_game_mode, 'name', '???') if current_game_mode else "???"
         top_score_display = f"Meilleur ({mode_display_name}): ---"
@@ -596,6 +597,12 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                 p2_ui_elements_height += line_height_small + gap
             if player2_snake.alive and player2_snake.persistent_score_multiplier > 1.001: p2_ui_elements_height += line_height_small + gap
             if player2_snake.alive and player2_snake.combo_counter > 1: p2_ui_elements_height += line_height_default + gap
+            # Affichage compétences J2 (PvP) + regen armure
+            if player2_snake.alive and player2_snake.is_player:
+                p2_ui_elements_height += line_height_default + gap  # Dash
+                p2_ui_elements_height += line_height_default + gap  # Shield
+                if player2_snake.is_armor_regen_pending:
+                    p2_ui_elements_height += line_height_default + gap  # Regen armor (+A)
             # --- Suppression calcul hauteur compétence J2 ---
             # if player2_snake.alive and player2_snake.skill_type: p2_ui_elements_height += line_height_default + gap
             p2_panel_width = 280
@@ -630,6 +637,38 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                 y_p2_ui -= line_height_small
                 regen_text_p2 = f"Regen: +{player2_snake.ammo_regen_rate} / {player2_snake.ammo_regen_interval / 1000:.0f}s"
                 utils.draw_text_with_shadow(target_surface, regen_text_p2, font_small, config.COLOR_AMMO_TEXT,
+                                            config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
+
+            # --- Compétences J2 + Regen Armure (+A) ---
+            if player2_snake.alive and player2_snake.is_player:
+                # Regen Armure (ligne sous SHIELD/DASH)
+                if player2_snake.is_armor_regen_pending:
+                    y_p2_ui -= gap
+                    y_p2_ui -= line_height_default
+                    regen_color_p2 = config.COLOR_ARMOR_HIGHLIGHT
+                    if player2_snake.armor >= config.ARMOR_REGEN_MAX_STACKS:
+                        regen_color_p2 = config.COLOR_SKILL_COOLDOWN
+                    utils.draw_text_with_shadow(target_surface, "+A: Regen Armure", font_default, regen_color_p2,
+                                                config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
+
+                # Shield
+                y_p2_ui -= gap
+                y_p2_ui -= line_height_default
+                shield_color_p2 = config.COLOR_SKILL_READY if player2_snake.shield_ready else config.COLOR_SKILL_COOLDOWN
+                shield_status_text_p2 = ""
+                if player2_snake.shield_charge_active:
+                    shield_status_text_p2 = " CHARGE"
+                    shield_color_p2 = config.COLOR_SHIELD_POWERUP
+                shield_text_p2 = f"SHIELD:{' PRET' if player2_snake.shield_ready else ' CD'}{shield_status_text_p2}"
+                utils.draw_text_with_shadow(target_surface, shield_text_p2, font_default, shield_color_p2,
+                                            config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
+
+                # Dash
+                y_p2_ui -= gap
+                y_p2_ui -= line_height_default
+                dash_color_p2 = config.COLOR_SKILL_READY if player2_snake.dash_ready else config.COLOR_SKILL_COOLDOWN
+                dash_text_p2 = f"DASH: {'PRET' if player2_snake.dash_ready else 'CD'}"
+                utils.draw_text_with_shadow(target_surface, dash_text_p2, font_default, dash_color_p2,
                                             config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
             is_timer_condition_p2 = (PvpCondition is not None and pvp_condition_type == PvpCondition.TIMER)
             kill_target_display_p2 = str(pvp_target_kills) if not is_timer_condition_p2 else '-'
@@ -861,7 +900,8 @@ def reset_game(game_state):
             current_game_mode=current_game_mode, walls=current_map_walls_list,
             start_armor=start_armor_p1, start_ammo=start_ammo_p1
         )
-        game_state['player_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
+        if current_game_mode != config.MODE_CLASSIC:
+            game_state['player_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
     except Exception as e:
          print(f"ERREUR CRITIQUE création player_snake: {e}"); traceback.print_exc()
     if current_game_mode == config.MODE_VS_AI:
@@ -945,7 +985,7 @@ def reset_game(game_state):
         current_map_walls_list,
         game_state.get('nests', []), game_state.get('moving_mines', []), game_state.get('active_enemies', [])
     )
-    initial_food_count = max(1, config.MAX_FOOD_ITEMS // 3)
+    initial_food_count = 1 if current_game_mode == config.MODE_CLASSIC else max(1, config.MAX_FOOD_ITEMS // 3)
     for _ in range(initial_food_count):
         pos = utils.get_random_empty_position(initial_occupied)
         if pos:
@@ -957,7 +997,7 @@ def reset_game(game_state):
                 initial_occupied.add(pos)
             except Exception as e:
                 print(f"Erreur création nourriture initiale à {pos}: {e}"); traceback.print_exc()
-    if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
+    if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
         player_snake_obj = game_state.get('player_snake')
         player_score = player_snake_obj.score if player_snake_obj else 0
         new_objective = utils.select_new_objective(current_game_mode, player_score)
@@ -1005,6 +1045,9 @@ def run_menu(events, dt, screen, game_state):
     solo_scores = utils.high_scores.get('solo')
     top_solo_hs = f"Meilleur: {solo_scores[0]['name']} {solo_scores[0]['score']}" if solo_scores else "Meilleur: ---"
 
+    classic_scores = utils.high_scores.get('classic')
+    top_classic_hs = f"Meilleur: {classic_scores[0]['name']} {classic_scores[0]['score']}" if classic_scores else "Meilleur: ---"
+
     # Affichage d'un message d'erreur PvP si présent
     pvp_error_msg = game_state.pop('pvp_setup_error', None) # Utilise pop pour l'afficher une seule fois
     vsai_scores = utils.high_scores.get('vs_ai')
@@ -1017,9 +1060,11 @@ def run_menu(events, dt, screen, game_state):
     # Options du menu
     menu_options = [
         (config.MODE_SOLO, "Joueur Seul", top_solo_hs),
+        (config.MODE_CLASSIC, "Snake Classique", top_classic_hs),
         (config.MODE_VS_AI, "Joueur vs IA", top_vsai_hs),
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),
         (config.MODE_SURVIVAL, "Mode Survie", top_surv_hs),
+        (config.OPTIONS, "Options", ""),
         (config.HALL_OF_FAME, "Hall of Fame", ""),
         (config.UPDATE, "Mise à jour", "")
     ]
@@ -1098,6 +1143,8 @@ def run_menu(events, dt, screen, game_state):
                                 targeted_next_state = config.HALL_OF_FAME
                             elif selected_option == config.UPDATE:
                                 targeted_next_state = config.UPDATE
+                            elif selected_option == config.OPTIONS:
+                                targeted_next_state = config.OPTIONS
                             elif isinstance(selected_option, config.GameMode):
                                 game_state['current_game_mode'] = selected_option
                                 if selected_option == config.MODE_PVP:
@@ -1180,6 +1227,8 @@ def run_menu(events, dt, screen, game_state):
                             next_state = config.HALL_OF_FAME
                         elif selected_option == config.UPDATE:
                             next_state = config.UPDATE
+                        elif selected_option == config.OPTIONS:
+                            next_state = config.OPTIONS
                         elif isinstance(selected_option, config.GameMode):
                             game_state['current_game_mode'] = selected_option
                             if selected_option == config.MODE_PVP:
@@ -1233,6 +1282,8 @@ def run_menu(events, dt, screen, game_state):
                         next_state = config.HALL_OF_FAME
                     elif selected_option == config.UPDATE:
                         next_state = config.UPDATE
+                    elif selected_option == config.OPTIONS:
+                        next_state = config.OPTIONS
                     elif isinstance(selected_option, config.GameMode):
                         game_state['current_game_mode'] = selected_option
                         if selected_option == config.MODE_PVP:
@@ -1328,6 +1379,268 @@ def run_menu(events, dt, screen, game_state):
     logging.debug(f"Exiting run_menu, next_state: {next_state}")
     return next_state # Reste dans le menu si aucune action n'a changé l'état
 # --- END: REVISED run_menu function ---
+
+
+def run_options(events, dt, screen, game_state):
+    """Menu Options: taille de grille + quadrillage."""
+    base_path = game_state.get('base_path', "")
+    font_small = game_state.get('font_small')
+    font_default = game_state.get('font_default')
+    font_medium = game_state.get('font_medium')
+
+    if not all([font_small, font_default, font_medium]):
+        print("Erreur: Polices manquantes pour run_options")
+        return config.MENU
+
+    current_time = pygame.time.get_ticks()
+    axis_repeat_delay = 200
+    last_axis_move_time = game_state.get('last_axis_move_time_options', 0)
+    selection_index = game_state.get('options_selection_index', 0)
+
+    # Initialise les valeurs "pending" à l'entrée
+    if 'pending_show_grid' not in game_state or 'pending_grid_size' not in game_state:
+        try:
+            opts = utils.load_game_options(base_path)
+        except Exception:
+            opts = {}
+        pending_show_grid = bool(opts.get("show_grid", getattr(config, "SHOW_GRID", True)))
+        pending_grid_size = opts.get("grid_size", None)
+        if not isinstance(pending_grid_size, int) or pending_grid_size <= 0:
+            pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
+        game_state['pending_show_grid'] = pending_show_grid
+        game_state['pending_grid_size'] = pending_grid_size
+
+    pending_show_grid = bool(game_state.get('pending_show_grid', getattr(config, "SHOW_GRID", True)))
+    pending_grid_size = game_state.get('pending_grid_size', getattr(config, "GRID_SIZE", 20))
+    if not isinstance(pending_grid_size, int) or pending_grid_size <= 0:
+        pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
+
+    grid_sizes = [12, 16, 20, 24, 30, 36, 48]
+    if pending_grid_size not in grid_sizes:
+        grid_sizes = sorted(set(grid_sizes + [pending_grid_size]))
+
+    def preview_dims(grid_size):
+        try:
+            info = pygame.display.Info()
+            w = (info.current_w // grid_size) * grid_size
+            h = (info.current_h // grid_size) * grid_size
+            return (max(1, w // grid_size), max(1, h // grid_size))
+        except Exception:
+            return (getattr(config, "GRID_WIDTH", 1), getattr(config, "GRID_HEIGHT", 1))
+
+    preview_w, preview_h = preview_dims(pending_grid_size)
+
+    menu_items = [
+        ("Quadrillage", "Oui" if pending_show_grid else "Non"),
+        ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
+        ("Appliquer", ""),
+        ("Retour", ""),
+    ]
+    selection_index = max(0, min(selection_index, len(menu_items) - 1))
+
+    def cycle_grid_size(delta):
+        nonlocal pending_grid_size
+        try:
+            idx = grid_sizes.index(pending_grid_size)
+        except ValueError:
+            idx = 0
+        pending_grid_size = grid_sizes[(idx + delta) % len(grid_sizes)]
+
+    def apply_options():
+        nonlocal pending_show_grid, pending_grid_size, screen
+        # Persist
+        opts = utils.load_game_options(base_path)
+        opts["show_grid"] = bool(pending_show_grid)
+        opts["grid_size"] = int(pending_grid_size)
+        utils.save_game_options(opts, base_path)
+
+        # Apply to config + display
+        config.SHOW_GRID = bool(pending_show_grid)
+        try:
+            info = pygame.display.Info()
+            new_w = (info.current_w // int(pending_grid_size)) * int(pending_grid_size)
+            new_h = (info.current_h // int(pending_grid_size)) * int(pending_grid_size)
+            config.GRID_SIZE = int(pending_grid_size)
+            config.SCREEN_WIDTH = max(int(pending_grid_size), int(new_w))
+            config.SCREEN_HEIGHT = max(int(pending_grid_size), int(new_h))
+            config.GRID_WIDTH = max(1, config.SCREEN_WIDTH // config.GRID_SIZE)
+            config.GRID_HEIGHT = max(1, config.SCREEN_HEIGHT // config.GRID_SIZE)
+        except Exception as e:
+            logging.error(f"Erreur application taille grille: {e}", exc_info=True)
+
+        try:
+            screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+            game_state['screen'] = screen
+        except pygame.error as e:
+            logging.error(f"Erreur set_mode après options: {e}", exc_info=True)
+
+        # Reload assets (rescale images) + menu background
+        try:
+            game_state['menu_background_image'] = utils.load_assets(base_path)
+        except Exception as e:
+            logging.error(f"Erreur reload assets après options: {e}", exc_info=True)
+            game_state['menu_background_image'] = None
+
+        game_state['calculated_grid_size'] = config.GRID_SIZE
+
+        # Force refresh map-selection cached data (dims changed)
+        global _current_random_map_walls, _map_selection_needs_update
+        _current_random_map_walls = None
+        _map_selection_needs_update = True
+
+    next_state = config.OPTIONS
+
+    for event in events:
+        if event.type == pygame.QUIT:
+            return False
+
+        elif event.type == pygame.JOYAXISMOTION:
+            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                axis = event.axis
+                value = event.value
+                threshold = config.JOYSTICK_THRESHOLD
+                if axis == 0:  # Vertical: haut/bas
+                    if value < -threshold:
+                        selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                    elif value > threshold:
+                        selection_index = (selection_index + 1) % len(menu_items)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                elif axis == 1:  # Horizontal: gauche/droite
+                    if value < -threshold:
+                        if selection_index == 0:
+                            pending_show_grid = not pending_show_grid
+                            utils.play_sound("eat")
+                        elif selection_index == 1:
+                            cycle_grid_size(-1)
+                            utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                    elif value > threshold:
+                        if selection_index == 0:
+                            pending_show_grid = not pending_show_grid
+                            utils.play_sound("eat")
+                        elif selection_index == 1:
+                            cycle_grid_size(1)
+                            utils.play_sound("eat")
+                        last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYHATMOTION:
+            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay and event.hat == 0:
+                hat_x, hat_y = event.value
+                if hat_y > 0:
+                    selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_y < 0:
+                    selection_index = (selection_index + 1) % len(menu_items)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_x != 0:
+                    if selection_index == 0:
+                        pending_show_grid = not pending_show_grid
+                        utils.play_sound("eat")
+                    elif selection_index == 1:
+                        cycle_grid_size(1 if hat_x > 0 else -1)
+                        utils.play_sound("eat")
+                    last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYBUTTONDOWN:
+            if event.instance_id == 0:
+                if is_back_button(event.button):
+                    next_state = config.MENU
+                    break
+                if is_confirm_button(event.button):
+                    if selection_index == 0:
+                        pending_show_grid = not pending_show_grid
+                        utils.play_sound("eat")
+                    elif selection_index == 2:  # Appliquer
+                        utils.play_sound("powerup_pickup")
+                        apply_options()
+                        next_state = config.MENU
+                        break
+                    elif selection_index == 3:  # Retour
+                        utils.play_sound("combo_break")
+                        next_state = config.MENU
+                        break
+
+        elif event.type == pygame.KEYDOWN:
+            key = event.key
+            if key == pygame.K_ESCAPE:
+                next_state = config.MENU
+                break
+            if key == pygame.K_UP:
+                selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                utils.play_sound("eat")
+            elif key == pygame.K_DOWN:
+                selection_index = (selection_index + 1) % len(menu_items)
+                utils.play_sound("eat")
+            elif key == pygame.K_LEFT:
+                if selection_index == 0:
+                    pending_show_grid = not pending_show_grid
+                    utils.play_sound("eat")
+                elif selection_index == 1:
+                    cycle_grid_size(-1)
+                    utils.play_sound("eat")
+            elif key == pygame.K_RIGHT:
+                if selection_index == 0:
+                    pending_show_grid = not pending_show_grid
+                    utils.play_sound("eat")
+                elif selection_index == 1:
+                    cycle_grid_size(1)
+                    utils.play_sound("eat")
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                if selection_index == 0:
+                    pending_show_grid = not pending_show_grid
+                    utils.play_sound("eat")
+                elif selection_index == 2:
+                    utils.play_sound("powerup_pickup")
+                    apply_options()
+                    next_state = config.MENU
+                    break
+                elif selection_index == 3:
+                    utils.play_sound("combo_break")
+                    next_state = config.MENU
+                    break
+
+    # Update pending values back into state
+    game_state['pending_show_grid'] = pending_show_grid
+    game_state['pending_grid_size'] = pending_grid_size
+    game_state['options_selection_index'] = selection_index
+    game_state['last_axis_move_time_options'] = last_axis_move_time
+
+    # Draw
+    try:
+        screen.fill(config.COLOR_BACKGROUND)
+        title_y = config.SCREEN_HEIGHT * 0.15
+        utils.draw_text_with_shadow(screen, "Options", font_medium, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW,
+                                    (config.SCREEN_WIDTH / 2, title_y), "center")
+
+        start_y = config.SCREEN_HEIGHT * 0.30
+        gap_y = 50
+        for i, (label, value) in enumerate(menu_items):
+            is_selected = i == selection_index
+            color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT_MENU
+            prefix = "> " if is_selected else "  "
+            line = f"{prefix}{label}"
+            if value:
+                line += f": {value}"
+            utils.draw_text_with_shadow(screen, line, font_default, color, config.COLOR_UI_SHADOW,
+                                        (config.SCREEN_WIDTH / 2, start_y + i * gap_y), "center")
+
+        utils.draw_text(screen, "Haut/Bas: naviguer | Gauche/Droite: changer | Entrée/A: confirmer | Echap/B: retour",
+                        font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.92), "center")
+    except Exception as e:
+        print(f"Erreur dessin run_options: {e}")
+
+    # Nettoyage simple si on quitte l'écran
+    if next_state != config.OPTIONS:
+        game_state.pop('pending_show_grid', None)
+        game_state.pop('pending_grid_size', None)
+
+    game_state['current_state'] = next_state
+    return next_state
 
 # --- Clavier virtuel pour les écrans de saisie de noms ---
 # Liste des caractères disponibles pour le clavier virtuel
@@ -1772,15 +2085,21 @@ def run_map_selection(events, dt, screen, game_state):
     if _map_selection_needs_update:
         print("Mise à jour de la liste des cartes (incluant favoris)...")
         _favorite_maps = utils.load_favorite_maps(base_path)
-        map_keys_static = list(config.MAPS.keys())
-        map_keys_favorites = sorted(list(_favorite_maps.keys())) # Tri alphabétique des favoris
-        _map_keys_display = map_keys_static + map_keys_favorites + ["Aléatoire"]
+        if current_game_mode == config.MODE_CLASSIC:
+            # Mode classique: on reste sur une carte simple (pas de favoris/aléatoire)
+            map_keys_static = ["Boîte Simple"] if "Boîte Simple" in config.MAPS else [config.DEFAULT_MAP_KEY]
+            map_keys_favorites = []
+            _map_keys_display = map_keys_static
+        else:
+            map_keys_static = list(config.MAPS.keys())
+            map_keys_favorites = sorted(list(_favorite_maps.keys())) # Tri alphabétique des favoris
+            _map_keys_display = map_keys_static + map_keys_favorites + ["Aléatoire"]
         _map_selection_needs_update = False # Réinitialise le flag
         # Ajuste l'index si la liste a changé et qu'il devient invalide
         map_selection_index = max(0, min(map_selection_index, len(_map_keys_display) - 1))
         game_state['map_selection_index'] = map_selection_index
         # Génère la carte aléatoire initiale si elle n'existe pas
-        if _current_random_map_walls is None:
+        if current_game_mode != config.MODE_CLASSIC and _current_random_map_walls is None:
             try:
                 _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
             except Exception as e:
@@ -3070,6 +3389,7 @@ def run_game_over(events, dt, screen, game_state):
 
     mode_key, mode_name, score_to_check, name_for_hs = "solo", "Solo", p1_score, p1_name
     if current_game_mode == config.MODE_VS_AI: mode_key, mode_name, score_to_check, name_for_hs = "vs_ai", "Vs AI", p1_score, p1_name
+    elif current_game_mode == config.MODE_CLASSIC: mode_key, mode_name, score_to_check, name_for_hs = "classic", "Classique", p1_score, p1_name
     elif current_game_mode == config.MODE_PVP:
         mode_key, mode_name = "pvp", "PvP"
         if p2_score > p1_score: score_to_check, name_for_hs = p2_score, p2_name
@@ -3342,7 +3662,7 @@ def run_hall_of_fame(events, dt, screen, game_state):
         except: pass
         return config.MENU # Retour menu
 
-    categories = {"solo": "Solo", "vs_ai": "Vs IA", "pvp": "PvP", "survie": "Survie"}
+    categories = {"solo": "Solo", "classic": "Classique", "vs_ai": "Vs IA", "pvp": "PvP", "survie": "Survie"}
     num_categories = len(categories)
     next_state = config.HALL_OF_FAME
 
@@ -3502,7 +3822,7 @@ def run_game(events, dt, screen, game_state):
             logging.info(f"AI difficulty increased to level {difficulty_level} based on time.")
 
     try:
-        if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
+        if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
             if objective_complete_timer > 0 and current_time >= objective_complete_timer:
                 game_state['objective_complete_timer'] = 0
                 player_score = player_snake.score if player_snake else 0
@@ -3632,7 +3952,12 @@ def run_game(events, dt, screen, game_state):
              # --- Gestion Boutons Joystick J1 ---
             if player_snake and player_snake.alive and event.instance_id == 0:
                 button = event.button
-                if button == 0: # Dash (Button 0 pour J1)
+                dash_buttons = {0, getattr(config, 'BUTTON_SECONDARY_ACTION', 0)}
+                shoot_buttons = {1, getattr(config, 'BUTTON_PRIMARY_ACTION', 1)}
+                shield_buttons = {2, getattr(config, 'BUTTON_TERTIARY_ACTION', 2)}
+                pause_button = getattr(config, 'BUTTON_PAUSE', 7)
+
+                if current_game_mode != config.MODE_CLASSIC and button in dash_buttons: # Dash
                     logging.debug(f"P1 Button {button} (Dash) pressed")
                     if player_snake.dash_ready:
                         p1_obstacles_for_dash = utils.get_obstacles_for_player(player_snake, player_snake, player2_snake, enemy_snake, mines, current_map_walls, active_enemies)
@@ -3656,21 +3981,21 @@ def run_game(events, dt, screen, game_state):
                             logging.info(f"{player_snake.name} collided during dash with {dash_result_p1.get('type')}.")
                     else:
                         utils.play_sound("combo_break") # Son pour compétence non prête
-                elif button == 1: # Tirer (Button 1)
+                elif current_game_mode != config.MODE_CLASSIC and button in shoot_buttons: # Tirer
                     logging.debug(f"Button {button} (Shoot) pressed")
                     new_projectiles_list = player_snake.shoot(current_time)
                     if new_projectiles_list:
                         game_state['player_projectiles'].extend(new_projectiles_list)
                         utils.play_sound(player_snake.shoot_sound)
-                elif button == 2: # Shield (Button 2)
+                elif current_game_mode != config.MODE_CLASSIC and button in shield_buttons: # Shield
                     logging.debug(f"Button {button} (Shield) pressed")
                     if player_snake.shield_ready: player_snake.activate_shield(current_time)
                     else: utils.play_sound("combo_break")
                 elif button == 3: # Ignore Button 3
                     logging.debug(f"Button {button} pressed, explicitly ignored.")
                     pass # Do nothing for button 3
-                elif button == 7: # Pause (Button 7 - often Start)
-                    logging.info("Joystick button 7 pressed, pausing game.")
+                elif button == pause_button: # Pause (often Start)
+                    logging.info(f"Joystick button {button} pressed, pausing game.")
                     try: pygame.mixer.music.pause()
                     except Exception: pass
                     game_state['previous_state'] = config.PLAYING
@@ -3687,7 +4012,11 @@ def run_game(events, dt, screen, game_state):
              # --- START: Player 2 Joystick Button Handling (PvP) ---
             elif current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and event.instance_id == 1:
                 button = event.button
-                if button == 0: # Dash (Button 0 pour J2)
+                dash_buttons = {0, getattr(config, 'BUTTON_SECONDARY_ACTION', 0)}
+                shoot_buttons = {1, getattr(config, 'BUTTON_PRIMARY_ACTION', 1)}
+                shield_buttons = {2, getattr(config, 'BUTTON_TERTIARY_ACTION', 2)}
+
+                if button in dash_buttons: # Dash
                     logging.debug(f"P2 Button {button} (Dash) pressed")
                     if player2_snake.dash_ready:
                         p2_obstacles_for_dash = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, None, mines, current_map_walls, [])
@@ -3702,13 +4031,13 @@ def run_game(events, dt, screen, game_state):
                             p2_moved_this_frame = True
                     else:
                         utils.play_sound("combo_break")
-                elif button == 1: # Tirer (Button 1)
+                elif button in shoot_buttons: # Tirer
                     logging.debug(f"P2 Button {button} (Shoot) pressed")
                     new_projectiles_list_p2 = player2_snake.shoot(current_time)
                     if new_projectiles_list_p2:
                         game_state['player2_projectiles'].extend(new_projectiles_list_p2)
                         utils.play_sound(player2_snake.shoot_sound)
-                elif button == 2: # Shield (Button 2)
+                elif button in shield_buttons: # Shield
                     logging.debug(f"P2 Button {button} (Shield) pressed")
                     if player2_snake.shield_ready: player2_snake.activate_shield(current_time)
                     else: utils.play_sound("combo_break")
@@ -3923,11 +4252,12 @@ def run_game(events, dt, screen, game_state):
 
             current_occupied = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
 
-            if len(foods) < config.MAX_FOOD_ITEMS and current_time - last_food_spawn_time > food_interval:
+            max_food_items = 1 if current_game_mode == config.MODE_CLASSIC else config.MAX_FOOD_ITEMS
+            if len(foods) < max_food_items and current_time - last_food_spawn_time > food_interval:
                 spawn_pos = utils.get_random_empty_position(current_occupied)
                 if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
 
-            if current_time - last_mine_spawn_time > mine_interval:
+            if current_game_mode != config.MODE_CLASSIC and current_time - last_mine_spawn_time > mine_interval:
                 spawned_count = 0
                 for _ in range(config.MINE_SPAWN_COUNT):
                     if len(mines) >= config.MAX_MINES: break
@@ -3948,26 +4278,27 @@ def run_game(events, dt, screen, game_state):
                         if not too_close: mines.append(game_objects.Mine(spawn_pos)); current_occupied.add(spawn_pos); spawned_count += 1
                 if spawned_count > 0: game_state['last_mine_spawn_time'] = current_time
 
-            expired_indices = [i for i, pu in enumerate(powerups) if pu.is_expired()]
-            if expired_indices:
-                for i in sorted(expired_indices, reverse=True):
-                    if 0 <= i < len(powerups):
-                        pu = powerups.pop(i); px, py = pu.get_center_pos_px()
-                        if px is not None: utils.emit_particles(px, py, 10, pu.data['color'], (1, 3), (300, 600), (2, 4), 0, 0.2)
-                current_occupied = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
+            if current_game_mode != config.MODE_CLASSIC:
+                expired_indices = [i for i, pu in enumerate(powerups) if pu.is_expired()]
+                if expired_indices:
+                    for i in sorted(expired_indices, reverse=True):
+                        if 0 <= i < len(powerups):
+                            pu = powerups.pop(i); px, py = pu.get_center_pos_px()
+                            if px is not None: utils.emit_particles(px, py, 10, pu.data['color'], (1, 3), (300, 600), (2, 4), 0, 0.2)
+                    current_occupied = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
 
-            if current_time - last_powerup_spawn_time > powerup_interval:
-                spawned_count = 0
-                for _ in range(config.POWERUP_SPAWN_COUNT):
-                    if len(powerups) >= config.MAX_POWERUPS: break
-                    spawn_pos = utils.get_random_empty_position(current_occupied)
-                    if spawn_pos:
-                        heads = [s.get_head_position() for s in [player_snake, player2_snake, enemy_snake] if s and s.alive] + [baby.get_head_position() for baby in active_enemies if baby and baby.alive]
-                        too_close = any(h and abs(spawn_pos[0]-h[0]) + abs(spawn_pos[1]-h[1]) < 4 for h in heads)
-                        if not too_close:
-                            available_powerups = list(config.POWERUP_TYPES.keys())
-                            if available_powerups: powerup_type = random.choice(available_powerups); powerups.append(game_objects.PowerUp(spawn_pos, powerup_type)); current_occupied.add(spawn_pos); spawned_count += 1
-                if spawned_count > 0: game_state['last_powerup_spawn_time'] = current_time
+                if current_time - last_powerup_spawn_time > powerup_interval:
+                    spawned_count = 0
+                    for _ in range(config.POWERUP_SPAWN_COUNT):
+                        if len(powerups) >= config.MAX_POWERUPS: break
+                        spawn_pos = utils.get_random_empty_position(current_occupied)
+                        if spawn_pos:
+                            heads = [s.get_head_position() for s in [player_snake, player2_snake, enemy_snake] if s and s.alive] + [baby.get_head_position() for baby in active_enemies if baby and baby.alive]
+                            too_close = any(h and abs(spawn_pos[0]-h[0]) + abs(spawn_pos[1]-h[1]) < 4 for h in heads)
+                            if not too_close:
+                                available_powerups = list(config.POWERUP_TYPES.keys())
+                                if available_powerups: powerup_type = random.choice(available_powerups); powerups.append(game_objects.PowerUp(spawn_pos, powerup_type)); current_occupied.add(spawn_pos); spawned_count += 1
+                    if spawned_count > 0: game_state['last_powerup_spawn_time'] = current_time
 
             if current_game_mode == config.MODE_SURVIVAL:
                 mine_wave_interval_adjusted = config.MINE_WAVE_INTERVAL * spawn_factor
@@ -4031,7 +4362,7 @@ def run_game(events, dt, screen, game_state):
                         p1_rem_indices.add(i); mines_hit_indices_proj.add(j); hit_something = True
                         if player_snake and player_snake.alive: # P1 est le owner ici
                             player_snake.add_score(config.MINE_SCORE_VALUE); player_snake.increment_combo(1)
-                            if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
+                            if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
                                 obj_completed, bonus = utils.check_objective_completion('destroy_mine', current_objective, 1)
                                 if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
                         utils.play_sound("explode_mine"); cx, cy = m.get_center_pos_px()
@@ -4090,12 +4421,12 @@ def run_game(events, dt, screen, game_state):
                             survived_ai = enemy_snake.handle_damage(current_time, player_snake, damage_source_pos=p.rect.center)
                             if survived_ai:
                                 if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_HIT_SCORE); player_snake.increment_combo(1)
-                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
+                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
                                     obj_completed, bonus = utils.check_objective_completion('hit_opponent', current_objective, 1)
                                     if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
                             else: # AI died
                                 if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_KILL_SCORE); player_snake.add_armor(config.ENEMY_KILL_ARMOR); player_snake.increment_combo(3)
-                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
+                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
                                      obj_completed, bonus = utils.check_objective_completion('kill_opponent', current_objective, 1)
                                      if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
                             break # Sort de la boucle des segments IA
@@ -4329,16 +4660,17 @@ def run_game(events, dt, screen, game_state):
                     # Gérer la logique de gain d'armure ici si c'est 'armor_plate_food'
                     if food_type_key == "armor_plate_food":
                         if snake_object.is_player:
-                             # Limite fixée par ARMOR_REGEN_MAX_STACKS (ou MAX_ARMOR si plus pertinent?)
-                            if snake_object.armor < config.ARMOR_REGEN_MAX_STACKS: # Ou utiliser config.MAX_ARMOR
-                                if not snake_object.is_armor_regen_pending:
-                                    snake_object.last_armor_regen_tick_time = current_time # Démarre le timer au premier gain
-                                snake_object.is_armor_regen_pending = True # Active la regen passive
-                                logging.debug(f"{snake_object.name} ate armor food, regen pending activated/refreshed.")
+                            # Feedback immédiat : +1 armure (cappée par MAX_ARMOR)
+                            snake_object.add_armor(1)
+
+                            # Active/rafraîchit une regen passive si on n'est pas au cap de regen
+                            if snake_object.armor < config.ARMOR_REGEN_MAX_STACKS:
+                                snake_object.last_armor_regen_tick_time = current_time
+                                snake_object.is_armor_regen_pending = True
+                                logging.debug(f"{snake_object.name} ate armor food: +1 armor, regen pending refreshed.")
                             else:
-                                # Si déjà au max pour la regen, donne quand même +1 direct jusqu'à MAX_ARMOR
-                                snake_object.add_armor(1)
-                                logging.debug(f"{snake_object.name} ate armor food while at regen cap, adding +1 armor directly (if possible).")
+                                snake_object.is_armor_regen_pending = False
+                                logging.debug(f"{snake_object.name} ate armor food: +1 armor, regen cap reached.")
                         # L'IA ignore cet effet (pas de regen passive pour elle)
 
                     else: # Autres types de nourriture
@@ -4352,32 +4684,35 @@ def run_game(events, dt, screen, game_state):
 
                         if snake_object.is_player:
                             snake_object.add_score(food_data.get('score', 0))
-                            # Ammo bonus maintenant géré directement dans config.FOOD_TYPES["normal"]
-                            #if food_type_key == 'normal': snake_object.add_ammo(config.NORMAL_FOOD_AMMO_BONUS)
-                            #else: snake_object.add_ammo(food_data.get('ammo', 0)) # Gère ammo pack
-                            snake_object.add_ammo(food_data.get('ammo', 0)) # Simplifié: prend la valeur ammo du dict
 
-                            snake_object.increment_combo(food_data.get('combo_points', 0))
-                            if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and collected_food.objective_tag:
-                                obj_completed, bonus = utils.check_objective_completion(collected_food.objective_tag, current_objective, 1)
-                                if obj_completed:
-                                    snake_object.add_score(bonus, is_objective_bonus=True)
-                                    game_state['current_objective'] = None
-                                    game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
+                            # Mode classique: pas de munitions, pas de combo/regen ammo
+                            if current_game_mode != config.MODE_CLASSIC:
+                                # Ammo bonus maintenant géré directement dans config.FOOD_TYPES["normal"]
+                                #if food_type_key == 'normal': snake_object.add_ammo(config.NORMAL_FOOD_AMMO_BONUS)
+                                #else: snake_object.add_ammo(food_data.get('ammo', 0)) # Gère ammo pack
+                                snake_object.add_ammo(food_data.get('ammo', 0)) # Simplifié: prend la valeur ammo du dict
 
-                            # Logique regen ammo
-                            if food_type_key == 'normal':
-                                if snake_object.ammo_regen_rate < config.AMMO_REGEN_MAX_RATE:
-                                    snake_object.ammo_regen_rate += 1
-                                    snake_object.normal_food_eaten_at_max_rate = 0
-                                    logging.debug(f"{snake_object.name} ammo regen rate increased to +{snake_object.ammo_regen_rate}")
-                                else:
-                                    snake_object.normal_food_eaten_at_max_rate += 1
-                                    if snake_object.normal_food_eaten_at_max_rate >= config.AMMO_REGEN_FOOD_COUNT_FOR_INTERVAL_REDUCTION:
-                                        new_interval = snake_object.ammo_regen_interval - config.AMMO_REGEN_INTERVAL_REDUCTION_STEP
-                                        snake_object.ammo_regen_interval = max(config.AMMO_REGEN_MIN_INTERVAL, new_interval) # Utilise MIN_INTERVAL
+                                snake_object.increment_combo(food_data.get('combo_points', 0))
+                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC and collected_food.objective_tag:
+                                    obj_completed, bonus = utils.check_objective_completion(collected_food.objective_tag, current_objective, 1)
+                                    if obj_completed:
+                                        snake_object.add_score(bonus, is_objective_bonus=True)
+                                        game_state['current_objective'] = None
+                                        game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
+
+                                # Logique regen ammo
+                                if food_type_key == 'normal':
+                                    if snake_object.ammo_regen_rate < config.AMMO_REGEN_MAX_RATE:
+                                        snake_object.ammo_regen_rate += 1
                                         snake_object.normal_food_eaten_at_max_rate = 0
-                                        logging.debug(f"{snake_object.name} ammo regen interval reduced to {snake_object.ammo_regen_interval}ms")
+                                        logging.debug(f"{snake_object.name} ammo regen rate increased to +{snake_object.ammo_regen_rate}")
+                                    else:
+                                        snake_object.normal_food_eaten_at_max_rate += 1
+                                        if snake_object.normal_food_eaten_at_max_rate >= config.AMMO_REGEN_FOOD_COUNT_FOR_INTERVAL_REDUCTION:
+                                            new_interval = snake_object.ammo_regen_interval - config.AMMO_REGEN_INTERVAL_REDUCTION_STEP
+                                            snake_object.ammo_regen_interval = max(config.AMMO_REGEN_MIN_INTERVAL, new_interval) # Utilise MIN_INTERVAL
+                                            snake_object.normal_food_eaten_at_max_rate = 0
+                                            logging.debug(f"{snake_object.name} ammo regen interval reduced to {snake_object.ammo_regen_interval}ms")
 
                         # Applique les effets de durée (sauf grow, ammo_only, armor_plate)
                         if effect and effect not in ['grow', 'ammo_only', 'armor_plate']:
@@ -4416,7 +4751,7 @@ def run_game(events, dt, screen, game_state):
                     pu_center_px = collected_pu.get_center_pos_px()
 
                     # Objectif
-                    if snake_object.is_player and current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
+                    if snake_object.is_player and current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
                         obj_tags_to_check = [collected_pu.objective_tag, 'powerup_generic']
                         for tag in obj_tags_to_check:
                              if tag and game_state['current_objective']: # Vérifie si objectif existe
@@ -4454,7 +4789,7 @@ def run_game(events, dt, screen, game_state):
                             snake_object.increment_combo(points=combo_points)
                             
                             # Objectif destruction mines
-                            if destroyed_total_mines_count > 0 and current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL:
+                            if destroyed_total_mines_count > 0 and current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
                                 if game_state['current_objective']: # Vérifie si objectif existe
                                      obj_completed_mine_emp, bonus_mine_emp = utils.check_objective_completion('destroy_mine', current_objective, destroyed_total_mines_count)
                                      if obj_completed_mine_emp:

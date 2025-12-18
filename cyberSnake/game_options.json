@@ -12,5 +12,7 @@
     "friendly_fire": false,
     "score_limit": 10,
     "best_of": 0
-  }
+  },
+  "show_grid": true,
+  "grid_size": null
 }

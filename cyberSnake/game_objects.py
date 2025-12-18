@@ -479,10 +479,57 @@ class Snake:
     def reset(self, current_game_mode, walls):
         self.game_mode = current_game_mode
         self.current_walls = walls if walls is not None else []
-        self.positions = [self.start_pos]
-        self.length = 1
         self.current_direction = self._find_safe_initial_direction(self.start_pos, self.current_walls, self.initial_direction)
         self.next_direction = self.current_direction
+
+        self.positions = [self.start_pos]
+        desired_length = 1
+        if self.is_player:
+            try:
+                desired_length = max(1, int(getattr(config, "PLAYER_INITIAL_SIZE", 1)))
+            except (TypeError, ValueError):
+                desired_length = 1
+
+        # Construction du corps initial du joueur (évite l'affichage "1 case")
+        if desired_length > 1 and isinstance(self.start_pos, tuple) and len(self.start_pos) == 2:
+            walls_set = set(self.current_walls)
+            start_x, start_y = self.start_pos
+
+            def can_place(direction):
+                dx, dy = direction
+                forward = (start_x + dx, start_y + dy)
+                if not (0 <= forward[0] < config.GRID_WIDTH and 0 <= forward[1] < config.GRID_HEIGHT):
+                    return False
+                if forward in walls_set:
+                    return False
+                for i in range(1, desired_length):
+                    pos = (start_x - dx * i, start_y - dy * i)
+                    if not (0 <= pos[0] < config.GRID_WIDTH and 0 <= pos[1] < config.GRID_HEIGHT):
+                        return False
+                    if pos in walls_set:
+                        return False
+                return True
+
+            directions_to_try = [self.current_direction] + [d for d in config.DIRECTIONS if d != self.current_direction]
+            for candidate_dir in directions_to_try:
+                if can_place(candidate_dir):
+                    self.current_direction = candidate_dir
+                    self.next_direction = candidate_dir
+                    break
+
+            grow_dir = (-self.current_direction[0], -self.current_direction[1])
+            for _ in range(desired_length - 1):
+                last_x, last_y = self.positions[-1]
+                next_pos = (last_x + grow_dir[0], last_y + grow_dir[1])
+                if (0 <= next_pos[0] < config.GRID_WIDTH and
+                        0 <= next_pos[1] < config.GRID_HEIGHT and
+                        next_pos not in self.positions and
+                        next_pos not in walls_set):
+                    self.positions.append(next_pos)
+                else:
+                    break
+
+        self.length = len(self.positions)
         self.growing = False
         self.alive = True
         self.last_move_time = 0
@@ -777,11 +824,28 @@ class Snake:
             next_x_raw = cur_pos[0] + dx
             next_y_raw = cur_pos[1] + dy
 
-            new_x = (next_x_raw + config.GRID_WIDTH) % config.GRID_WIDTH
-            new_y = (next_y_raw + config.GRID_HEIGHT) % config.GRID_HEIGHT
-            new_head = (new_x, new_y)
+            if self.game_mode == getattr(config, "MODE_CLASSIC", None):
+                new_x = next_x_raw
+                new_y = next_y_raw
+                new_head = (new_x, new_y)
+            else:
+                new_x = (next_x_raw + config.GRID_WIDTH) % config.GRID_WIDTH
+                new_y = (next_y_raw + config.GRID_HEIGHT) % config.GRID_HEIGHT
+                new_head = (new_x, new_y)
 
             died_in_move = False
+
+            # Mode classique: pas de wrap (collision sur bord)
+            if self.game_mode == getattr(config, "MODE_CLASSIC", None):
+                if not (0 <= new_x < config.GRID_WIDTH and 0 <= new_y < config.GRID_HEIGHT):
+                    obs_x = max(0, min(config.GRID_WIDTH - 1, new_x))
+                    obs_y = max(0, min(config.GRID_HEIGHT - 1, new_y))
+                    obs_center_px = (obs_x * config.GRID_SIZE + config.GRID_SIZE // 2, obs_y * config.GRID_SIZE + config.GRID_SIZE // 2)
+                    if not self.handle_damage(current_time, killer_snake=None, damage_source_pos=obs_center_px):
+                        died_in_move = True
+                        death_cause_detail = 'wall'
+                    new_head = (obs_x, obs_y)
+
             # 1. Vérifier auto-collision (priorité haute)
             if not self.ghost_active and self.length > 1 and new_head in self.positions[1:]:
                  if not self.handle_damage(current_time, killer_snake=self, is_self_collision=True):
@@ -1582,6 +1646,28 @@ class Snake:
                 tint_surface = None
 
         # --- Dessin des Segments (avec Assets et Rotation) ---
+
+        # Mode classique: rendu simple (sans sprites)
+        if self.game_mode == getattr(config, "MODE_CLASSIC", None):
+            for i, p in enumerate(self.positions):
+                px = p[0] * config.GRID_SIZE
+                py = p[1] * config.GRID_SIZE
+                r = pygame.Rect(px, py, config.GRID_SIZE, config.GRID_SIZE)
+
+                seg_color = base_color
+                if i == 0 and not draw_color_override:
+                    try:
+                        seg_color = tuple(min(c + 40, 255) for c in base_color[:3])
+                    except Exception:
+                        seg_color = base_color
+
+                try:
+                    pygame.draw.rect(surface, seg_color, r)
+                    border = tuple(max(0, int(c * 0.6)) for c in seg_color[:3]) if isinstance(seg_color, (list, tuple)) else config.COLOR_BLACK
+                    pygame.draw.rect(surface, border, r, 1)
+                except Exception:
+                    pass
+            return
 
         # 1. Identifier les images selon le joueur
         prefix = "enemy"

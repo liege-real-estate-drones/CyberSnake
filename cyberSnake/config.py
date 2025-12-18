@@ -10,6 +10,7 @@ SCREEN_HEIGHT = 600
 GRID_SIZE = 20
 GRID_WIDTH = SCREEN_WIDTH // GRID_SIZE
 GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
+SHOW_GRID = True
 
 
 # --- Constantes Vitesse & Difficulté ---
@@ -208,6 +209,7 @@ ITEM_ANIMATION_MAGNITUDE = 0.05
 
 
 # --- Constantes Ennemi (AI) ---
+PLAYER_INITIAL_SIZE = 3
 ENEMY_INITIAL_SIZE = 3
 ENEMY_RESPAWN_TIME = 8000
 ENEMY_HIT_SCORE = 10
@@ -438,6 +440,7 @@ MUSIC_TRACKS = {
 DEFAULT_MUSIC_FILE = "background_music.mp3"
 MENU_BACKGROUND_IMAGE_FILE = "cover.jpg"
 HIGH_SCORE_FILE = "highscores.json"
+GAME_OPTIONS_FILE = "game_options.json"
 FAVORITE_MAP_FILE = "favorite_maps.json" # NOUVEAU
 MAX_HIGH_SCORES = 10
 
@@ -454,6 +457,7 @@ HALL_OF_FAME = 6
 MAP_SELECTION = 7
 NAME_ENTRY_SOLO = 8
 UPDATE = 9 # --- NOUVEAU: État pour la mise à jour ---
+OPTIONS = 100 # Menu Options (doit éviter les valeurs de GameMode)
 
 
 # Modes de jeu (classe pour comparaison et nom)
@@ -477,6 +481,7 @@ MODE_SOLO = GameMode(10, "Solo")
 MODE_VS_AI = GameMode(11, "Vs AI")
 MODE_PVP = GameMode(12, "PvP")
 MODE_SURVIVAL = GameMode(13, "Survie")
+MODE_CLASSIC = GameMode(14, "Classique")
 
 
 # --- Constantes Contrôles & Inputs ---

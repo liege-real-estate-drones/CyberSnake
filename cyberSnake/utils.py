@@ -11,6 +11,8 @@ import traceback
 from collections import defaultdict, deque
 import logging
 
+from utils_safejson import read_json_or_default, safe_write_json
+
 # Importe toutes les constantes
 import config
 # Importe les classes nécessaires (pour emit_particles)
@@ -20,11 +22,75 @@ import game_objects
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_GAME_OPTIONS = {
+    "speed": "normal",
+    "growth_per_food": 1,
+    "mine_density": "normal",
+    "powerups": {
+        "poison": True,
+        "ghost": True,
+        "freeze": True,
+        "shield": True,
+    },
+    "pvp": {
+        "friendly_fire": False,
+        "score_limit": 10,
+        "best_of": 0,
+    },
+    # Vidéo
+    "show_grid": True,
+    # Si null/absent: comportement auto (calcul dynamique existant)
+    "grid_size": None,
+}
+
+
+def _deep_merge_dict(defaults, loaded):
+    if not isinstance(defaults, dict):
+        return loaded
+    if not isinstance(loaded, dict):
+        loaded = {}
+
+    merged = {}
+    for key, default_value in defaults.items():
+        if key in loaded:
+            loaded_value = loaded.get(key)
+            if isinstance(default_value, dict) and isinstance(loaded_value, dict):
+                merged[key] = _deep_merge_dict(default_value, loaded_value)
+            else:
+                merged[key] = loaded_value
+        else:
+            merged[key] = default_value
+
+    # Conserve les clés inconnues (compat avant/arrière)
+    for key, loaded_value in loaded.items():
+        if key not in merged:
+            merged[key] = loaded_value
+
+    return merged
+
+
+def load_game_options(base_path=""):
+    """Charge game_options.json (avec defaults + compat)."""
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_path, config.GAME_OPTIONS_FILE)
+    loaded = read_json_or_default(file_path, DEFAULT_GAME_OPTIONS)
+    return _deep_merge_dict(DEFAULT_GAME_OPTIONS, loaded)
+
+
+def save_game_options(options, base_path=""):
+    """Sauvegarde game_options.json (écriture atomique)."""
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(base_path, config.GAME_OPTIONS_FILE)
+    to_save = _deep_merge_dict(DEFAULT_GAME_OPTIONS, options if isinstance(options, dict) else {})
+    safe_write_json(file_path, to_save)
+
 # --- Variables globales gérées par ce module ---
 # ... (inchangé) ...
 sounds = {}
 images = {}
-high_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": []}
+high_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": [], "classic": []}
 particles = []
 kill_feed = deque(maxlen=config.MAX_KILL_FEED_MESSAGES)
 screen_shake_intensity = 0
@@ -160,7 +226,7 @@ def load_high_scores(base_path):
     """Charge les high scores depuis le fichier JSON. Met à jour la globale `high_scores`."""
     global high_scores # Modifie la globale
     file_path = os.path.join(base_path, config.HIGH_SCORE_FILE)
-    default_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": []}
+    default_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": [], "classic": []}
     loaded_high_scores = default_scores.copy()
 
     if os.path.exists(file_path):
@@ -397,6 +463,9 @@ def clear_particles():
 
 def choose_food_type(current_game_mode, current_objective):
     """Sélectionne un type de nourriture basé sur probabilités, mode et objectif."""
+    if current_game_mode == getattr(config, "MODE_CLASSIC", None):
+        return "normal"
+
     current_probs = config.FOOD_TYPE_PROBABILITY.copy()
 
     # --- RESTRICTION MODE SURVIE ---
@@ -734,7 +803,7 @@ def add_kill_feed_message(killer_name, victim_name):
 # ... (inchangé) ...
 def select_new_objective(current_game_mode, player_current_score):
     """Sélectionne un nouvel objectif aléatoire basé sur le mode de jeu."""
-    if current_game_mode == config.MODE_PVP or current_game_mode == config.MODE_SURVIVAL:
+    if current_game_mode == config.MODE_PVP or current_game_mode == config.MODE_SURVIVAL or current_game_mode == getattr(config, "MODE_CLASSIC", None):
         return None
 
     valid_objectives = []
