@@ -382,7 +382,17 @@ def emit_particles(x, y, count, color, speed_range=(1, 5), lifetime_range=(300, 
 
         lifetime = random.randint(*lifetime_range)
         size = random.uniform(*size_range)
-        p_color = random.choice(color) if isinstance(color, list) else color
+
+        # --- MODIF: Gestion robuste des couleurs (liste de choix vs couleur unique [r,g,b]) ---
+        p_color = color
+        if isinstance(color, list):
+            if len(color) > 0 and isinstance(color[0], int):
+                # C'est une seule couleur définie comme liste [r, g, b]
+                p_color = color
+            else:
+                # C'est une liste de couleurs possibles
+                p_color = random.choice(color)
+        # --- FIN MODIF ---
 
         try:
             # Crée l'instance de Particle DÉFINIE DANS game_objects.py
