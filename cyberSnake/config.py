@@ -536,6 +536,11 @@ MAP_SELECTION = 7
 NAME_ENTRY_SOLO = 8
 UPDATE = 9 # --- NOUVEAU: État pour la mise à jour ---
 OPTIONS = 100 # Menu Options (doit éviter les valeurs de GameMode)
+DEMO = 101 # Mode démo / attract (inactivité)
+
+# --- Transitions & Mode Démo ---
+TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)
+DEMO_IDLE_TIMEOUT_MS = 180000  # 3 minutes sans input (ms) => démo
 
 
 # Modes de jeu (classe pour comparaison et nom)

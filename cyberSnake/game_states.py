@@ -207,6 +207,10 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             except Exception:
                 pass
 
+    # --- Mode Démo : rendu "clean" (sans HUD) ---
+    if bool(game_state.get('demo_mode', False)):
+        return
+
     # --- *** UI Elements *** ---
     ui_padding = 12
     ui_margin = 8
@@ -288,14 +292,41 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                     length_value = len(getattr(player_snake, "positions", []) or [])
                 ammo_text = f"Taille: {length_value}"
                 ammo_color = config.COLOR_TEXT
+                utils.draw_text_with_shadow(
+                    target_surface,
+                    ammo_text,
+                    font_default,
+                    ammo_color,
+                    config.COLOR_UI_SHADOW,
+                    (x_p1_ui, y_p1_ui),
+                    "topleft",
+                )
             else:
-                ammo_text = f"Ammo: {player_snake.ammo}"
                 ammo_color = config.COLOR_AMMO_TEXT
-                if player_snake.alive and player_snake.ammo <= 5 and (
-                        current_time // 300) % 2 == 0:
+                if player_snake.alive and player_snake.ammo <= 5 and (current_time // 300) % 2 == 0:
                     ammo_color = config.COLOR_LOW_AMMO_WARN
-            utils.draw_text_with_shadow(target_surface, ammo_text, font_default, ammo_color,
-                                        config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui), "topleft")
+
+                icon_size = max(16, int(getattr(config, "GRID_SIZE", 20)))
+                icon = utils.images.get("food_ammo.png")
+                text_x = x_p1_ui
+                if icon:
+                    try:
+                        if icon.get_width() != icon_size or icon.get_height() != icon_size:
+                            icon = pygame.transform.smoothscale(icon, (icon_size, icon_size))
+                        target_surface.blit(icon, (x_p1_ui, y_p1_ui + 1))
+                        text_x = x_p1_ui + icon_size + 8
+                    except Exception:
+                        pass
+
+                utils.draw_text_with_shadow(
+                    target_surface,
+                    f"{player_snake.ammo}",
+                    font_default,
+                    ammo_color,
+                    config.COLOR_UI_SHADOW,
+                    (text_x, y_p1_ui),
+                    "topleft",
+                )
             y_p1_ui += line_height_default + gap
 
             # Armure
@@ -315,8 +346,38 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                 armor_color = config.COLOR_ARMOR_TEXT
             # Flash géré directement dans snake.draw, ici juste la couleur de base
             if current_game_mode != config.MODE_CLASSIC and player_snake.alive and player_snake.armor <= 0: armor_color = config.COLOR_LOW_ARMOR_WARN
-            utils.draw_text_with_shadow(target_surface, armor_text, font_default, armor_color,
-                                        config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui), "topleft")
+            if current_game_mode == config.MODE_CLASSIC:
+                utils.draw_text_with_shadow(
+                    target_surface,
+                    armor_text,
+                    font_default,
+                    armor_color,
+                    config.COLOR_UI_SHADOW,
+                    (x_p1_ui, y_p1_ui),
+                    "topleft",
+                )
+            else:
+                icon_size = max(16, int(getattr(config, "GRID_SIZE", 20)))
+                icon = utils.images.get("food_armor.png")
+                text_x = x_p1_ui
+                if icon:
+                    try:
+                        if icon.get_width() != icon_size or icon.get_height() != icon_size:
+                            icon = pygame.transform.smoothscale(icon, (icon_size, icon_size))
+                        target_surface.blit(icon, (x_p1_ui, y_p1_ui + 1))
+                        text_x = x_p1_ui + icon_size + 8
+                    except Exception:
+                        pass
+
+                utils.draw_text_with_shadow(
+                    target_surface,
+                    f"{player_snake.armor}",
+                    font_default,
+                    armor_color,
+                    config.COLOR_UI_SHADOW,
+                    (text_x, y_p1_ui),
+                    "topleft",
+                )
             y_p1_ui += line_height_default + gap
 
             # Regen Munitions (si actif)
@@ -445,24 +506,34 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             # Icônes Powerups 
             if player_snake.alive:
                 p1_icon_y = p1_panel_rect.top + ui_padding // 2
-                icon_offset_temp = 0;
-                icon_size = 22
-                if player_snake.shield_active: utils.draw_text(target_surface, "S", font_default,
-                                                               config.COLOR_SHIELD_POWERUP,
-                                                               (p1_icon_x + icon_offset_temp, p1_icon_y),
-                                                               "topleft"); icon_offset_temp += icon_size
-                if player_snake.rapid_fire_active: utils.draw_text(target_surface, "R", font_default,
-                                                                   config.COLOR_RAPIDFIRE_POWERUP,
-                                                                   (p1_icon_x + icon_offset_temp, p1_icon_y),
-                                                                   "topleft"); icon_offset_temp += icon_size
-                if player_snake.invincible_powerup_active: utils.draw_text(target_surface, "I", font_default,
-                                                                           config.COLOR_INVINCIBILITY_POWERUP,
-                                                                           (p1_icon_x + icon_offset_temp, p1_icon_y),
-                                                                           "topleft"); icon_offset_temp += icon_size
-                if player_snake.multishot_active: utils.draw_text(target_surface, "M", font_default,
-                                                                  config.COLOR_MULTISHOT_POWERUP,
-                                                                  (p1_icon_x + icon_offset_temp, p1_icon_y),
-                                                                  "topleft"); icon_offset_temp += icon_size
+                icon_size = max(16, int(getattr(config, "GRID_SIZE", 20)))
+                icon_gap = 4
+
+                icons = []
+                if player_snake.shield_active:
+                    icons.append(("icon_shield.png", "S", config.COLOR_SHIELD_POWERUP))
+                if player_snake.rapid_fire_active:
+                    icons.append(("icon_rapid.png", "R", config.COLOR_RAPIDFIRE_POWERUP))
+                if player_snake.invincible_powerup_active:
+                    icons.append(("icon_invincible.png", "I", config.COLOR_INVINCIBILITY_POWERUP))
+                if player_snake.multishot_active:
+                    icons.append(("icon_multishot.png", "M", config.COLOR_MULTISHOT_POWERUP))
+
+                if icons:
+                    total_w = len(icons) * icon_size + (len(icons) - 1) * icon_gap
+                    x = p1_panel_rect.right - ui_padding - total_w
+                    for icon_filename, fallback_text, fallback_color in icons:
+                        icon = utils.images.get(icon_filename)
+                        if icon:
+                            try:
+                                if icon.get_width() != icon_size or icon.get_height() != icon_size:
+                                    icon = pygame.transform.smoothscale(icon, (icon_size, icon_size))
+                                target_surface.blit(icon, (x, p1_icon_y))
+                            except Exception:
+                                utils.draw_text(target_surface, fallback_text, font_default, fallback_color, (x, p1_icon_y), "topleft")
+                        else:
+                            utils.draw_text(target_surface, fallback_text, font_default, fallback_color, (x, p1_icon_y), "topleft")
+                        x += icon_size + icon_gap
 
     except Exception as e:
         print(f"Erreur dessin UI Joueur 1: {e}")
@@ -759,15 +830,53 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             if player2_snake.alive and player2_snake.armor <= 1: armor_color_p2 = config.COLOR_LOW_ARMOR_WARN
             y_p2_ui -= gap
             y_p2_ui -= line_height_default
-            utils.draw_text_with_shadow(target_surface, f"Armor: {player2_snake.armor}", font_default, armor_color_p2,
-                                        config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
+            icon_size = max(16, int(getattr(config, "GRID_SIZE", 20)))
+            icon = utils.images.get("food_armor.png")
+            text_x = x_p2_ui
+            if icon:
+                try:
+                    if icon.get_width() != icon_size or icon.get_height() != icon_size:
+                        icon = pygame.transform.smoothscale(icon, (icon_size, icon_size))
+                    icon_rect = icon.get_rect(bottomleft=(x_p2_ui, y_p2_ui))
+                    target_surface.blit(icon, icon_rect)
+                    text_x = icon_rect.right + 8
+                except Exception:
+                    pass
+            utils.draw_text_with_shadow(
+                target_surface,
+                f"{player2_snake.armor}",
+                font_default,
+                armor_color_p2,
+                config.COLOR_UI_SHADOW,
+                (text_x, y_p2_ui),
+                "bottomleft",
+            )
             ammo_color_p2 = config.COLOR_AMMO_TEXT
             if player2_snake.alive and player2_snake.ammo <= 5 and (
                     current_time // 300) % 2 == 0: ammo_color_p2 = config.COLOR_LOW_AMMO_WARN
             y_p2_ui -= gap
             y_p2_ui -= line_height_default
-            utils.draw_text_with_shadow(target_surface, f"Ammo: {player2_snake.ammo}", font_default, ammo_color_p2,
-                                        config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
+            icon_size = max(16, int(getattr(config, "GRID_SIZE", 20)))
+            icon = utils.images.get("food_ammo.png")
+            text_x = x_p2_ui
+            if icon:
+                try:
+                    if icon.get_width() != icon_size or icon.get_height() != icon_size:
+                        icon = pygame.transform.smoothscale(icon, (icon_size, icon_size))
+                    icon_rect = icon.get_rect(bottomleft=(x_p2_ui, y_p2_ui))
+                    target_surface.blit(icon, icon_rect)
+                    text_x = icon_rect.right + 8
+                except Exception:
+                    pass
+            utils.draw_text_with_shadow(
+                target_surface,
+                f"{player2_snake.ammo}",
+                font_default,
+                ammo_color_p2,
+                config.COLOR_UI_SHADOW,
+                (text_x, y_p2_ui),
+                "bottomleft",
+            )
             y_p2_ui -= gap
             y_p2_ui -= line_height_default
             p2_score_rect = None
@@ -795,24 +904,33 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                                                             (x_p2_ui, y_p2_ui), "bottomleft")
             if player2_snake.alive and p2_score_rect:
                 p2_icon_y = p2_score_rect.top
-                icon_offset_temp_p2 = 0;
-                icon_size = 22
-                if player2_snake.shield_active: utils.draw_text(target_surface, "S", font_default,
-                                                                config.COLOR_SHIELD_POWERUP,
-                                                                (p2_icon_x + icon_offset_temp_p2, p2_icon_y),
-                                                                "topleft"); icon_offset_temp_p2 += icon_size
-                if player2_snake.rapid_fire_active: utils.draw_text(target_surface, "R", font_default,
-                                                                    config.COLOR_RAPIDFIRE_POWERUP,
-                                                                    (p2_icon_x + icon_offset_temp_p2, p2_icon_y),
-                                                                    "topleft"); icon_offset_temp_p2 += icon_size
-                if player2_snake.invincible_powerup_active: utils.draw_text(target_surface, "I", font_default,
-                                                                            config.COLOR_INVINCIBILITY_POWERUP, (
-                                                                            p2_icon_x + icon_offset_temp_p2, p2_icon_y),
-                                                                            "topleft"); icon_offset_temp_p2 += icon_size
-                if player2_snake.multishot_active: utils.draw_text(target_surface, "M", font_default,
-                                                                   config.COLOR_MULTISHOT_POWERUP,
-                                                                   (p2_icon_x + icon_offset_temp_p2, p2_icon_y),
-                                                                   "topleft"); icon_offset_temp_p2 += icon_size
+                icon_size = max(16, int(getattr(config, "GRID_SIZE", 20)))
+                icon_gap = 4
+                icons = []
+                if player2_snake.shield_active:
+                    icons.append(("icon_shield.png", "S", config.COLOR_SHIELD_POWERUP))
+                if player2_snake.rapid_fire_active:
+                    icons.append(("icon_rapid.png", "R", config.COLOR_RAPIDFIRE_POWERUP))
+                if player2_snake.invincible_powerup_active:
+                    icons.append(("icon_invincible.png", "I", config.COLOR_INVINCIBILITY_POWERUP))
+                if player2_snake.multishot_active:
+                    icons.append(("icon_multishot.png", "M", config.COLOR_MULTISHOT_POWERUP))
+
+                if icons:
+                    total_w = len(icons) * icon_size + (len(icons) - 1) * icon_gap
+                    x = p2_panel_rect.right - ui_padding - total_w
+                    for icon_filename, fallback_text, fallback_color in icons:
+                        icon = utils.images.get(icon_filename)
+                        if icon:
+                            try:
+                                if icon.get_width() != icon_size or icon.get_height() != icon_size:
+                                    icon = pygame.transform.smoothscale(icon, (icon_size, icon_size))
+                                target_surface.blit(icon, (x, p2_icon_y))
+                            except Exception:
+                                utils.draw_text(target_surface, fallback_text, font_default, fallback_color, (x, p2_icon_y), "topleft")
+                        else:
+                            utils.draw_text(target_surface, fallback_text, font_default, fallback_color, (x, p2_icon_y), "topleft")
+                        x += icon_size + icon_gap
         except Exception as e:
             print(f"Erreur dessin UI Joueur 2: {e}")
             traceback.print_exc()
@@ -1462,21 +1580,125 @@ def run_menu(events, dt, screen, game_state):
             error_y = config.SCREEN_HEIGHT * 0.05 # En haut de l'écran
             utils.draw_text_with_shadow(screen, pvp_error_msg, font_medium, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, error_y), "center")
 
-        utils.draw_text_with_shadow(screen, "Cyber Snake", font_title, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.12), "center")
-        y_start, item_gap = config.SCREEN_HEIGHT * 0.38, 65
+        utils.draw_text_with_shadow(
+            screen,
+            "Cyber Snake",
+            font_title,
+            config.COLOR_TEXT_MENU,
+            config.COLOR_UI_SHADOW,
+            (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.13),
+            "center",
+        )
+
+        # --- Légende contrôles (joystick only) ---
+        confirm_btn = getattr(config, "BUTTON_PRIMARY_ACTION", 1)
+        back_btn = getattr(config, "BUTTON_SECONDARY_ACTION", 2)
+        music_btn = 4
+        quit_btn = 8
+        legend_lines = [
+            f"Stick/Croix: Naviguer   |   Bouton {confirm_btn}: Valider   |   Bouton {back_btn}: Retour",
+            f"Bouton {music_btn}: Musique   |   Bouton {quit_btn}: Quitter   |   Inactivité: Démo (3 min)",
+        ]
+        legend_h = (font_small.get_height() + 6) * len(legend_lines) + 14
+        legend_w = min(int(config.SCREEN_WIDTH * 0.92), 900)
+        legend_x = (config.SCREEN_WIDTH - legend_w) // 2
+        legend_y = config.SCREEN_HEIGHT - legend_h - 10
+        legend_rect = pygame.Rect(legend_x, legend_y, legend_w, legend_h)
+
+        # --- Menu "pro" (panneau + surlignage) ---
+        panel_w = min(680, int(config.SCREEN_WIDTH * 0.72))
+        panel_top_min = int(config.SCREEN_HEIGHT * 0.22)
+        available_h = max(220, legend_y - panel_top_min - 12)
+        row_h = max(48, min(64, int((available_h - 40) / max(1, len(menu_options)))))
+        panel_h = max(220, (len(menu_options) * row_h) + 40)
+        panel_x = (config.SCREEN_WIDTH - panel_w) // 2
+        panel_y = max(panel_top_min, legend_y - panel_h - 12)
+        menu_panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        draw_ui_panel(screen, menu_panel_rect)
+
+        content_pad = 18
+        row_x = menu_panel_rect.left + content_pad
+        row_w = menu_panel_rect.width - (content_pad * 2)
+        row_y0 = menu_panel_rect.top + 18
+
+        # Animation légère du surlignage (pulse)
+        pulse = 0.55 + 0.45 * math.sin(current_time * 0.008)
+        hl_alpha = int(40 + 60 * pulse)
+
         for i, (_, text, hs_text) in enumerate(menu_options):
-            color = config.COLOR_TEXT_HIGHLIGHT if i == menu_selection_index else config.COLOR_TEXT_MENU
-            prefix = "> " if i == menu_selection_index else "  "
-            item_y = y_start + i * item_gap
-            # Corrected indentation for the next line
-            utils.draw_text_with_shadow(screen, prefix + text, font_medium, color, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, item_y), "center")
-            if hs_text: utils.draw_text(screen, hs_text, font_small, color, (config.SCREEN_WIDTH / 2, item_y + 30), "center")
-        y_instructions, instr_gap = config.SCREEN_HEIGHT * 0.95, 20
-        utils.draw_text(screen, "Naviguer: HAUT/BAS (Joystick/Hat) | Confirmer: ENTRÉE / Bouton Joystick", font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, y_instructions - 3 * instr_gap), "center") # Updated instruction
-        utils.draw_text(screen, "0-9: Choix Musique | +/- Musique | [/] ou */ / Effets", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_instructions - 2 * instr_gap), "center")
-        music_track_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'} (Vol: {utils.music_volume:.1f})"
-        utils.draw_text(screen, music_track_text, font_small, config.COLOR_TEXT_HIGHLIGHT, (config.SCREEN_WIDTH / 2, y_instructions - 1 * instr_gap), "center")
-        utils.draw_text(screen, f"Effets (Vol: {utils.sound_volume:.1f}) | Echap: Quitter", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_instructions), "center")
+            y = row_y0 + (i * row_h)
+            row_rect = pygame.Rect(row_x, y, row_w, row_h - 8)
+            is_selected = (i == menu_selection_index)
+
+            if is_selected:
+                hl = pygame.Surface(row_rect.size, pygame.SRCALPHA)
+                hl.fill((255, 255, 255, hl_alpha))
+                screen.blit(hl, row_rect.topleft)
+                try:
+                    pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT, row_rect, 2, border_radius=10)
+                except Exception:
+                    pass
+
+            main_color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT_MENU
+            utils.draw_text_with_shadow(
+                screen,
+                text,
+                font_medium,
+                main_color,
+                config.COLOR_UI_SHADOW,
+                (row_rect.centerx, row_rect.top + 10),
+                "midtop",
+            )
+            if hs_text:
+                hs_color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT
+                utils.draw_text(
+                    screen,
+                    hs_text,
+                    font_small,
+                    hs_color,
+                    (row_rect.centerx, row_rect.bottom - 12),
+                    "midbottom",
+                )
+
+        # --- Légende contrôles (joystick only) ---
+        confirm_btn = getattr(config, "BUTTON_PRIMARY_ACTION", 1)
+        back_btn = getattr(config, "BUTTON_SECONDARY_ACTION", 2)
+        music_btn = 4
+        quit_btn = 8
+        legend_lines = [
+            f"Stick/Croix: Naviguer   |   Bouton {confirm_btn}: Valider   |   Bouton {back_btn}: Retour",
+            f"Bouton {music_btn}: Musique   |   Bouton {quit_btn}: Quitter   |   Inactivité: Démo (3 min)",
+        ]
+        legend_h = (font_small.get_height() + 6) * len(legend_lines) + 14
+        legend_w = min(int(config.SCREEN_WIDTH * 0.92), 900)
+        legend_x = (config.SCREEN_WIDTH - legend_w) // 2
+        legend_y = config.SCREEN_HEIGHT - legend_h - 10
+        legend_rect = pygame.Rect(legend_x, legend_y, legend_w, legend_h)
+        # Force une version "propre" (certains fichiers ont des caractères accentués corrompus)
+        legend_lines = [
+            f"Stick/Croix: Naviguer   |   Bouton {confirm_btn}: Valider   |   Bouton {back_btn}: Retour",
+            f"Bouton {music_btn}: Musique   |   Bouton {quit_btn}: Quitter   |   Inactivité: Démo (3 min)",
+        ]
+        draw_ui_panel(screen, legend_rect)
+        y_text = legend_rect.top + 10
+        for line in legend_lines:
+            utils.draw_text(screen, line, font_small, config.COLOR_TEXT_MENU, (legend_rect.centerx, y_text), "midtop")
+            y_text += font_small.get_height() + 6
+
+        # Petit rappel musique
+        try:
+            music_track_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
+            music_track_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
+            utils.draw_text(
+                screen,
+                music_track_text,
+                font_small,
+                config.COLOR_TEXT_HIGHLIGHT,
+                (config.SCREEN_WIDTH - 10, 10),
+                "topright",
+            )
+        except Exception:
+            pass
 
         # --- Draw Version Popup Overlay ---
         if game_state.get('show_version_popup'):
@@ -4580,6 +4802,210 @@ def run_hall_of_fame(events, dt, screen, game_state):
 
     return next_state
 
+def run_demo(events, dt, screen, game_state):
+    """Mode démo (attract): auto-play et retour menu sur n'importe quel input."""
+    current_time = pygame.time.get_ticks()
+
+    def _is_demo_input(ev) -> bool:
+        try:
+            t = ev.type
+        except Exception:
+            return False
+        if t in (pygame.JOYBUTTONDOWN, pygame.JOYHATMOTION, pygame.KEYDOWN):
+            return True
+        if t == pygame.JOYAXISMOTION:
+            try:
+                thr = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+            except Exception:
+                thr = 0.6
+            try:
+                return abs(float(getattr(ev, "value", 0.0))) > thr
+            except Exception:
+                return False
+        return False
+
+    if any(_is_demo_input(ev) for ev in events):
+        # Sortie immédiate vers le menu
+        saved = game_state.pop('_demo_saved', None)
+        if isinstance(saved, dict):
+            for key, value in saved.items():
+                try:
+                    game_state[key] = value
+                except Exception:
+                    pass
+        game_state.pop('demo_mode', None)
+        game_state.pop('_demo_initialized', None)
+        return config.MENU
+
+    if not bool(game_state.get('_demo_initialized', False)):
+        # Sauvegarde un minimum de contexte pour ne pas "polluer" la session
+        game_state['_demo_saved'] = {
+            'current_game_mode': game_state.get('current_game_mode', config.MODE_VS_AI),
+            'selected_map_key': game_state.get('selected_map_key', config.DEFAULT_MAP_KEY),
+        }
+
+        game_state['demo_mode'] = True
+        game_state['_demo_initialized'] = True
+        game_state['_demo_last_turn_time'] = 0
+        game_state['_demo_last_shot_time'] = 0
+
+        # Démo: VS AI (plus vivant)
+        game_state['current_game_mode'] = config.MODE_VS_AI
+        game_state['selected_map_key'] = config.DEFAULT_MAP_KEY
+        try:
+            reset_game(game_state)
+        except Exception:
+            logging.error("Erreur reset_game() en mode démo.", exc_info=True)
+
+    # --- Auto-play minimal (J1) ---
+    player_snake = game_state.get('player_snake')
+    enemy_snake = game_state.get('enemy_snake')
+    foods = game_state.get('foods', [])
+    mines = game_state.get('mines', [])
+    current_map_walls = game_state.get('current_map_walls', [])
+    active_enemies = game_state.get('active_enemies', [])
+
+    def _next_pos(pos, direction):
+        x, y = pos
+        dx, dy = direction
+        return ((x + dx + config.GRID_WIDTH) % config.GRID_WIDTH, (y + dy + config.GRID_HEIGHT) % config.GRID_HEIGHT)
+
+    def _choose_demo_direction(snake, obstacles, food_list):
+        head = snake.get_head_position()
+        if not head:
+            return None
+
+        # Cible: nourriture la plus proche
+        target = None
+        best_dist = float("inf")
+        for f in food_list:
+            try:
+                pos = f.position
+            except Exception:
+                continue
+            if not pos:
+                continue
+            d = utils.grid_manhattan_distance(head, pos, wrap=True)
+            if d < best_dist:
+                best_dist = d
+                target = pos
+
+        best_dir = None
+        best_score = -1e9
+        for d in config.DIRECTIONS:
+            nxt = _next_pos(head, d)
+            if nxt in obstacles:
+                continue
+
+            score = 0.0
+            if target is not None:
+                d0 = utils.grid_manhattan_distance(head, target, wrap=True)
+                d1 = utils.grid_manhattan_distance(nxt, target, wrap=True)
+                score += (d0 - d1) * 10.0
+
+            # Légère inertie
+            if d == snake.current_direction:
+                score += 0.75
+
+            # Évite les cases "collées" aux obstacles
+            adj = 0
+            for ad in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                a = _next_pos(nxt, ad)
+                if a in obstacles:
+                    adj += 1
+            score -= adj * 1.25
+
+            if score > best_score:
+                best_score = score
+                best_dir = d
+
+        return best_dir
+
+    try:
+        if player_snake and player_snake.alive:
+            obstacles = utils.get_obstacles_for_player(
+                player_snake,
+                player_snake,
+                None,
+                enemy_snake,
+                mines,
+                current_map_walls,
+                active_enemies,
+            )
+
+            last_turn = int(game_state.get('_demo_last_turn_time', 0) or 0)
+            if current_time - last_turn >= 110:
+                chosen = _choose_demo_direction(player_snake, obstacles, foods)
+                if chosen:
+                    player_snake.turn(chosen)
+                game_state['_demo_last_turn_time'] = current_time
+
+            # Tire de temps en temps pour montrer l'action
+            last_shot = int(game_state.get('_demo_last_shot_time', 0) or 0)
+            if player_snake.ammo > 0 and current_time - last_shot >= 700:
+                if random.random() < 0.65:
+                    new_projectiles = player_snake.shoot(current_time)
+                    if new_projectiles:
+                        game_state['player_projectiles'].extend(new_projectiles)
+                        try:
+                            utils.play_sound(player_snake.shoot_sound)
+                        except Exception:
+                            pass
+                        game_state['_demo_last_shot_time'] = current_time
+    except Exception:
+        logging.debug("Erreur autopilot démo (non bloquante).", exc_info=True)
+
+    # --- Fait tourner le jeu sans inputs ---
+    try:
+        next_val = run_game([], dt, screen, game_state)
+        if isinstance(next_val, int) and next_val != config.PLAYING:
+            # En démo: redémarre automatiquement au lieu d'aller sur GAME_OVER/menus
+            try:
+                reset_game(game_state)
+            except Exception:
+                logging.error("Erreur reset_game() après fin de démo.", exc_info=True)
+    except Exception:
+        logging.error("Erreur run_game() en mode démo.", exc_info=True)
+        try:
+            reset_game(game_state)
+        except Exception:
+            pass
+
+    # Overlay "DEMO"
+    try:
+        font_medium = game_state.get('font_medium')
+        font_default = game_state.get('font_default')
+        if font_medium and font_default:
+            panel_w = int(config.SCREEN_WIDTH * 0.72)
+            panel_h = 90
+            panel_x = (config.SCREEN_WIDTH - panel_w) // 2
+            panel_y = int(config.SCREEN_HEIGHT * 0.08)
+            panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+            draw_ui_panel(screen, panel_rect)
+
+            utils.draw_text_with_shadow(
+                screen,
+                "MODE DÉMO",
+                font_medium,
+                config.COLOR_TEXT_HIGHLIGHT,
+                config.COLOR_UI_SHADOW,
+                (panel_rect.centerx, panel_rect.top + 18),
+                "midtop",
+            )
+            utils.draw_text_with_shadow(
+                screen,
+                "Appuie sur un bouton pour revenir au menu",
+                font_default,
+                config.COLOR_TEXT_MENU,
+                config.COLOR_UI_SHADOW,
+                (panel_rect.centerx, panel_rect.bottom - 18),
+                "midbottom",
+            )
+    except Exception:
+        pass
+
+    return config.DEMO
+
 def run_game(events, dt, screen, game_state):
     """Gère la logique principale du jeu (état PLAYING)."""
     next_state = config.PLAYING
@@ -4632,17 +5058,28 @@ def run_game(events, dt, screen, game_state):
 
     # --- Vérifications Critiques ---
     critical_error = False; error_message = ""
-    print(f"DEBUG RUN_GAME: Mode actuel: {current_game_mode}, player_snake: {player_snake}, player2_snake: {player2_snake}")
+    dbg_time = pygame.time.get_ticks()
+    try:
+        last_dbg = int(game_state.get('_run_game_debug_last', 0) or 0)
+    except Exception:
+        last_dbg = 0
+    if dbg_time - last_dbg >= 5000:
+        logging.debug(
+            "RUN_GAME: mode=%s p1=%s p2=%s",
+            getattr(current_game_mode, "name", current_game_mode),
+            bool(player_snake),
+            bool(player2_snake),
+        )
+        game_state['_run_game_debug_last'] = dbg_time
     if not player_snake:
         critical_error = True; error_message = "player_snake manquant!"
-        print("DEBUG RUN_GAME: CRITICAL - player_snake est None.")
+        logging.error("RUN_GAME: CRITICAL - player_snake est None.")
     elif current_game_mode == config.MODE_PVP and not player2_snake:
         critical_error = True; error_message = "player2_snake manquant en mode PvP!"
-        print("DEBUG RUN_GAME: CRITICAL - Mode PVP et player2_snake est None.")
+        logging.error("RUN_GAME: CRITICAL - Mode PVP et player2_snake est None.")
     
     if critical_error:
         logging.error(f"Erreur critique dans run_game: {error_message} - Retour forcé au menu.") # Log l'erreur
-        print(f"ERREUR CRITIQUE DANS RUN_GAME: {error_message} - RETOUR AU MENU")
         try: pygame.mixer.music.stop()
         except Exception: pass
         game_state['current_state'] = config.MENU; return config.MENU

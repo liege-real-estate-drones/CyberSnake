@@ -4,7 +4,7 @@
 import pygame
 import random
 import math
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 # Importe toutes les constantes depuis config.py
 import config
@@ -17,6 +17,44 @@ logger = logging.getLogger(__name__)
 
 # --- Classes Game Objects ---
 
+
+_SCALED_SURFACE_CACHE = OrderedDict()
+_SCALED_SURFACE_CACHE_MAX = 512
+_MISSING_IMAGE_FILES_LOGGED = set()
+
+
+def _get_scaled_surface_cached(image, image_key, size_px):
+    """Retourne une surface redimensionnée (avec cache) pour éviter un scale à chaque frame."""
+    if not image:
+        return None
+
+    try:
+        size = int(size_px)
+    except (TypeError, ValueError):
+        return None
+
+    if size <= 0:
+        return None
+
+    cache_key = (str(image_key), size, id(image))
+    cached = _SCALED_SURFACE_CACHE.get(cache_key)
+    if cached is not None:
+        _SCALED_SURFACE_CACHE.move_to_end(cache_key)
+        return cached
+
+    try:
+        scaled = pygame.transform.smoothscale(image, (size, size))
+    except Exception:
+        try:
+            scaled = pygame.transform.scale(image, (size, size))
+        except Exception:
+            return None
+
+    _SCALED_SURFACE_CACHE[cache_key] = scaled
+    _SCALED_SURFACE_CACHE.move_to_end(cache_key)
+    if len(_SCALED_SURFACE_CACHE) > _SCALED_SURFACE_CACHE_MAX:
+        _SCALED_SURFACE_CACHE.popitem(last=False)
+    return scaled
 
 
 class Particle:
@@ -170,9 +208,9 @@ class Nest:
         self.health -= 1
         if self.health <= 0:
             self.is_active = False # Se désactive quand détruit
-            print(f"Nest at {self.position} destroyed by damage.")
+            logger.info("Nest at %s destroyed by damage.", self.position)
             return True # Détruit
-        print(f"Nest at {self.position} took damage, health: {self.health}")
+        logger.debug("Nest at %s took damage, health: %s", self.position, self.health)
         return False # Endommagé mais pas détruit
 
     def update(self, current_time):
@@ -181,7 +219,7 @@ class Nest:
             return None # Déjà inactif (détruit ou éclos)
         # Vérifie si le temps est écoulé pour déclencher l'éclosion auto
         if current_time >= self.auto_spawn_trigger_time:
-            print(f"Nest at {self.position} triggering AUTO spawn!")
+            logger.info("Nest at %s triggering AUTO spawn!", self.position)
             #self.is_active = False # Se désactive après déclenchement
             return 'auto_spawn' # Identifiant pour éclosion auto
         return None # Pas encore l'heure
@@ -193,11 +231,11 @@ class Nest:
 
         # Incrémente le compteur de passages
         self.ai_pass_count += 1
-        print(f"AI passed over nest at {self.position} ({self.ai_pass_count}/3)")
+        logger.debug("AI passed over nest at %s (%s/3)", self.position, self.ai_pass_count)
 
         # Si l'IA est passée 3 fois, le nid éclot
         if self.ai_pass_count >= 3:
-            print(f"Nest at {self.position} triggered by AI hatch after 3 passes!")
+            logger.info("Nest at %s triggered by AI hatch after 3 passes!", self.position)
             self.is_active = False # Se désactive immédiatement
             return 'ai_hatch' # Identifiant pour éclosion par IA
 
@@ -604,7 +642,10 @@ class Snake:
     def _find_safe_initial_direction(self, start_pos, walls_list, default_direction):
         # --- Vérification de sécurité : S'assurer que start_pos est valide ---
         if not isinstance(start_pos, tuple) or len(start_pos) != 2:
-            print(f"ERREUR _find_safe_initial_direction: start_pos invalide: {start_pos}. Utilisation position par défaut.")
+            logger.error(
+                "_find_safe_initial_direction: start_pos invalide: %s. Utilisation position par défaut.",
+                start_pos,
+            )
             # Utiliser une position de secours sûre (loin des bords par exemple)
             start_pos = (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
             # Si start_pos vient d'une source externe (lambda de map), il faut peut-être revoir cette source.
@@ -633,7 +674,11 @@ class Snake:
                      return direction
         # Fallback: Si toutes les directions sont bloquées (très rare), retourne la direction par défaut
         # Cela pourrait causer une mort immédiate si la case par défaut est un mur, mais évite un crash.
-        print(f"Warning: _find_safe_initial_direction - Toutes les directions initiales depuis {start_pos} semblent bloquées. Utilisation défaut {default_direction}.")
+        logger.warning(
+            "_find_safe_initial_direction - Toutes les directions initiales depuis %s semblent bloquées. Utilisation défaut %s.",
+            start_pos,
+            default_direction,
+        )
         return default_direction
 
     def respawn(self, current_time, current_game_mode, walls):
@@ -724,7 +769,12 @@ class Snake:
             elif effect == 'ghost':
                 self.ghost_active = False
             elif effect == 'freeze_self':
-                print(f"DEBUG: {self.name} - UNFREEZING NOW. Current time: {current_time}, Expiration was: {expiration_time}")
+                logger.debug(
+                    "%s - UNFREEZING NOW. Current time: %s, Expiration was: %s",
+                    self.name,
+                    current_time,
+                    expiration_time,
+                )
 
                 self.frozen = False
             self.effect_end_timers.pop(effect, None)
@@ -763,8 +813,12 @@ class Snake:
         #     self.shield_skill_end_time = 0
         # Optionnel: Effet visuel/sonore de fin de bouclier
         if self.shield_charge_active and current_time >= self.shield_charge_expiry_time:
-            print(
-                f"DEBUG update_effects: Shield CHARGE expired for {self.name}. Current: {current_time}, Expiry: {self.shield_charge_expiry_time}")  # DEBUG
+            logger.debug(
+                "Shield CHARGE expired for %s. Current: %s, Expiry: %s",
+                self.name,
+                current_time,
+                self.shield_charge_expiry_time,
+            )
             self.shield_charge_active = False
             self.shield_charge_expiry_time = 0
         # --- FIN MODIFICATION ---
@@ -1018,7 +1072,7 @@ class Snake:
             # --- MODIFICATION : Vérification et CONSOMMATION Bouclier de COMPÉTENCE ---
             # if self.shield_skill_active: # <- Ancienne vérification
             if self.shield_charge_active: # <- Nouvelle vérification
-                print(f"DEBUG handle_damage: SKILL shield charge absorbed damage for {self.name}") # DEBUG
+                logger.debug("SKILL shield charge absorbed damage for %s", self.name)
                 self.shield_charge_active = False # Consomme la charge
                 self.shield_charge_expiry_time = 0 # Annule l'expiration
                 # Jouer un son différent si le bouclier de compétence absorbe
@@ -1096,7 +1150,7 @@ class Snake:
     def activate_powerup(self, type_key, current_time):
         # --- Suppression Logique "armor_plate" ---
         if type_key == "armor_plate": # Ne devrait plus arriver si supprimé de POWERUP_TYPES
-             print("WARNING: Tried to activate removed 'armor_plate' powerup.")
+             logger.warning("Tried to activate removed 'armor_plate' powerup.")
              # armor_gain = config.POWERUP_TYPES.get(type_key, {}).get("armor_bonus", 1)
              # self.add_armor(armor_gain)
              # utils.play_sound("powerup_pickup")
@@ -1158,7 +1212,7 @@ class Snake:
 
         # --- Logique déplacée pour 'armor_plate' dans run_game ---
         if effect_name == 'armor_plate':
-            print("DEBUG apply_food_effect: Skipping 'armor_plate' effect here, handled in run_game.")
+            logger.debug("Skipping 'armor_plate' effect here, handled in run_game.")
             update_timer_flag = False # Pas de timer d'effet pour celui-ci
             sound_effect = "eat_special" # Joue quand même le son
 
@@ -1197,7 +1251,7 @@ class Snake:
             if self.is_player:
                 increment = food_data.get('multiplier_increment', 0.05)
                 self.persistent_score_multiplier += increment
-                print(f"Persistent Multiplier increased to: {self.persistent_score_multiplier:.2f}")
+                logger.debug("Persistent Multiplier increased to: %.2f", self.persistent_score_multiplier)
                 sound_effect = "eat_special"
             update_timer_flag = False
 
@@ -1210,7 +1264,12 @@ class Snake:
                 update_timer_flag = False
 
         elif effect_name == 'freeze_self':
-            print(f"DEBUG: {self.name} - Freeze timer set. End time: {self.effect_end_timers.get('freeze_self')}, Current time: {current_time}")
+            logger.debug(
+                "%s - Freeze timer set. End time: %s, Current time: %s",
+                self.name,
+                self.effect_end_timers.get('freeze_self'),
+                current_time,
+            )
             # Généralement pour l'IA
             sound_effect = "effect_freeze"
             self.frozen = True
@@ -1313,7 +1372,7 @@ class Snake:
         if not self.alive or not self.is_player or not self.dash_ready:
             return {'died': False, 'collided': False, 'type': None}
 
-        print(f"{self.name} activated Dash!")
+        logger.debug("%s activated Dash!", self.name)
         self.dash_ready = False
         self.last_dash_time = current_time
         utils.play_sound("dash_sound")
@@ -1417,7 +1476,7 @@ class Snake:
         if not self.alive or not self.is_player or not self.shield_ready:
             return
 
-        print(f"{self.name} activated Shield!")
+        logger.debug("%s activated Shield!", self.name)
         self.shield_ready = False
         self.last_shield_time = current_time
         # self.shield_skill_active = True # <- Remplacé
@@ -1939,7 +1998,13 @@ class Snake:
             # --- MODIFICATION : Enregistre le timer directement ici ---
             expiration_time = current_time + duration
             self.effect_end_timers['freeze_self'] = expiration_time
-            print(f"DEBUG: {self.name} - Freeze timer explicitly set. End time: {expiration_time}, Current time: {current_time}, Duration: {duration}")
+            logger.debug(
+                "%s - Freeze timer explicitly set. End time: %s, Current time: %s, Duration: %s",
+                self.name,
+                expiration_time,
+                current_time,
+                duration,
+            )
             # --- FIN MODIFICATION ---
             cx, cy = self.get_head_center_px()
             if cx is not None: # <--- Corrected indentation
@@ -1986,7 +2051,7 @@ class EnemySnake(Snake):
         self.length = config.ENEMY_INITIAL_SIZE
         # S'assure que start_pos est valide avant de l'utiliser
         if not isinstance(self.start_pos, tuple) or len(self.start_pos) != 2:
-            print(f"ERREUR EnemySnake.reset: start_pos invalide ({self.start_pos}). Utilisation pos défaut.")
+            logger.error("EnemySnake.reset: start_pos invalide (%s). Utilisation pos défaut.", self.start_pos)
             self.start_pos = (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
 
         self.positions = [self.start_pos]
@@ -2029,7 +2094,11 @@ class EnemySnake(Snake):
                         break
                 if not found_alternative:
                     # Si même les tours sont bloqués, arrête la croissance prématurément
-                    print(f"Warning: EnemySnake reset - Could not fully grow initial body for {self.name}. Length: {len(self.positions)}")
+                    logger.warning(
+                        "EnemySnake reset - Could not fully grow initial body for %s. Length: %s",
+                        self.name,
+                        len(self.positions),
+                    )
                     break # Sort de la boucle while
 
         self.length = len(self.positions) # Met à jour la longueur réelle
@@ -2380,7 +2449,7 @@ class Food:
         self.type = type_key
         self.type_data = config.FOOD_TYPES.get(type_key)
         if not self.type_data:
-            print(f"WARNING: Food type '{type_key}' not found in config.FOOD_TYPES. Defaulting to 'normal'.")
+            logger.warning("Food type '%s' not found in config.FOOD_TYPES. Defaulting to 'normal'.", type_key)
             self.type = 'normal'
             self.type_data = config.FOOD_TYPES['normal']
         self.objective_tag = self.type_data.get('objective_tag')
@@ -2405,16 +2474,17 @@ class Food:
         image = utils.images.get(image_file) if image_file else None
 
         # Log si l'image est manquante alors qu'elle devrait être là (throttled/debug only)
-        if image_file and not image:
+        if image_file and not image and image_file not in _MISSING_IMAGE_FILES_LOGGED:
             # On utilise logger.debug pour ne pas spammer, mais ça aidera si on active le debug
-            if random.random() < 0.01: # 1% chance to log to avoid spam
-                logger.warning(f"Image manquante pour food {self.type}: {image_file}")
+            _MISSING_IMAGE_FILES_LOGGED.add(image_file)
+            logger.warning("Image manquante pour food %s: %s", self.type, image_file)
 
         if image:
             try:
                 # Scale image to the animated size
-                scaled_image = pygame.transform.scale(image, (scaled_size, scaled_size))
-                surface.blit(scaled_image, draw_rect)
+                scaled_image = _get_scaled_surface_cached(image, image_file, scaled_size)
+                if scaled_image is not None:
+                    surface.blit(scaled_image, draw_rect)
                 return # Image drawn, skip default drawing
             except Exception as img_err:
                 # Log error and fallback to default drawing
@@ -2442,14 +2512,14 @@ class Food:
                 try:
                     surface.blit(s_text, s_rect)
                 except Exception as blit_e:
-                    print(f"Error blitting powerup symbol: {blit_e}") # Catch potential blit errors
+                    logger.debug("Error blitting food symbol '%s': %s", symbol, blit_e)
 
 class PowerUp:
     """Représente un item power-up."""
     def __init__(self, position, type_key):
         if type_key not in config.POWERUP_TYPES:
             # --- MODIF: Gestion type inconnu ---
-            print(f"WARNING: Powerup type '{type_key}' not found in config.POWERUP_TYPES. Ignoring spawn.")
+            logger.warning("Powerup type '%s' not found in config.POWERUP_TYPES. Ignoring spawn.", type_key)
             self.position = None;
             self.type = None
             self.data = {}
@@ -2494,16 +2564,15 @@ class PowerUp:
         image_file = self.data.get('image_file')
         image = utils.images.get(image_file) if image_file else None
 
-        # Log si l'image est manquante (throttled)
-        if image_file and not image:
-            if random.random() < 0.01:
-                logger.warning(f"Image manquante pour powerup {self.type}: {image_file}")
+        if image_file and not image and image_file not in _MISSING_IMAGE_FILES_LOGGED:
+            _MISSING_IMAGE_FILES_LOGGED.add(image_file)
+            logger.warning("Image manquante pour powerup %s: %s", self.type, image_file)
 
         if image:
             try:
-                # Scale image to the animated size
-                scaled_image = pygame.transform.scale(image, (scaled_size, scaled_size))
-                surface.blit(scaled_image, draw_rect)
+                scaled_image = _get_scaled_surface_cached(image, image_file, scaled_size)
+                if scaled_image is not None:
+                    surface.blit(scaled_image, draw_rect)
                 return # Image drawn, skip default drawing
             except Exception as img_err:
                 logger.warning(f"Error drawing powerup image {image_file}: {img_err}")

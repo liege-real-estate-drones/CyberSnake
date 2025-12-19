@@ -278,6 +278,8 @@ def main():
         'joystick_p1': joystick_p1, 'joystick_p1_name': joystick_p1_name, 'num_buttons_p1': num_buttons_p1,
         'joystick_p2': joystick_p2, 'joystick_p2_name': joystick_p2_name, 'num_buttons_p2': num_buttons_p2,
         'calculated_grid_size': calculated_grid_size,
+        # Inactivité (mode démo)
+        'last_input_time': pygame.time.get_ticks(),
     }
 
     # Check for update flag
@@ -305,6 +307,7 @@ def main():
         config.GAME_OVER: game_states.run_game_over,
         config.HALL_OF_FAME: game_states.run_hall_of_fame,
         config.UPDATE: game_states.run_update,
+        config.DEMO: game_states.run_demo,
     }
     # --- Fin Mappage États ---
 
@@ -314,37 +317,162 @@ def main():
     while running:
         dt = clock.tick(60)
         events = pygame.event.get()
-        current_state_key = game_state['current_state']
-        run_current_state = state_functions.get(current_state_key)
+        now_ticks = pygame.time.get_ticks()
 
-        if run_current_state:
+        # --- Inactivité / Attract (démo) ---
+        try:
+            last_input_time = int(game_state.get('last_input_time', now_ticks))
+        except Exception:
+            last_input_time = now_ticks
+
+        def _is_user_input_event(ev):
             try:
-                next_state_val = run_current_state(events, dt, screen, game_state)
-
-                if isinstance(next_state_val, bool) and not next_state_val:
-                    logging.info("Signal de fin de jeu reçu de l'état actuel.")
-                    running = False
-                elif isinstance(next_state_val, int) and next_state_val != current_state_key:
-                    logging.debug(f"Changement d'état de {current_state_key} vers {next_state_val}")
-                    game_state['current_state'] = next_state_val
-                # Si next_state_val est un int ET égal à current_state_key, on reste dans le même état.
-                # Si next_state_val est None (certaines fonctions pourraient retourner None implicitement),
-                # on pourrait considérer cela comme "rester dans l'état actuel" ou logguer une alerte.
-                # Pour l'instant, on ne change d'état que si explicitement différent.
-
-            except Exception as e:
-                # MODIFIÉ: Log l'erreur complète dans le fichier log
-                logging.error(f"--- ERREUR DANS L'ÉTAT {current_state_key} ---", exc_info=True)
+                t = ev.type
+            except Exception:
+                return False
+            if t in (pygame.JOYBUTTONDOWN, pygame.JOYHATMOTION, pygame.KEYDOWN):
+                return True
+            if t == pygame.JOYAXISMOTION:
                 try:
-                    pygame.mixer.music.stop()
-                except Exception as music_err:
-                    logging.warning(f"Erreur mineure arrêt musique lors gestion erreur: {music_err}", exc_info=False)
-                game_state['current_state'] = config.MENU # Retour au menu par sécurité
-                pygame.time.wait(2000) # Pause pour potentiellement voir l'erreur si console visible
+                    thr = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                except Exception:
+                    thr = 0.6
+                try:
+                    return abs(float(getattr(ev, "value", 0.0))) > thr
+                except Exception:
+                    return False
+            return False
+
+        if any(_is_user_input_event(ev) for ev in events):
+            game_state['last_input_time'] = now_ticks
+            last_input_time = now_ticks
+
+        # --- Transitions (fondu) ---
+        fade_ms = int(getattr(config, "TRANSITION_FADE_MS", 260))
+        fade_ms = max(60, fade_ms)
+
+        def _get_fade_overlay():
+            overlay = game_state.get('_transition_fade_overlay')
+            try:
+                if overlay is None or overlay.get_size() != screen.get_size():
+                    overlay = pygame.Surface(screen.get_size())
+                    overlay.fill((0, 0, 0))
+                    game_state['_transition_fade_overlay'] = overlay
+            except Exception:
+                overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+                overlay.fill((0, 0, 0))
+                game_state['_transition_fade_overlay'] = overlay
+            return overlay
+
+        transition_phase = game_state.get('_transition_phase')
+        transition_alpha = float(game_state.get('_transition_alpha', 0.0) or 0.0)
+        transition_from_surface = game_state.get('_transition_from_surface')
+
+        if transition_phase == 'fade_out' and transition_from_surface is not None:
+            try:
+                if transition_from_surface.get_size() != screen.get_size():
+                    transition_from_surface = pygame.transform.smoothscale(transition_from_surface, screen.get_size())
+                screen.blit(transition_from_surface, (0, 0))
+            except Exception:
+                screen.fill((0, 0, 0))
+
+            transition_alpha = min(255.0, transition_alpha + (255.0 * float(dt) / float(fade_ms)))
+            overlay = _get_fade_overlay()
+            overlay.set_alpha(int(transition_alpha))
+            screen.blit(overlay, (0, 0))
+            game_state['_transition_alpha'] = transition_alpha
+
+            if transition_alpha >= 255.0:
+                game_state['_transition_phase'] = 'fade_in'
+                game_state['_transition_alpha'] = 255.0
+                game_state.pop('_transition_from_surface', None)
+
+        elif transition_phase == 'fade_in':
+            current_state_key = game_state.get('current_state', config.MENU)
+            run_current_state = state_functions.get(current_state_key)
+            if run_current_state:
+                try:
+                    # Pendant le fondu, on ignore les inputs (évite un double-select)
+                    run_current_state([], dt, screen, game_state)
+                except Exception:
+                    logging.error(f"--- ERREUR DANS L'ÉTAT {current_state_key} (fade_in) ---", exc_info=True)
+                    game_state['current_state'] = config.MENU
+            else:
+                logging.error(f"État de jeu inconnu (fade_in): {current_state_key}. Retour au menu.")
+                game_state['current_state'] = config.MENU
+
+            # Permet à un état (ex: Options) de recréer la surface écran
+            screen = game_state.get('screen', screen)
+
+            overlay = _get_fade_overlay()
+            overlay.set_alpha(int(max(0.0, min(255.0, transition_alpha))))
+            screen.blit(overlay, (0, 0))
+
+            transition_alpha = max(0.0, transition_alpha - (255.0 * float(dt) / float(fade_ms)))
+            game_state['_transition_alpha'] = transition_alpha
+            if transition_alpha <= 0.0:
+                game_state.pop('_transition_phase', None)
+                game_state.pop('_transition_alpha', None)
+
         else:
-            # MODIFIÉ: Log l'erreur d'état inconnu
-            logging.error(f"État de jeu inconnu ou fonction non trouvée pour clé: {current_state_key}. Retour au menu.")
-            game_state['current_state'] = config.MENU
+            # --- Exécution normale d'un état ---
+            current_state_key = game_state.get('current_state', config.MENU)
+            run_current_state = state_functions.get(current_state_key)
+
+            if run_current_state:
+                try:
+                    # Déclenche la démo uniquement hors partie (et hors update/pause)
+                    idle_demo_states = {
+                        config.MENU,
+                        config.OPTIONS,
+                        config.HALL_OF_FAME,
+                        config.MAP_SELECTION,
+                        config.PVP_SETUP,
+                        config.NAME_ENTRY_SOLO,
+                        config.NAME_ENTRY_PVP,
+                        config.GAME_OVER,
+                    }
+                    force_next_state = None
+                    if (
+                        current_state_key in idle_demo_states
+                        and current_state_key != config.DEMO
+                        and (now_ticks - last_input_time) >= int(getattr(config, "DEMO_IDLE_TIMEOUT_MS", 180000))
+                    ):
+                        force_next_state = config.DEMO
+
+                    next_state_val = run_current_state(events, dt, screen, game_state)
+
+                    # Permet à un état (ex: Options) de recréer la surface écran
+                    screen = game_state.get('screen', screen)
+
+                    if isinstance(next_state_val, bool) and not next_state_val:
+                        logging.info("Signal de fin de jeu reçu de l'état actuel.")
+                        running = False
+                    else:
+                        requested_state = force_next_state if isinstance(force_next_state, int) else next_state_val
+                        if isinstance(requested_state, int) and requested_state != current_state_key:
+                            logging.debug(f"Changement d'état de {current_state_key} vers {requested_state}")
+                            try:
+                                game_state['_transition_from_surface'] = screen.copy()
+                                game_state['_transition_phase'] = 'fade_out'
+                                game_state['_transition_alpha'] = 0.0
+                            except Exception:
+                                game_state['_transition_phase'] = 'fade_in'
+                                game_state['_transition_alpha'] = 255.0
+                            game_state['current_state'] = requested_state
+                            game_state['last_input_time'] = now_ticks
+
+                except Exception:
+                    logging.error(f"--- ERREUR DANS L'ÉTAT {current_state_key} ---", exc_info=True)
+                    try:
+                        pygame.mixer.music.stop()
+                    except Exception as music_err:
+                        logging.warning(f"Erreur mineure arrêt musique lors gestion erreur: {music_err}", exc_info=False)
+                    game_state['current_state'] = config.MENU # Retour au menu par sécurité
+                    pygame.time.wait(2000) # Pause pour potentiellement voir l'erreur si console visible
+            else:
+                logging.error(f"État de jeu inconnu ou fonction non trouvée pour clé: {current_state_key}. Retour au menu.")
+                game_state['current_state'] = config.MENU
 
         # Permet à un état (ex: Options) de recréer la surface écran
         screen = game_state.get('screen', screen)
