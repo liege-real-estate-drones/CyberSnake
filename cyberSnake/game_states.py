@@ -1612,7 +1612,7 @@ def run_menu(events, dt, screen, game_state):
         row_h = max(48, min(64, int((available_h - 40) / max(1, len(menu_options)))))
         panel_h = max(220, (len(menu_options) * row_h) + 40)
         panel_x = (config.SCREEN_WIDTH - panel_w) // 2
-        panel_y = max(panel_top_min, legend_y - panel_h - 12)
+        panel_y = max(12, min(panel_top_min, legend_y - panel_h - 12))
         menu_panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
         draw_ui_panel(screen, menu_panel_rect)
 
@@ -1625,10 +1625,12 @@ def run_menu(events, dt, screen, game_state):
         pulse = 0.55 + 0.45 * math.sin(current_time * 0.008)
         hl_alpha = int(40 + 60 * pulse)
 
-        for i, (_, text, hs_text) in enumerate(menu_options):
+        safe_selection_index = menu_selection_index if 0 <= menu_selection_index < len(menu_options) else 0
+
+        for i, (mode_id, text, _) in enumerate(menu_options):
             y = row_y0 + (i * row_h)
             row_rect = pygame.Rect(row_x, y, row_w, row_h - 8)
-            is_selected = (i == menu_selection_index)
+            is_selected = (i == safe_selection_index)
 
             if is_selected:
                 hl = pygame.Surface(row_rect.size, pygame.SRCALPHA)
@@ -1646,39 +1648,31 @@ def run_menu(events, dt, screen, game_state):
                 font_medium,
                 main_color,
                 config.COLOR_UI_SHADOW,
-                (row_rect.centerx, row_rect.top + 10),
-                "midtop",
+                (row_rect.centerx, row_rect.centery),
+                "center",
             )
-            if hs_text:
-                hs_color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT
-                utils.draw_text(
-                    screen,
-                    hs_text,
-                    font_small,
-                    hs_color,
-                    (row_rect.centerx, row_rect.bottom - 12),
-                    "midbottom",
-                )
+
+        selected_id, _, selected_hs_text = menu_options[safe_selection_index]
+        info_text = selected_hs_text
+        if not info_text:
+            if selected_id == config.OPTIONS:
+                info_text = "Configurer le jeu"
+            elif selected_id == config.HALL_OF_FAME:
+                info_text = "Voir les meilleurs scores"
+            elif selected_id == config.UPDATE:
+                info_text = "Mettre à jour le jeu"
+
+        if info_text:
+            utils.draw_text(
+                screen,
+                info_text,
+                font_small,
+                config.COLOR_TEXT,
+                (menu_panel_rect.centerx, menu_panel_rect.bottom - 14),
+                "midbottom",
+            )
 
         # --- Légende contrôles (joystick only) ---
-        confirm_btn = getattr(config, "BUTTON_PRIMARY_ACTION", 1)
-        back_btn = getattr(config, "BUTTON_SECONDARY_ACTION", 2)
-        music_btn = 4
-        quit_btn = 8
-        legend_lines = [
-            f"Stick/Croix: Naviguer   |   Bouton {confirm_btn}: Valider   |   Bouton {back_btn}: Retour",
-            f"Bouton {music_btn}: Musique   |   Bouton {quit_btn}: Quitter   |   Inactivité: Démo (3 min)",
-        ]
-        legend_h = (font_small.get_height() + 6) * len(legend_lines) + 14
-        legend_w = min(int(config.SCREEN_WIDTH * 0.92), 900)
-        legend_x = (config.SCREEN_WIDTH - legend_w) // 2
-        legend_y = config.SCREEN_HEIGHT - legend_h - 10
-        legend_rect = pygame.Rect(legend_x, legend_y, legend_w, legend_h)
-        # Force une version "propre" (certains fichiers ont des caractères accentués corrompus)
-        legend_lines = [
-            f"Stick/Croix: Naviguer   |   Bouton {confirm_btn}: Valider   |   Bouton {back_btn}: Retour",
-            f"Bouton {music_btn}: Musique   |   Bouton {quit_btn}: Quitter   |   Inactivité: Démo (3 min)",
-        ]
         draw_ui_panel(screen, legend_rect)
         y_text = legend_rect.top + 10
         for line in legend_lines:
@@ -1687,7 +1681,6 @@ def run_menu(events, dt, screen, game_state):
 
         # Petit rappel musique
         try:
-            music_track_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
             music_track_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
             utils.draw_text(
                 screen,
