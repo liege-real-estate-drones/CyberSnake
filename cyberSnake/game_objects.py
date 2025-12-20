@@ -4,7 +4,7 @@
 import pygame
 import random
 import math
-from collections import defaultdict, OrderedDict
+from collections import defaultdict, OrderedDict, deque
 
 # Importe toutes les constantes depuis config.py
 import config
@@ -2015,11 +2015,37 @@ class Snake:
         """Met à jour la difficulté de l'IA basée sur un niveau donné."""
         if not self.is_ai or not self.alive: return
         # Assure que le niveau est au moins 0
-        effective_level = max(0, level)
-        # Calcule les nouveaux intervalles basés sur le niveau
-        self.move_interval = config.ENEMY_MOVE_INTERVAL_BASE * (config.ENEMY_SPEED_INCREASE_FACTOR ** effective_level)
+        try:
+            effective_level = max(0.0, float(level))
+        except Exception:
+            effective_level = 0.0
+
+        # Applique un preset de difficulté (easy/normal/hard/insane) en plus de la montée dynamique.
+        preset_key = getattr(self, "ai_difficulty_key", None) or getattr(config, "AI_DIFFICULTY", "normal")
+        try:
+            preset_key = str(preset_key).strip().lower()
+        except Exception:
+            preset_key = "normal"
+
+        presets = getattr(config, "AI_DIFFICULTY_PRESETS", {}) or {}
+        preset = presets.get(preset_key) or presets.get("normal") or {}
+
+        try:
+            move_mult = float(preset.get("move_interval_mult", 1.0))
+        except Exception:
+            move_mult = 1.0
+        try:
+            shoot_mult = float(preset.get("shoot_cooldown_mult", 1.0))
+        except Exception:
+            shoot_mult = 1.0
+
+        base_move = config.ENEMY_MOVE_INTERVAL_BASE * move_mult
+        base_shoot = config.ENEMY_SHOOT_COOLDOWN_BASE * shoot_mult
+
+        self.move_interval = base_move * (config.ENEMY_SPEED_INCREASE_FACTOR ** effective_level)
         self.move_interval = max(config.MIN_ENEMY_MOVE_INTERVAL, self.move_interval) # Applique la limite minimale
-        self.shoot_cooldown = config.ENEMY_SHOOT_COOLDOWN_BASE * (config.ENEMY_SHOOT_INCREASE_FACTOR ** effective_level)
+
+        self.shoot_cooldown = base_shoot * (config.ENEMY_SHOOT_INCREASE_FACTOR ** effective_level)
         self.shoot_cooldown = max(config.MIN_ENEMY_SHOOT_COOLDOWN, self.shoot_cooldown) # Applique la limite minimale
         # Optionnel: Afficher la mise à jour pour le débogage
         # print(f"DEBUG: AI {self.name} difficulty updated to level {effective_level}. Move Interval: {self.move_interval:.0f}ms, Shoot Cooldown: {self.shoot_cooldown:.0f}ms")
@@ -2027,14 +2053,22 @@ class Snake:
 class EnemySnake(Snake):
     """Classe spécialisée pour l'IA."""
     def __init__(self, start_pos=None, current_game_mode=None, walls=None, start_armor=0, start_ammo=config.ENEMY_INITIAL_AMMO, can_get_bonuses=True, is_baby=False):
+        # Attributs utilisés pendant le reset (appelé depuis Snake.__init__)
+        self.is_baby = bool(is_baby)  # Flag pour identifier les bébés serpents
+        self.ai_target_pos = None
+        self.ai_difficulty_key = None
+        self.ai_profile = {}
+        self._ai_next_decision_time = 0
+        self._ai_burst_window_start = 0
+        self._ai_burst_count = 0
+        self._ai_burst_pause_until = 0
+
         # Passe les nouveaux arguments à la classe parent Snake
-        name = "Bébé IA" if is_baby else "IA"
+        name = "Bébé IA" if self.is_baby else "IA"
         super().__init__(player_num=0, name=name, start_pos=start_pos,
                          current_game_mode=current_game_mode, walls=walls,
                          start_armor=start_armor, start_ammo=start_ammo, # Passe les valeurs spécifiques
                          can_get_bonuses=can_get_bonuses) # Passe le flag bonus
-        self.ai_target_pos = None
-        self.is_baby = is_baby  # Flag pour identifier les bébés serpents
         self.last_shot_time = 0 # Ensure AI snakes have this attribute for cooldown checks
         # Le reset est déjà appelé par le parent, mais on l'appelle à nouveau
         # pour s'assurer que la logique spécifique AI (corps) est exécutée.
@@ -2042,6 +2076,174 @@ class EnemySnake(Snake):
         # self.reset(current_game_mode, walls) # Pas besoin de le rappeler ici si super().__init__ le fait déjà via son propre reset
         # Réinitialise can_get_bonuses après le reset du parent si nécessaire (normalement géré dans __init__)
         self.can_get_bonuses = can_get_bonuses
+        # Applique le preset de difficulté sélectionné (peut modifier vitesse / tir / logique)
+        try:
+            self.set_ai_difficulty(getattr(config, "AI_DIFFICULTY", "normal"), apply_now=True)
+        except Exception:
+            pass
+
+    def set_ai_difficulty(self, difficulty_key, apply_now=True):
+        """Définit le profil de difficulté de l'IA (indépendant de la difficulté dynamique)."""
+        presets = getattr(config, "AI_DIFFICULTY_PRESETS", {}) or {}
+        try:
+            key = str(difficulty_key).strip().lower()
+        except Exception:
+            key = "normal"
+        if key not in presets:
+            key = "normal" if "normal" in presets else (next(iter(presets.keys()), "normal") if isinstance(presets, dict) else "normal")
+        self.ai_difficulty_key = key
+        self.ai_profile = dict(presets.get(key, {}) or {})
+        if apply_now and self.is_ai and self.alive:
+            try:
+                self.update_difficulty(0)
+            except Exception:
+                pass
+
+    def _ai_get_profile(self):
+        if isinstance(getattr(self, "ai_profile", None), dict) and self.ai_profile:
+            return self.ai_profile
+        try:
+            key = str(getattr(self, "ai_difficulty_key", None) or getattr(config, "AI_DIFFICULTY", "normal")).strip().lower()
+        except Exception:
+            key = "normal"
+        presets = getattr(config, "AI_DIFFICULTY_PRESETS", {}) or {}
+        preset = presets.get(key) or presets.get("normal") or {}
+        return preset if isinstance(preset, dict) else {}
+
+    def _ai_reachable_area(self, start, obstacles, max_nodes=80):
+        """Estimation rapide de place libre (anti auto-trap). Grille avec wrap-around."""
+        try:
+            if start in obstacles:
+                return 0
+            visited = {start}
+            q = deque([start])
+            while q and len(visited) < max_nodes:
+                x, y = q.popleft()
+                for dx, dy in config.DIRECTIONS:
+                    nx = (x + dx + config.GRID_WIDTH) % config.GRID_WIDTH
+                    ny = (y + dy + config.GRID_HEIGHT) % config.GRID_HEIGHT
+                    nxt = (nx, ny)
+                    if nxt in obstacles or nxt in visited:
+                        continue
+                    visited.add(nxt)
+                    q.append(nxt)
+                    if len(visited) >= max_nodes:
+                        break
+            return len(visited)
+        except Exception:
+            return 0
+
+    def _ai_ray_hit_distance(self, start_pos, direction, target_positions, blocking_positions, max_steps):
+        """Retourne la distance (en cases) au premier hit sur target_positions, ou None si aucun."""
+        try:
+            x, y = start_pos
+            dx, dy = direction
+            dx = int(dx)
+            dy = int(dy)
+        except Exception:
+            return None
+        if dx == 0 and dy == 0:
+            return None
+
+        for step in range(1, int(max_steps) + 1):
+            x += dx
+            y += dy
+            if x < 0 or x >= config.GRID_WIDTH or y < 0 or y >= config.GRID_HEIGHT:
+                return None
+            p = (x, y)
+            if p in target_positions:
+                return step
+            if p in blocking_positions:
+                return None
+        return None
+
+    def _ai_should_shoot(self, current_time, head_pos, direction, target_snake, blocking_positions):
+        """Décision de tir réaliste: alignement + visibilité + discipline (burst)."""
+        if not self.alive:
+            return False
+        if self.ammo <= 0:
+            return False
+        if not target_snake or not target_snake.alive:
+            return False
+
+        try:
+            current_time = int(current_time)
+        except Exception:
+            current_time = pygame.time.get_ticks()
+
+        if current_time < int(getattr(self, "_ai_burst_pause_until", 0) or 0):
+            return False
+
+        cooldown = self.get_current_shoot_cooldown()
+        if current_time - int(getattr(self, "last_shot_time", 0) or 0) < int(cooldown):
+            return False
+
+        profile = self._ai_get_profile()
+        try:
+            max_steps = int(getattr(config, "ENEMY_SHOOT_RANGE", 12) or 12)
+        except Exception:
+            max_steps = 12
+
+        try:
+            target_positions = set(target_snake.positions)
+        except Exception:
+            target_positions = set()
+        if not target_positions:
+            return False
+
+        blocking = set(blocking_positions) if blocking_positions else set()
+        blocking.difference_update(target_positions)
+
+        hit_dist = self._ai_ray_hit_distance(head_pos, direction, target_positions, blocking, max_steps)
+        if hit_dist is None:
+            return False
+
+        # Burst window management (évite la mitraillette infinie)
+        try:
+            burst_window_ms = int(profile.get("burst_window_ms", 1400) or 1400)
+        except Exception:
+            burst_window_ms = 1400
+        try:
+            burst_max = int(profile.get("burst_max", 2) or 2)
+        except Exception:
+            burst_max = 2
+        try:
+            burst_pause_ms = int(profile.get("burst_pause_ms", 650) or 650)
+        except Exception:
+            burst_pause_ms = 650
+
+        w0 = int(getattr(self, "_ai_burst_window_start", 0) or 0)
+        if w0 <= 0 or current_time - w0 > burst_window_ms:
+            self._ai_burst_window_start = current_time
+            self._ai_burst_count = 0
+        if int(getattr(self, "_ai_burst_count", 0) or 0) >= burst_max:
+            self._ai_burst_pause_until = current_time + burst_pause_ms
+            self._ai_burst_window_start = current_time
+            self._ai_burst_count = 0
+            return False
+
+        # Probabilité (distance + discipline)
+        try:
+            base_prob = float(profile.get("shoot_probability", 0.42))
+        except Exception:
+            base_prob = 0.42
+
+        try:
+            closeness = max(0.0, (max_steps - float(hit_dist)) / max(1.0, float(max_steps)))
+        except Exception:
+            closeness = 0.0
+
+        prob = base_prob + (0.25 * closeness)
+        if self.ammo <= 1:
+            prob *= 0.60
+        elif self.ammo >= 6:
+            prob *= 1.10
+        prob = max(0.05, min(0.95, prob))
+
+        if random.random() < prob:
+            self._ai_burst_count = int(getattr(self, "_ai_burst_count", 0) or 0) + 1
+            return True
+        return False
 
     def reset(self, current_game_mode, walls):
         # Appel du reset parent *AVANT* la logique spécifique IA
@@ -2103,6 +2305,16 @@ class EnemySnake(Snake):
 
         self.length = len(self.positions) # Met à jour la longueur réelle
         self.ai_target_pos = None
+        # Reset pacing + burst pour un comportement plus "humain"
+        self._ai_next_decision_time = 0
+        self._ai_burst_window_start = 0
+        self._ai_burst_count = 0
+        self._ai_burst_pause_until = 0
+        # Ré-applique le preset de difficulté après reset (super().reset remet les valeurs de base)
+        try:
+            self.set_ai_difficulty(getattr(self, "ai_difficulty_key", None) or getattr(config, "AI_DIFFICULTY", "normal"), apply_now=True)
+        except Exception:
+            pass
 
     def apply_food_effect(self, type_key, current_time, player1_snake=None, player2_snake=None):
         # --- MODIFICATION: Check can_get_bonuses flag ---
@@ -2144,9 +2356,37 @@ class EnemySnake(Snake):
         # Apply other effects using the parent method
         super().apply_food_effect(type_key, current_time, player1_snake=player1_snake, player2_snake=player2_snake)
 
-    def choose_direction(self, p1_snake, p2_snake, foods_list, mines_list, powerups_list, nests_list, obstacles): # Added nests_list
+    def choose_direction(self, p1_snake, p2_snake, foods_list, mines_list, powerups_list, nests_list, obstacles, current_time=None): # Added nests_list
         head = self.get_head_position()
         if head is None: return
+
+        profile = self._ai_get_profile()
+        try:
+            decision_iv = int(profile.get("decision_interval_ms", 160) or 160)
+        except Exception:
+            decision_iv = 160
+
+        # Limite la "twitchiness" (réaction humaine) : on ne recalcule pas trop souvent,
+        # sauf si la direction actuelle mène à une collision immédiate.
+        if current_time is not None:
+            try:
+                current_time = int(current_time)
+            except Exception:
+                current_time = None
+        if current_time is not None:
+            try:
+                next_forward = (
+                    (head[0] + self.current_direction[0] + config.GRID_WIDTH) % config.GRID_WIDTH,
+                    (head[1] + self.current_direction[1] + config.GRID_HEIGHT) % config.GRID_HEIGHT,
+                )
+                imminent = (
+                    next_forward in obstacles
+                    or (not self.ghost_active and self.length > 1 and next_forward in self.positions[1:])
+                )
+            except Exception:
+                imminent = True
+            if not imminent and current_time < int(getattr(self, "_ai_next_decision_time", 0) or 0):
+                return
 
         target_p = p1_snake # Default target player 1
         # Add logic here if AI should target player 2 in some modes
@@ -2293,6 +2533,30 @@ class EnemySnake(Snake):
             dist_to_player = min(dx, config.GRID_WIDTH - dx) + min(dy, config.GRID_HEIGHT - dy)
             player_near = dist_to_player < config.ENEMY_AI_SIGHT
 
+        # Obstacles pour l'évaluation "place libre": on ajoute le corps de l'IA (en gardant la case de queue si elle bouge).
+        obstacles_eval = set(obstacles) if obstacles else set()
+        if not self.ghost_active:
+            try:
+                body = list(self.positions[1:])
+                if body and (not getattr(self, "growing", False)):
+                    body = body[:-1]
+                obstacles_eval.update(body)
+            except Exception:
+                pass
+
+        # Positions de la cible (pour détecter une vraie ligne de tir)
+        target_positions = set()
+        if target_p and target_p.alive:
+            try:
+                target_positions = set(target_p.positions)
+            except Exception:
+                target_positions = set()
+
+        try:
+            max_shot_steps = int(getattr(config, "ENEMY_SHOOT_RANGE", 12) or 12)
+        except Exception:
+            max_shot_steps = 12
+
         for d, data in moves.items():
             pos = data['pos']
             score = 0
@@ -2307,6 +2571,10 @@ class EnemySnake(Snake):
             if player_near and p_head:
                 dxp = abs(pos[0]-p_head[0]); dyp = abs(pos[1]-p_head[1])
                 d_next = min(dxp, config.GRID_WIDTH-dxp) + min(dyp, config.GRID_HEIGHT-dyp)
+                try:
+                    chase_weight = float(profile.get("chase_weight", 1.0))
+                except Exception:
+                    chase_weight = 1.0
                 aggro = 1.0 + (self.ammo / (config.MAX_AMMO / 2.0)) # Varie de 1.0 à 3.0
                 chase = 0
                 # L'IA est toujours un peu agressive si elle a des munitions
@@ -2316,24 +2584,58 @@ class EnemySnake(Snake):
                     else:
                         chase = 2 * aggro # Poursuite plus modérée si autre cible existe
 
-                    # Bonus pour une ligne de tir claire
-                    line = utils.bresenham_line(pos, p_head)
-                    if all(p not in obstacles for p in line):
-                        # Le bonus est plus élevé à courte portée
-                        score += 8 / (dist_to_player + 1)
+                    chase *= chase_weight
+
+                    # Bonus si ce move crée une vraie ligne de tir (dans la direction choisie)
+                    try:
+                        seek_shot_bonus = float(profile.get("seek_shot_bonus", 4.0))
+                    except Exception:
+                        seek_shot_bonus = 4.0
+                    if target_positions:
+                        blocking = set(obstacles_eval)
+                        blocking.difference_update(target_positions)
+                        hit_dist = self._ai_ray_hit_distance(pos, d, target_positions, blocking, max_shot_steps)
+                        if hit_dist is not None:
+                            score += (seek_shot_bonus / (hit_dist + 0.5))
 
                 if d_next < dist_to_player: score += chase
                 # Fuit plus agressivement si trop proche pour se repositionner
-                elif d_next > dist_to_player and dist_to_player < 3: score -= 5
+                elif d_next > dist_to_player and dist_to_player < 3:
+                    try:
+                        retreat_pen = float(profile.get("retreat_too_close_penalty", 5.5))
+                    except Exception:
+                        retreat_pen = 5.5
+                    score -= retreat_pen
 
             if not self.ghost_active:
                  for dx_c, dy_c in [(0,1), (0,-1), (1,0), (-1,0)]:
-                     adj_x = (pos[0]+dx_c+config.GRID_WIDTH)%config.GRID_WIDTH
-                     adj_y = (pos[1]+dy_c+config.GRID_HEIGHT)%config.GRID_HEIGHT
-                     if (adj_x, adj_y) in obstacles: score -= 2
+                      adj_x = (pos[0]+dx_c+config.GRID_WIDTH)%config.GRID_WIDTH
+                      adj_y = (pos[1]+dy_c+config.GRID_HEIGHT)%config.GRID_HEIGHT
+                      if (adj_x, adj_y) in obstacles:
+                          try:
+                              adj_pen = float(profile.get("adjacent_obstacle_penalty", 2.0))
+                          except Exception:
+                              adj_pen = 2.0
+                          score -= adj_pen
+
+            # Favorise les zones ouvertes (anti pièges)
+            try:
+                max_nodes = int(profile.get("space_nodes", 80) or 80)
+            except Exception:
+                max_nodes = 80
+            try:
+                space_w = float(profile.get("space_weight", 0.13))
+            except Exception:
+                space_w = 0.13
+            if space_w > 0 and max_nodes > 0:
+                score += self._ai_reachable_area(pos, obstacles_eval, max_nodes=max_nodes) * space_w
 
             if d == self.current_direction: score += 1
-            data['score'] = score + random.uniform(-0.1, 0.1) # Réduction du facteur aléatoire
+            try:
+                r = float(profile.get("randomness", 0.10))
+            except Exception:
+                r = 0.10
+            data['score'] = score + random.uniform(-r, r)
 
         best_score = -float('inf')
         best_dirs = []
@@ -2343,15 +2645,21 @@ class EnemySnake(Snake):
 
         chosen_dir = self.current_direction
         if best_dirs:
-            if self.current_direction in best_dirs and random.random() < 0.85: # Increased inertia
-                 chosen_dir = self.current_direction
+            try:
+                inertia = float(profile.get("turn_inertia", 0.85))
+            except Exception:
+                inertia = 0.85
+            if self.current_direction in best_dirs and random.random() < inertia:
+                chosen_dir = self.current_direction
             else:
-                 chosen_dir = random.choice(best_dirs)
+                  chosen_dir = random.choice(best_dirs)
         elif moves:
             chosen_dir = random.choice(list(moves.keys()))
 
         self.next_direction = chosen_dir
         self.ai_target_pos = target_pos
+        if current_time is not None and decision_iv > 0:
+            self._ai_next_decision_time = int(current_time) + int(decision_iv)
 
     # --- START: MODIFIED EnemySnake.move method in game_objects.py ---
     def move(self, p1_snake, p2_snake, foods, mines, powerups, current_time, **kwargs):
@@ -2377,8 +2685,8 @@ class EnemySnake(Snake):
             if snake_obj and snake_obj.alive and snake_obj is not self:
                 obstacles.update(snake_obj.positions)
 
-        # --- Logique de décision de l'IA (inchangée) ---
-        self.choose_direction(p1_snake, p2_snake, foods, mines, powerups, nests_list, obstacles)
+        # --- Logique de décision de l'IA ---
+        self.choose_direction(p1_snake, p2_snake, foods, mines, powerups, nests_list, obstacles, current_time=current_time)
 
         # --- Logique de mouvement de base (similaire à Snake.move) ---
         self._apply_direction_change()
@@ -2402,25 +2710,10 @@ class EnemySnake(Snake):
             next_y = (cur_pos[1] + dy + config.GRID_HEIGHT) % config.GRID_HEIGHT
             new_head = (next_x, next_y)
 
-            # --- Logique de Tir ---
-            p_head = p1_snake.get_head_position() if p1_snake and p1_snake.alive else None
-            if p_head:
-                dist_to_player = abs(new_head[0] - p_head[0]) + abs(new_head[1] - p_head[1])
-                line = utils.bresenham_line(new_head, p_head)
-                line_of_sight = all(pos not in self.current_walls for pos in line)
-
-                # Check for friendly fire
-                for other_ai in all_active_enemies:
-                    if other_ai is not self and other_ai.alive:
-                        if any(pos in other_ai.positions for pos in line):
-                            line_of_sight = False
-                            break
-
-                logging.debug(f"AI {self.name} shooting check: p_head={p_head}, dist={dist_to_player}, LoS={line_of_sight}, ammo={self.ammo}, cooldown_ok={current_time - self.last_shot_time > self.shoot_cooldown}")
-                if self.ammo > 0 and line_of_sight and dist_to_player < config.ENEMY_AI_SIGHT and random.random() < 0.9: # Probabilité de tir augmentée
-                    if current_time - self.last_shot_time > self.shoot_cooldown:
-                        should_shoot = True
-                        logging.info(f"AI {self.name} decided to shoot.")
+            # --- Logique de Tir (alignée à la direction + anti-spam) ---
+            target_p = p1_snake if p1_snake and p1_snake.alive else None
+            if target_p:
+                should_shoot = self._ai_should_shoot(current_time, new_head, self.current_direction, target_p, obstacles)
 
             # --- Logique de Collision (similaire à Snake.move) ---
             died_in_move = False

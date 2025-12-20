@@ -1758,6 +1758,7 @@ def run_options(events, dt, screen, game_state):
         or 'pending_snake_color_p2' not in game_state
         or 'pending_classic_arena' not in game_state
         or 'pending_game_speed' not in game_state
+        or 'pending_ai_difficulty' not in game_state
         or 'pending_particle_density' not in game_state
         or 'pending_screen_shake' not in game_state
         or 'pending_show_fps' not in game_state
@@ -1787,6 +1788,7 @@ def run_options(events, dt, screen, game_state):
         pending_snake_color_p2 = str(opts.get("snake_color_p2", getattr(config, "SNAKE_COLOR_PRESET_P2", "pink"))).strip().lower()
         pending_classic_arena = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
         pending_game_speed = str(opts.get("game_speed", getattr(config, "GAME_SPEED", "normal")))
+        pending_ai_difficulty = str(opts.get("ai_difficulty", getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
         pending_particle_density = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal")))
         pending_screen_shake = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         pending_show_fps = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
@@ -1808,6 +1810,7 @@ def run_options(events, dt, screen, game_state):
         game_state['pending_snake_color_p2'] = pending_snake_color_p2
         game_state['pending_classic_arena'] = pending_classic_arena
         game_state['pending_game_speed'] = pending_game_speed
+        game_state['pending_ai_difficulty'] = pending_ai_difficulty
         game_state['pending_particle_density'] = pending_particle_density
         game_state['pending_screen_shake'] = pending_screen_shake
         game_state['pending_show_fps'] = pending_show_fps
@@ -1835,6 +1838,7 @@ def run_options(events, dt, screen, game_state):
     pending_snake_color_p2 = str(game_state.get('pending_snake_color_p2', getattr(config, "SNAKE_COLOR_PRESET_P2", "pink"))).strip().lower()
     pending_classic_arena = str(game_state.get('pending_classic_arena', getattr(config, "CLASSIC_ARENA", "full")))
     pending_game_speed = str(game_state.get('pending_game_speed', getattr(config, "GAME_SPEED", "normal")))
+    pending_ai_difficulty = str(game_state.get('pending_ai_difficulty', getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
     pending_particle_density = str(game_state.get('pending_particle_density', getattr(config, "PARTICLE_DENSITY", "normal")))
     pending_screen_shake = bool(game_state.get('pending_screen_shake', getattr(config, "SCREEN_SHAKE_ENABLED", True)))
     pending_show_fps = bool(game_state.get('pending_show_fps', getattr(config, "SHOW_FPS", False)))
@@ -1930,6 +1934,26 @@ def run_options(events, dt, screen, game_state):
         pending_game_speed = game_speed_keys[1]
     game_speed_display = dict(game_speeds).get(pending_game_speed, pending_game_speed)
 
+    # Difficulté IA (Vs IA / Survie / Démo)
+    ai_difficulties = []
+    try:
+        presets = getattr(config, "AI_DIFFICULTY_PRESETS", {}) or {}
+        order = list(getattr(config, "AI_DIFFICULTY_ORDER", [])) or list(presets.keys())
+        for k in order:
+            if k in presets:
+                label = (presets.get(k, {}) or {}).get("label", k)
+                ai_difficulties.append((k, str(label)))
+    except Exception:
+        ai_difficulties = []
+    if not ai_difficulties:
+        ai_difficulties = [("easy", "Facile"), ("normal", "Normal"), ("hard", "Difficile"), ("insane", "Insane")]
+
+    ai_difficulty_keys = [k for k, _ in ai_difficulties]
+    pending_ai_difficulty = str(pending_ai_difficulty).strip().lower()
+    if pending_ai_difficulty not in ai_difficulty_keys:
+        pending_ai_difficulty = "normal" if "normal" in ai_difficulty_keys else ai_difficulty_keys[0]
+    ai_difficulty_display = dict(ai_difficulties).get(pending_ai_difficulty, pending_ai_difficulty)
+
     particle_densities = [
         ("off", "Off"),
         ("low", "Faible"),
@@ -1954,6 +1978,7 @@ def run_options(events, dt, screen, game_state):
         ("Couleur J2", snake_color_display_p2),
         ("Arène classique", classic_arena_display),
         ("Vitesse jeu", game_speed_display),
+        ("Difficulté IA", ai_difficulty_display),
         ("Particules", particle_density_display),
         ("Secousse écran", "Oui" if pending_screen_shake else "Non"),
         ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
@@ -1972,14 +1997,15 @@ def run_options(events, dt, screen, game_state):
     IDX_COLOR_P2 = 5
     IDX_CLASSIC_ARENA = 6
     IDX_GAME_SPEED = 7
-    IDX_PARTICLES = 8
-    IDX_SHAKE = 9
-    IDX_SHOW_FPS = 10
-    IDX_MUSIC_VOL = 11
-    IDX_SOUND_VOL = 12
-    IDX_RESET = 13
-    IDX_APPLY = 14
-    IDX_BACK = 15
+    IDX_AI_DIFFICULTY = 8
+    IDX_PARTICLES = 9
+    IDX_SHAKE = 10
+    IDX_SHOW_FPS = 11
+    IDX_MUSIC_VOL = 12
+    IDX_SOUND_VOL = 13
+    IDX_RESET = 14
+    IDX_APPLY = 15
+    IDX_BACK = 16
 
     selection_index = max(0, min(selection_index, len(menu_items) - 1))
 
@@ -2039,6 +2065,14 @@ def run_options(events, dt, screen, game_state):
             idx = 0
         pending_game_speed = game_speed_keys[(idx + delta) % len(game_speed_keys)]
 
+    def cycle_ai_difficulty(delta):
+        nonlocal pending_ai_difficulty
+        try:
+            idx = ai_difficulty_keys.index(pending_ai_difficulty)
+        except ValueError:
+            idx = 0
+        pending_ai_difficulty = ai_difficulty_keys[(idx + delta) % len(ai_difficulty_keys)]
+
     def cycle_particle_density(delta):
         nonlocal pending_particle_density
         try:
@@ -2077,6 +2111,7 @@ def run_options(events, dt, screen, game_state):
         opts["snake_color_p2"] = str(pending_snake_color_p2)
         opts["classic_arena"] = str(pending_classic_arena)
         opts["game_speed"] = str(pending_game_speed)
+        opts["ai_difficulty"] = str(pending_ai_difficulty)
         opts["particle_density"] = str(pending_particle_density)
         opts["screen_shake"] = bool(pending_screen_shake)
         opts["show_fps"] = bool(pending_show_fps)
@@ -2103,6 +2138,11 @@ def run_options(events, dt, screen, game_state):
         speed_map = {"slow": 1.25, "normal": 1.0, "fast": 0.85}
         config.GAME_SPEED = str(pending_game_speed).strip().lower()
         config.GAME_SPEED_FACTOR = float(speed_map.get(config.GAME_SPEED, 1.0))
+
+        try:
+            config.AI_DIFFICULTY = str(pending_ai_difficulty).strip().lower()
+        except Exception:
+            config.AI_DIFFICULTY = "normal"
 
         particle_map = {"off": 0.0, "low": 0.5, "normal": 1.0, "high": 1.6}
         config.PARTICLE_DENSITY = str(pending_particle_density).strip().lower()
@@ -2153,7 +2193,7 @@ def run_options(events, dt, screen, game_state):
     def reset_to_defaults():
         nonlocal pending_show_grid, pending_grid_size
         nonlocal pending_snake_style_p1, pending_snake_style_p2, pending_snake_color_p1, pending_snake_color_p2
-        nonlocal pending_classic_arena, pending_game_speed, pending_particle_density
+        nonlocal pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
         nonlocal pending_screen_shake, pending_show_fps, pending_music_volume, pending_sound_volume
 
         defaults = getattr(utils, "DEFAULT_GAME_OPTIONS", {}) if hasattr(utils, "DEFAULT_GAME_OPTIONS") else {}
@@ -2181,6 +2221,7 @@ def run_options(events, dt, screen, game_state):
 
         pending_classic_arena = str(defaults.get("classic_arena", "full")).strip().lower()
         pending_game_speed = str(defaults.get("game_speed", "normal")).strip().lower()
+        pending_ai_difficulty = str(defaults.get("ai_difficulty", getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
         pending_particle_density = str(defaults.get("particle_density", "normal")).strip().lower()
 
         pending_screen_shake = bool(defaults.get("screen_shake", True))
@@ -2199,7 +2240,7 @@ def run_options(events, dt, screen, game_state):
         pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
 
     def adjust_current(delta):
-        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps
+        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_ai_difficulty
 
         if selection_index == IDX_SHOW_GRID:
             pending_show_grid = not pending_show_grid
@@ -2217,6 +2258,8 @@ def run_options(events, dt, screen, game_state):
             cycle_classic_arena(delta)
         elif selection_index == IDX_GAME_SPEED:
             cycle_game_speed(delta)
+        elif selection_index == IDX_AI_DIFFICULTY:
+            cycle_ai_difficulty(delta)
         elif selection_index == IDX_PARTICLES:
             cycle_particle_density(delta)
         elif selection_index == IDX_SHAKE:
@@ -2343,6 +2386,7 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_snake_color_p2'] = pending_snake_color_p2
     game_state['pending_classic_arena'] = pending_classic_arena
     game_state['pending_game_speed'] = pending_game_speed
+    game_state['pending_ai_difficulty'] = pending_ai_difficulty
     game_state['pending_particle_density'] = pending_particle_density
     game_state['pending_screen_shake'] = pending_screen_shake
     game_state['pending_show_fps'] = pending_show_fps
@@ -2393,6 +2437,7 @@ def run_options(events, dt, screen, game_state):
 
         classic_arena_display = dict(classic_arenas).get(pending_classic_arena, pending_classic_arena)
         game_speed_display = dict(game_speeds).get(pending_game_speed, pending_game_speed)
+        ai_difficulty_display = dict(ai_difficulties).get(pending_ai_difficulty, pending_ai_difficulty)
         particle_density_display = dict(particle_densities).get(pending_particle_density, pending_particle_density)
         music_volume_display = f"{int(round(pending_music_volume * 100))}%"
         sound_volume_display = f"{int(round(pending_sound_volume * 100))}%"
@@ -2410,6 +2455,7 @@ def run_options(events, dt, screen, game_state):
             ("Couleur J2", snake_color_display_p2),
             ("Arène classique", classic_arena_display),
             ("Vitesse jeu", game_speed_display),
+            ("Difficulté IA", ai_difficulty_display),
             ("Particules", particle_density_display),
             ("Secousse écran", "Oui" if pending_screen_shake else "Non"),
             ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
@@ -4841,6 +4887,9 @@ def run_demo(events, dt, screen, game_state):
         game_state['_demo_initialized'] = True
         game_state['_demo_last_turn_time'] = 0
         game_state['_demo_last_shot_time'] = 0
+        game_state['_demo_shoot_burst_window_start'] = 0
+        game_state['_demo_shoot_burst_count'] = 0
+        game_state['_demo_shoot_burst_pause_until'] = 0
         game_state['_demo_last_dash_time'] = 0
         game_state['_demo_round_boosted'] = False
 
@@ -4888,6 +4937,30 @@ def run_demo(events, dt, screen, game_state):
             return len(visited)
         except Exception:
             return 0
+
+    def _ray_hit_distance(start_pos, direction, target_positions, blocking_positions, max_steps):
+        """Distance au premier hit (tir aligné), ou None."""
+        try:
+            x, y = start_pos
+            dx, dy = direction
+            dx = int(dx)
+            dy = int(dy)
+        except Exception:
+            return None
+        if dx == 0 and dy == 0:
+            return None
+
+        for step in range(1, int(max_steps) + 1):
+            x += dx
+            y += dy
+            if x < 0 or x >= config.GRID_WIDTH or y < 0 or y >= config.GRID_HEIGHT:
+                return None
+            p = (x, y)
+            if p in target_positions:
+                return step
+            if p in blocking_positions:
+                return None
+        return None
 
     def _choose_demo_direction(snake, obstacles, food_list, powerups_list):
         head = snake.get_head_position()
@@ -4974,10 +5047,10 @@ def run_demo(events, dt, screen, game_state):
 
         try:
             if p and p.alive:
-                p.armor = max(int(getattr(p, 'armor', 0) or 0), 4)
-                p.ammo = max(int(getattr(p, 'ammo', 0) or 0), 25)
+                p.armor = max(int(getattr(p, 'armor', 0) or 0), 3)
+                p.ammo = max(int(getattr(p, 'ammo', 0) or 0), 14)
                 p.ammo_regen_rate = max(int(getattr(p, 'ammo_regen_rate', 0) or 0), 1)
-                p.ammo_regen_interval = min(int(getattr(p, 'ammo_regen_interval', config.AMMO_REGEN_INITIAL_INTERVAL) or config.AMMO_REGEN_INITIAL_INTERVAL), 1200)
+                p.ammo_regen_interval = min(int(getattr(p, 'ammo_regen_interval', config.AMMO_REGEN_INITIAL_INTERVAL) or config.AMMO_REGEN_INITIAL_INTERVAL), 1600)
                 p.last_ammo_regen_time = current_time
                 p.invincible_timer = max(int(getattr(p, 'invincible_timer', 0) or 0), current_time + 1200)
 
@@ -5116,18 +5189,82 @@ def run_demo(events, dt, screen, game_state):
             except Exception:
                 pass
 
-            # Tire de temps en temps pour montrer l'action
+            # Tir (plus réaliste): uniquement si un tir aligné toucherait l'ennemi + discipline (bursts).
             last_shot = int(game_state.get('_demo_last_shot_time', 0) or 0)
-            if player_snake.ammo > 0 and current_time - last_shot >= 320:
-                if random.random() < 0.85:
-                    new_projectiles = player_snake.shoot(current_time)
-                    if new_projectiles:
-                        game_state['player_projectiles'].extend(new_projectiles)
+            pause_until = int(game_state.get('_demo_shoot_burst_pause_until', 0) or 0)
+
+            if (
+                current_time >= pause_until
+                and enemy_snake
+                and enemy_snake.alive
+                and player_snake.ammo > 0
+                and (current_time - last_shot) >= 280
+            ):
+                head = player_snake.get_head_position()
+                if head:
+                    try:
+                        target_positions = set(enemy_snake.positions)
+                    except Exception:
+                        target_positions = set()
+
+                    if target_positions:
+                        blocking = set(current_map_walls)
                         try:
-                            utils.play_sound(player_snake.shoot_sound)
+                            blocking.update(m.position for m in mines if m and getattr(m, "position", None))
                         except Exception:
                             pass
-                        game_state['_demo_last_shot_time'] = current_time
+                        # Empêche de "tirer à travers soi-même" (plus crédible, même si le jeu n'auto-collide pas sur les projectiles)
+                        try:
+                            if not getattr(player_snake, "ghost_active", False):
+                                body = list(getattr(player_snake, "positions", []))[1:]
+                                if body:
+                                    if not getattr(player_snake, "growing", False):
+                                        body = body[:-1]
+                                    blocking.update(body)
+                        except Exception:
+                            pass
+
+                        blocking.difference_update(target_positions)
+                        max_steps = 20
+                        hit_dist = _ray_hit_distance(head, player_snake.current_direction, target_positions, blocking, max_steps)
+
+                        if hit_dist is not None:
+                            window_start = int(game_state.get('_demo_shoot_burst_window_start', 0) or 0)
+                            burst_count = int(game_state.get('_demo_shoot_burst_count', 0) or 0)
+                            window_ms = 1400
+                            burst_max = 2
+                            burst_pause_ms = 700
+
+                            if window_start <= 0 or current_time - window_start > window_ms:
+                                window_start = current_time
+                                burst_count = 0
+
+                            if burst_count >= burst_max:
+                                game_state['_demo_shoot_burst_pause_until'] = current_time + burst_pause_ms
+                                game_state['_demo_shoot_burst_window_start'] = current_time
+                                game_state['_demo_shoot_burst_count'] = 0
+                            else:
+                                closeness = max(0.0, (max_steps - float(hit_dist)) / float(max_steps))
+                                prob = 0.45 + (0.30 * closeness)
+                                if player_snake.ammo <= 2:
+                                    prob *= 0.55
+                                elif player_snake.ammo >= 8:
+                                    prob *= 1.05
+                                prob = max(0.05, min(0.90, prob))
+
+                                game_state['_demo_shoot_burst_window_start'] = window_start
+                                game_state['_demo_shoot_burst_count'] = burst_count
+
+                                if random.random() < prob:
+                                    new_projectiles = player_snake.shoot(current_time)
+                                    if new_projectiles:
+                                        game_state['player_projectiles'].extend(new_projectiles)
+                                        try:
+                                            utils.play_sound(player_snake.shoot_sound)
+                                        except Exception:
+                                            pass
+                                        game_state['_demo_last_shot_time'] = current_time
+                                        game_state['_demo_shoot_burst_count'] = burst_count + 1
     except Exception:
         logging.debug("Erreur autopilot démo (non bloquante).", exc_info=True)
 

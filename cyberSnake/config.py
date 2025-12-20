@@ -114,6 +114,92 @@ SOLO_MIN_MINE_INTERVAL = 2500  # ms
 JOYSTICK_THRESHOLD = 0.6 # Seuil pour la détection des axes du joystick
 
 
+# --- IA: Profils de difficulté (Vs IA / Survie / Démo) ---
+# Note: la difficulté "dynamique" (augmentation avec le temps) reste gérée séparément via update_difficulty().
+AI_DIFFICULTY = "normal"  # easy | normal | hard | insane
+
+AI_DIFFICULTY_ORDER = ["easy", "normal", "hard", "insane"]
+
+AI_DIFFICULTY_PRESETS = {
+    # Objectif: plus lent, moins agressif, moins précis, plus d'hésitations.
+    "easy": {
+        "label": "Facile",
+        "move_interval_mult": 1.25,
+        "shoot_cooldown_mult": 1.40,
+        "decision_interval_ms": 220,
+        "turn_inertia": 0.90,
+        "randomness": 0.25,
+        "space_nodes": 45,
+        "space_weight": 0.10,
+        "adjacent_obstacle_penalty": 2.2,
+        "chase_weight": 0.75,
+        "retreat_too_close_penalty": 6.0,
+        "seek_shot_bonus": 2.5,
+        "shoot_probability": 0.22,
+        "burst_max": 1,
+        "burst_window_ms": 1200,
+        "burst_pause_ms": 700,
+    },
+    # Par défaut: comportement équilibré, déjà "humain".
+    "normal": {
+        "label": "Normal",
+        "move_interval_mult": 1.00,
+        "shoot_cooldown_mult": 1.00,
+        "decision_interval_ms": 160,
+        "turn_inertia": 0.85,
+        "randomness": 0.12,
+        "space_nodes": 80,
+        "space_weight": 0.13,
+        "adjacent_obstacle_penalty": 2.0,
+        "chase_weight": 1.00,
+        "retreat_too_close_penalty": 5.5,
+        "seek_shot_bonus": 4.0,
+        "shoot_probability": 0.42,
+        "burst_max": 2,
+        "burst_window_ms": 1400,
+        "burst_pause_ms": 650,
+    },
+    # Difficile: plus opportuniste et meilleur placement, sans être "perfect".
+    "hard": {
+        "label": "Difficile",
+        "move_interval_mult": 0.92,
+        "shoot_cooldown_mult": 0.85,
+        "decision_interval_ms": 120,
+        "turn_inertia": 0.82,
+        "randomness": 0.07,
+        "space_nodes": 120,
+        "space_weight": 0.18,
+        "adjacent_obstacle_penalty": 1.8,
+        "chase_weight": 1.25,
+        "retreat_too_close_penalty": 5.0,
+        "seek_shot_bonus": 6.0,
+        "shoot_probability": 0.62,
+        "burst_max": 3,
+        "burst_window_ms": 1500,
+        "burst_pause_ms": 600,
+    },
+    # Insane: rapide, très opportuniste, bonne survie (mais pas omniscient).
+    "insane": {
+        "label": "Insane",
+        "move_interval_mult": 0.86,
+        "shoot_cooldown_mult": 0.75,
+        "decision_interval_ms": 90,
+        "turn_inertia": 0.80,
+        "randomness": 0.03,
+        "space_nodes": 180,
+        "space_weight": 0.22,
+        "adjacent_obstacle_penalty": 1.6,
+        "chase_weight": 1.45,
+        "retreat_too_close_penalty": 4.5,
+        "seek_shot_bonus": 8.0,
+        "shoot_probability": 0.78,
+        "burst_max": 4,
+        "burst_window_ms": 1600,
+        "burst_pause_ms": 520,
+    },
+}
+
+
 # --- Constantes Compétences ---
 SKILL_COOLDOWN_DASH = 5000  # ms
 SKILL_COOLDOWN_MINE = 8000  # ms # Gardé pour référence si J2 récupère une compétence

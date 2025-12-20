@@ -52,6 +52,8 @@ DEFAULT_GAME_OPTIONS = {
     "game_speed": "normal",
     "particle_density": "normal",
     "screen_shake": True,
+    # Gameplay
+    "ai_difficulty": "normal",
     # Audio
     "music_volume": 0.3,
     "sound_volume": 0.6,

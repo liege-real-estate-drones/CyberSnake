@@ -142,6 +142,18 @@ def main():
         config.GAME_SPEED = speed_key if speed_key in speed_map else "normal"
         config.GAME_SPEED_FACTOR = float(speed_map.get(config.GAME_SPEED, 1.0))
 
+        try:
+            ai_key = str(opts.get("ai_difficulty", getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
+        except Exception:
+            ai_key = str(getattr(config, "AI_DIFFICULTY", "normal")).strip().lower()
+        try:
+            presets = getattr(config, "AI_DIFFICULTY_PRESETS", {}) or {}
+            if ai_key not in presets:
+                ai_key = "normal"
+        except Exception:
+            ai_key = "normal"
+        config.AI_DIFFICULTY = ai_key
+
         particle_key = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal"))).strip().lower()
         particle_map = {"off": 0.0, "low": 0.5, "normal": 1.0, "high": 1.6}
         config.PARTICLE_DENSITY = particle_key if particle_key in particle_map else "normal"
