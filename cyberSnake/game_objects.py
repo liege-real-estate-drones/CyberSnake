@@ -1617,6 +1617,41 @@ class Snake:
         # Le reste de la fonction draw...
         if not self.alive or not self.positions: return
 
+        def _draw_armor_pips(head_rect):
+            """Affiche des 'pips' d'armure directement sur la case de la tête (lisible d'un coup d'œil)."""
+            try:
+                if not bool(getattr(config, "SHOW_ARMOR_PIPS_ON_SNAKE", True)):
+                    return
+                max_armor = int(getattr(config, "MAX_ARMOR", 0) or 0)
+                if max_armor <= 0 or not head_rect:
+                    return
+                armor = int(getattr(self, "armor", 0) or 0)
+                armor = max(0, min(max_armor, armor))
+
+                # Layout (conçu pour GRID_SIZE=20 et MAX_ARMOR=5, mais robuste si ça change)
+                gap = max(1, head_rect.width // 18)
+                pad_x = 2
+                pip_size = max(2, (head_rect.width - pad_x * 2 - (max_armor - 1) * gap) // max_armor)
+                pip_size = min(pip_size, max(3, head_rect.height // 5))
+
+                total_w = max_armor * pip_size + (max_armor - 1) * gap
+                start_x = head_rect.centerx - total_w // 2
+                y = head_rect.top + 2
+                if y + pip_size >= head_rect.bottom - 1:
+                    y = head_rect.bottom - pip_size - 1
+
+                on_col = getattr(config, "COLOR_ARMOR_HIGHLIGHT", (80, 200, 255))
+                off_col = (20, 20, 28)
+                border = (0, 0, 0)
+
+                for i in range(max_armor):
+                    r = pygame.Rect(start_x + i * (pip_size + gap), y, pip_size, pip_size)
+                    fill = on_col if i < armor else off_col
+                    pygame.draw.rect(surface, fill, r, border_radius=1)
+                    pygame.draw.rect(surface, border, r, 1, border_radius=1)
+            except Exception:
+                pass
+
         is_flashing_critically = False
         draw_color_override = None
 
@@ -1775,6 +1810,12 @@ class Snake:
                 except Exception:
                     pass
 
+                try:
+                    hp = self.positions[0]
+                    _draw_armor_pips(pygame.Rect(int(hp[0] * grid_px), int(hp[1] * grid_px), int(grid_px), int(grid_px)))
+                except Exception:
+                    pass
+
                 if self.is_player and self.reversed_controls_active:
                     try:
                         hx, hy = centers[0]
@@ -1898,6 +1939,12 @@ class Snake:
                         pygame.draw.rect(surface, border, draw_rect, 1, border_radius=draw_radius)
                 except Exception:
                     pass
+
+            try:
+                hp = self.positions[0]
+                _draw_armor_pips(pygame.Rect(int(hp[0] * grid_px), int(hp[1] * grid_px), int(grid_px), int(grid_px)))
+            except Exception:
+                pass
 
             if self.is_player and self.reversed_controls_active:
                 try:
@@ -2055,6 +2102,19 @@ class Snake:
                      pygame.draw.rect(surface, border_color, r, border_thickness)
                 except (TypeError, ValueError): pass
 
+        try:
+            hp = self.positions[0]
+            _draw_armor_pips(
+                pygame.Rect(
+                    int(hp[0] * config.GRID_SIZE),
+                    int(hp[1] * config.GRID_SIZE),
+                    int(config.GRID_SIZE),
+                    int(config.GRID_SIZE),
+                )
+            )
+        except Exception:
+            pass
+
         # Draw status effects near head (Last to be on top)
         self.draw_status_effects(surface, current_time, font_small)
 
@@ -2133,6 +2193,18 @@ class EnemySnake(Snake):
         self._ai_burst_window_start = 0
         self._ai_burst_count = 0
         self._ai_burst_pause_until = 0
+        # Memory of recent head positions (anti-loop / anti-spin)
+        try:
+            maxlen = int(getattr(config, "AI_LOOP_MEMORY", 12) or 12)
+        except Exception:
+            maxlen = 12
+        try:
+            self._ai_recent_positions = deque(maxlen=max(6, maxlen))
+            hp = self.get_head_position()
+            if hp:
+                self._ai_recent_positions.append(hp)
+        except Exception:
+            self._ai_recent_positions = deque(maxlen=max(6, maxlen))
 
         # Passe les nouveaux arguments à la classe parent Snake
         name = "Bébé IA" if self.is_baby else "IA"
@@ -2242,6 +2314,15 @@ class EnemySnake(Snake):
         except Exception:
             current_time = pygame.time.get_ticks()
 
+        # Conscience des bonus (invincibilité / rapid fire / multishot)
+        try:
+            is_invincible = (
+                bool(getattr(self, "invincible_powerup_active", False))
+                or (int(getattr(self, "invincible_timer", 0) or 0) > 0 and current_time < int(getattr(self, "invincible_timer", 0) or 0))
+            )
+        except Exception:
+            is_invincible = False
+
         if current_time < int(getattr(self, "_ai_burst_pause_until", 0) or 0):
             return False
 
@@ -2283,6 +2364,20 @@ class EnemySnake(Snake):
         except Exception:
             burst_pause_ms = 650
 
+        # Si l'IA a des bonus offensifs, elle peut "oser" des bursts un peu plus longs.
+        try:
+            bonus_burst = 0
+            if self.rapid_fire_active:
+                bonus_burst += 1
+                burst_pause_ms = max(150, int(burst_pause_ms * 0.75))
+            if self.multishot_active:
+                bonus_burst += 1
+            if is_invincible:
+                bonus_burst += 1
+            burst_max = max(1, int(burst_max) + int(bonus_burst))
+        except Exception:
+            pass
+
         w0 = int(getattr(self, "_ai_burst_window_start", 0) or 0)
         if w0 <= 0 or current_time - w0 > burst_window_ms:
             self._ai_burst_window_start = current_time
@@ -2309,7 +2404,203 @@ class EnemySnake(Snake):
             prob *= 0.60
         elif self.ammo >= 6:
             prob *= 1.10
+
+        # Bonus-aware shooting (sans devenir omniscient)
+        if self.rapid_fire_active:
+            prob *= 1.25
+        if self.multishot_active:
+            prob *= 1.15
+        if is_invincible:
+            prob *= 1.10
+
         prob = max(0.05, min(0.95, prob))
+
+        if random.random() < prob:
+            self._ai_burst_count = int(getattr(self, "_ai_burst_count", 0) or 0) + 1
+            return True
+        return False
+
+    def _ai_should_shoot_mine(self, current_time, head_pos, direction, mines_list, blocking_positions, target_snake=None):
+        """Utility shot: destroy a mine that blocks shots / movement (disciplined, ammo-aware)."""
+        if not self.alive:
+            return False
+
+        # Avoid wasting the last bullets on mines
+        if int(getattr(self, "ammo", 0) or 0) <= 1:
+            return False
+        if not mines_list:
+            return False
+
+        try:
+            current_time = int(current_time)
+        except Exception:
+            current_time = pygame.time.get_ticks()
+
+        if current_time < int(getattr(self, "_ai_burst_pause_until", 0) or 0):
+            return False
+
+        cooldown = self.get_current_shoot_cooldown()
+        if current_time - int(getattr(self, "last_shot_time", 0) or 0) < int(cooldown):
+            return False
+
+        profile = self._ai_get_profile()
+        try:
+            max_steps = int(getattr(config, "ENEMY_SHOOT_RANGE", 12) or 12)
+        except Exception:
+            max_steps = 12
+
+        mine_positions = set()
+        try:
+            for m in mines_list:
+                pos = getattr(m, "position", None)
+                if pos:
+                    mine_positions.add(pos)
+        except Exception:
+            mine_positions = set()
+
+        if not mine_positions:
+            return False
+
+        # Bonus awareness
+        try:
+            is_invincible = (
+                bool(getattr(self, "invincible_powerup_active", False))
+                or (int(getattr(self, "invincible_timer", 0) or 0) > 0 and current_time < int(getattr(self, "invincible_timer", 0) or 0))
+            )
+        except Exception:
+            is_invincible = False
+
+        # Build "blocking" for mine raycast: mines are targets, not blockers.
+        blocking = set(blocking_positions) if blocking_positions else set()
+        blocking.difference_update(mine_positions)
+        try:
+            if target_snake and target_snake.alive:
+                blocking.update(target_snake.positions)
+        except Exception:
+            pass
+
+        try:
+            x0, y0 = head_pos
+            dx, dy = direction
+            dx = int(dx)
+            dy = int(dy)
+        except Exception:
+            return False
+        if dx == 0 and dy == 0:
+            return False
+
+        # Find the first mine on the ray (stop if something else blocks before it)
+        mine_dist = None
+        mine_pos = None
+        x, y = int(x0), int(y0)
+        for step in range(1, int(max_steps) + 1):
+            x += dx
+            y += dy
+            if x < 0 or x >= config.GRID_WIDTH or y < 0 or y >= config.GRID_HEIGHT:
+                break
+            p = (x, y)
+            if p in mine_positions:
+                mine_dist = step
+                mine_pos = p
+                break
+            if p in blocking:
+                break
+
+        if mine_dist is None or mine_pos is None:
+            return False
+
+        # Does this mine block a potential straight shot to the player?
+        blocks_shot = False
+        try:
+            target_positions = set(target_snake.positions) if target_snake and target_snake.alive else set()
+        except Exception:
+            target_positions = set()
+
+        if target_positions:
+            tx, ty = mine_pos
+            for _ in range(int(mine_dist) + 1, int(max_steps) + 1):
+                tx += dx
+                ty += dy
+                if tx < 0 or tx >= config.GRID_WIDTH or ty < 0 or ty >= config.GRID_HEIGHT:
+                    break
+                p2 = (tx, ty)
+                if p2 in target_positions:
+                    blocks_shot = True
+                    break
+                if blocking_positions and p2 in blocking_positions:
+                    break
+
+        # "Stuck" heuristic: low diversity of recent head positions
+        stuck = False
+        try:
+            recent = getattr(self, "_ai_recent_positions", None)
+            if recent and len(recent) >= 8:
+                stuck = len(set(recent)) <= max(3, len(recent) // 2)
+        except Exception:
+            stuck = False
+
+        # Probability of taking the utility shot
+        try:
+            base_prob = float(profile.get("mine_shoot_probability", 0.18))
+        except Exception:
+            base_prob = 0.18
+
+        prob = base_prob
+        if blocks_shot:
+            prob *= 2.2
+        if int(mine_dist) <= 3:
+            prob *= 1.4
+        if stuck:
+            prob *= 1.6
+
+        if self.rapid_fire_active:
+            prob *= 1.35
+        if self.multishot_active:
+            prob *= 1.15
+        if is_invincible:
+            prob *= 0.90
+
+        if int(getattr(self, "ammo", 0) or 0) <= 2:
+            prob *= 0.55
+
+        prob = max(0.02, min(0.90, prob))
+
+        # Burst window management (shared with player shots)
+        try:
+            burst_window_ms = int(profile.get("burst_window_ms", 1400) or 1400)
+        except Exception:
+            burst_window_ms = 1400
+        try:
+            burst_max = int(profile.get("burst_max", 2) or 2)
+        except Exception:
+            burst_max = 2
+        try:
+            burst_pause_ms = int(profile.get("burst_pause_ms", 650) or 650)
+        except Exception:
+            burst_pause_ms = 650
+
+        try:
+            bonus_burst = 0
+            if self.rapid_fire_active:
+                bonus_burst += 1
+                burst_pause_ms = max(150, int(burst_pause_ms * 0.75))
+            if self.multishot_active:
+                bonus_burst += 1
+            if is_invincible:
+                bonus_burst += 1
+            burst_max = max(1, int(burst_max) + int(bonus_burst))
+        except Exception:
+            pass
+
+        w0 = int(getattr(self, "_ai_burst_window_start", 0) or 0)
+        if w0 <= 0 or current_time - w0 > burst_window_ms:
+            self._ai_burst_window_start = current_time
+            self._ai_burst_count = 0
+        if int(getattr(self, "_ai_burst_count", 0) or 0) >= burst_max:
+            self._ai_burst_pause_until = current_time + burst_pause_ms
+            self._ai_burst_window_start = current_time
+            self._ai_burst_count = 0
+            return False
 
         if random.random() < prob:
             self._ai_burst_count = int(getattr(self, "_ai_burst_count", 0) or 0) + 1
@@ -2647,6 +2938,24 @@ class EnemySnake(Snake):
                 except Exception:
                     chase_weight = 1.0
                 aggro = 1.0 + (self.ammo / (config.MAX_AMMO / 2.0)) # Varie de 1.0 à 3.0
+
+                # Conscience des bonus: quand l'IA a un avantage offensif / invincible, elle joue plus agressif.
+                try:
+                    ticks = current_time if current_time is not None else pygame.time.get_ticks()
+                    is_invincible = (
+                        bool(getattr(self, "invincible_powerup_active", False))
+                        or (int(getattr(self, "invincible_timer", 0) or 0) > 0 and int(ticks) < int(getattr(self, "invincible_timer", 0) or 0))
+                    )
+                except Exception:
+                    is_invincible = False
+
+                if self.rapid_fire_active:
+                    aggro *= 1.10
+                if self.multishot_active:
+                    aggro *= 1.05
+                if is_invincible:
+                    aggro *= 1.15
+                    chase_weight *= 1.10
                 chase = 0
                 # L'IA est toujours un peu agressive si elle a des munitions
                 if self.ammo > 0:
@@ -2676,6 +2985,8 @@ class EnemySnake(Snake):
                         retreat_pen = float(profile.get("retreat_too_close_penalty", 5.5))
                     except Exception:
                         retreat_pen = 5.5
+                    if is_invincible:
+                        retreat_pen *= 0.55
                     score -= retreat_pen
 
             if not self.ghost_active:
@@ -2702,6 +3013,33 @@ class EnemySnake(Snake):
                 score += self._ai_reachable_area(pos, obstacles_eval, max_nodes=max_nodes) * space_w
 
             if d == self.current_direction: score += 1
+
+            # Anti-loop: pénalise les positions récentes pour éviter les rotations en rond.
+            try:
+                recent = getattr(self, "_ai_recent_positions", None)
+                if recent:
+                    recent_list = list(recent)
+                    window = int(getattr(config, "AI_LOOP_WINDOW", 10) or 10)
+                    window = max(4, min(window, len(recent_list)))
+                    lookback = recent_list[-window:] if window > 0 else []
+
+                    if lookback and pos in lookback:
+                        # Plus la position est récente, plus la pénalité est forte
+                        back = 1
+                        for rp in reversed(lookback):
+                            if rp == pos:
+                                break
+                            back += 1
+                        loop_pen = float(getattr(config, "AI_LOOP_PENALTY", 2.6) or 2.6)
+                        score -= loop_pen * (1.0 + (window - back) / float(window))
+
+                    # Cas classique "A-B-A" (oscillation)
+                    if len(recent_list) >= 2 and pos == recent_list[-2]:
+                        osc_pen = float(getattr(config, "AI_OSCILLATION_PENALTY", 3.2) or 3.2)
+                        score -= osc_pen
+            except Exception:
+                pass
+
             try:
                 r = float(profile.get("randomness", 0.10))
             except Exception:
@@ -2746,15 +3084,39 @@ class EnemySnake(Snake):
         obstacles = set(self.current_walls)
 
         # Mines fixes = obstacles (sauf si IA fantôme)
-        if not self.ghost_active:
+        try:
+            current_ticks = int(current_time)
+        except Exception:
+            current_ticks = pygame.time.get_ticks()
+        try:
+            is_invincible = (
+                bool(getattr(self, "invincible_powerup_active", False))
+                or (int(getattr(self, "invincible_timer", 0) or 0) > 0 and current_ticks < int(getattr(self, "invincible_timer", 0) or 0))
+            )
+        except Exception:
+            is_invincible = False
+
+        mine_positions = set()
+        try:
+            mine_positions = {m.position for m in mines if m and getattr(m, "position", None)}
+        except Exception:
+            mine_positions = set()
+
+        # Mouvement: on évite les mines sauf si l'IA est invincible (elle peut alors les "nettoyer" en passant dessus).
+        if mine_positions and (not self.ghost_active) and (not is_invincible):
             try:
-                obstacles.update(m.position for m in mines if m and getattr(m, "position", None))
+                obstacles.update(mine_positions)
             except Exception:
                 pass
         # Ajoute les positions des autres serpents (sauf soi-même)
         for snake_obj in [p1_snake, p2_snake] + all_active_enemies:
             if snake_obj and snake_obj.alive and snake_obj is not self:
                 obstacles.update(snake_obj.positions)
+
+        # Tir: même invincible/ghost, les mines bloquent physiquement les projectiles.
+        obstacles_for_shot = set(obstacles)
+        if mine_positions:
+            obstacles_for_shot.update(mine_positions)
 
         # --- Logique de décision de l'IA ---
         self.choose_direction(p1_snake, p2_snake, foods, mines, powerups, nests_list, obstacles, current_time=current_time)
@@ -2784,7 +3146,9 @@ class EnemySnake(Snake):
             # --- Logique de Tir (alignée à la direction + anti-spam) ---
             target_p = p1_snake if p1_snake and p1_snake.alive else None
             if target_p:
-                should_shoot = self._ai_should_shoot(current_time, new_head, self.current_direction, target_p, obstacles)
+                should_shoot = self._ai_should_shoot(current_time, new_head, self.current_direction, target_p, obstacles_for_shot)
+                if not should_shoot:
+                    should_shoot = self._ai_should_shoot_mine(current_time, new_head, self.current_direction, mines, obstacles_for_shot, target_p)
 
             # --- Logique de Collision (similaire à Snake.move) ---
             died_in_move = False
@@ -2801,6 +3165,17 @@ class EnemySnake(Snake):
                     self.growing = False
                 elif len(self.positions) > self.length:
                     self.positions.pop()
+
+                # Anti-boucle: mémorise quelques positions récentes pour pénaliser les cycles.
+                try:
+                    hist = getattr(self, "_ai_recent_positions", None)
+                    if hist is None:
+                        maxlen = int(getattr(config, "AI_LOOP_MEMORY", 12) or 12)
+                        self._ai_recent_positions = deque(maxlen=max(6, maxlen))
+                        hist = self._ai_recent_positions
+                    hist.append(new_head)
+                except Exception:
+                    pass
             else:
                 self.alive = False
 

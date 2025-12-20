@@ -710,7 +710,9 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     # --- ** Panneau UI Top-Right (Kill Feed, HS, Effects) ** ---
     
     try:
-        if current_game_mode == config.MODE_CLASSIC:
+        # Ce panneau prenait beaucoup de place et masquait la vue (notamment en Vs IA).
+        # On le réserve au PvP (kill feed).
+        if current_game_mode != config.MODE_PVP:
             raise StopIteration
         top_right_panel_width = 280
         top_right_panel_height = config.SCREEN_HEIGHT * 0.45
@@ -2533,12 +2535,14 @@ def run_options(events, dt, screen, game_state):
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
                 elif axis == 1:  # Horizontal
+                    # NOTE: Sur certaines manettes (et dans le gameplay de ce projet), l'axe horizontal est inversé.
+                    # On aligne donc les menus sur la même convention que le jeu et l'écran de saisie des noms.
                     if value < -threshold:
-                        adjust_current(-1)
+                        adjust_current(1)
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
                     elif value > threshold:
-                        adjust_current(1)
+                        adjust_current(-1)
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
 
@@ -2835,6 +2839,22 @@ def run_options(events, dt, screen, game_state):
                 arena_inner = pygame.Rect(0, 0, inner_w, inner_h)
                 arena_inner.center = arena_outer.center
                 pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT, arena_inner, 2)
+        except Exception:
+            pass
+
+        # Wall style preview (sample tiles inside the map preview)
+        try:
+            tile_size = max(8, min(20, int(min(map_rect.width, map_rect.height) * 0.12)))
+            gap_px = max(2, tile_size // 6)
+            tile_count = 7
+            total_w = tile_count * tile_size + (tile_count - 1) * gap_px
+            start_x = map_rect.centerx - (total_w // 2)
+            y = map_rect.bottom - tile_size - 12
+            if y > map_rect.top + 12:
+                for i in range(tile_count):
+                    r = pygame.Rect(start_x + i * (tile_size + gap_px), y, tile_size, tile_size)
+                    draw_wall_tile(screen, r, grid_pos=(i, (i * 2 + 1)), current_time=current_time, style=pending_wall_style)
+                    pygame.draw.rect(screen, (0, 0, 0), r, 1)
         except Exception:
             pass
 
@@ -3953,13 +3973,14 @@ def run_vs_ai_setup(events, dt, screen, game_state):
                 value = event.value
                 threshold = getattr(config, "JOYSTICK_THRESHOLD", 0.6)
                 if axis == 1:  # Horizontal
+                    # Axe horizontal inversé (aligné avec la saisie des noms et les contrôles en jeu)
                     if value < -threshold:
-                        idx = (idx - 1) % len(keys)
+                        idx = (idx + 1) % len(keys)
                         cur = keys[idx]
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
                     elif value > threshold:
-                        idx = (idx + 1) % len(keys)
+                        idx = (idx - 1) % len(keys)
                         cur = keys[idx]
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
@@ -4157,9 +4178,9 @@ def run_pvp_setup(events, dt, screen, game_state):
         if inputs_locked:
             continue
             
-        # --- Gestion Joystick Game Over et Navigation Menu ---
-        elif event.type == pygame.JOYAXISMOTION or event.type == pygame.JOYHATMOTION:
-            if current_time - last_axis_move_time > axis_repeat_delay:
+        # --- Gestion Joystick : Navigation (axes analogiques) ---
+        elif event.type == pygame.JOYAXISMOTION:
+            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = config.JOYSTICK_THRESHOLD
@@ -4179,12 +4200,14 @@ def run_pvp_setup(events, dt, screen, game_state):
                         change_func = options[pvp_setup_index][2]
                         if change_func:
                             try:
-                                if value < -threshold: # GAUCHE (diminuer) - Assuming negative is left here, adjust if logs show otherwise
-                                    change_func(-1); utils.play_sound("shoot_p1")
-                                elif value > threshold: # DROITE (augmenter) - Assuming positive is right here
+                                # Axe horizontal inversé (aligné avec les contrôles en jeu)
+                                if value < -threshold: # DROITE -> augmenter
                                     change_func(1); utils.play_sound("shoot_p1")
+                                elif value > threshold: # GAUCHE -> diminuer
+                                    change_func(-1); utils.play_sound("shoot_p1")
                                 last_axis_move_time = current_time
-                            except Exception as e: logging.error(f"Erreur change_func PvP setup via axis: {e}")
+                            except Exception as e:
+                                logging.error(f"Erreur change_func PvP setup via axis: {e}")
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
