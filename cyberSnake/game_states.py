@@ -10,13 +10,16 @@ import logging
 # --- Helpers boutons (configurables) ---
 def is_confirm_button(button):
     try:
-        return button in (config.BUTTON_PRIMARY_ACTION, 0, 1, 9)
+        return int(button) == int(getattr(config, "BUTTON_PRIMARY_ACTION", 1))
     except Exception:
-        return button in (0, 1, 9)
+        return button in (0, 1)
 
 def is_back_button(button):
     try:
-        return button in (config.BUTTON_SECONDARY_ACTION, 8)
+        return int(button) in (
+            int(getattr(config, "BUTTON_SECONDARY_ACTION", 2)),
+            int(getattr(config, "BUTTON_BACK", 8)),
+        )
     except Exception:
         return button == 8
 # --- Fin helpers ---
@@ -234,6 +237,174 @@ def draw_wall_tile(surface, rect, grid_pos=None, current_time=0, style=None):
         pass
 
 # --- Fonction de Dessin Principale (appelle draw_ui_panel) ---
+# --- HUD minimal (option "HUD_MODE") ---
+def _format_mmss(total_seconds):
+    try:
+        total = max(0, int(total_seconds))
+    except Exception:
+        total = 0
+    minutes = total // 60
+    seconds = total % 60
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def _draw_minimal_hud(surface, game_state, current_time, font_small, font_default):
+    """Dessine un HUD minimal (lisible, multi-modes)."""
+    try:
+        current_game_mode = game_state.get('current_game_mode')
+        player_snake = game_state.get('player_snake')
+        player2_snake = game_state.get('player2_snake')
+    except Exception:
+        return
+
+    def _safe_int(value, default=0):
+        try:
+            return int(value)
+        except Exception:
+            return int(default)
+
+    try:
+        mode_label = current_game_mode.name if hasattr(current_game_mode, "name") else str(current_game_mode)
+    except Exception:
+        mode_label = "Jeu"
+
+    p1_name = getattr(player_snake, "name", "J1") if player_snake else "J1"
+    p2_name = getattr(player2_snake, "name", "J2") if player2_snake else "J2"
+
+    p1_score = _safe_int(getattr(player_snake, "score", 0), 0)
+    p1_kills = _safe_int(getattr(player_snake, "kills", 0), 0)
+    p1_ammo = _safe_int(getattr(player_snake, "ammo", 0), 0)
+    p1_armor = _safe_int(getattr(player_snake, "armor", 0), 0)
+
+    p2_score = _safe_int(getattr(player2_snake, "score", 0), 0)
+    p2_kills = _safe_int(getattr(player2_snake, "kills", 0), 0)
+
+    title = ""
+    lines = []
+
+    if current_game_mode == config.MODE_PVP:
+        p1_death_time = _safe_int(game_state.get('p1_death_time', 0), 0)
+        p2_death_time = _safe_int(game_state.get('p2_death_time', 0), 0)
+
+        def _pvp_player_line(name, snake, death_time):
+            alive = bool(getattr(snake, "alive", True)) if snake else False
+            if not alive and death_time > 0:
+                try:
+                    left_ms = max(0, int(config.PVP_RESPAWN_DELAY) - (int(current_time) - int(death_time)))
+                except Exception:
+                    left_ms = 0
+                if left_ms > 0:
+                    return f"{name}: respawn {left_ms/1000:.1f}s"
+            score = _safe_int(getattr(snake, "score", 0), 0)
+            kills = _safe_int(getattr(snake, "kills", 0), 0)
+            return f"{name}: {score} ({kills}k)"
+
+        status = ""
+        try:
+            PvpCondition = getattr(config, 'PvpCondition', None)
+            pvp_condition_type = game_state.get('pvp_condition_type')
+            if PvpCondition is not None and pvp_condition_type != PvpCondition.KILLS:
+                pvp_start_time = _safe_int(game_state.get('pvp_start_time', 0), 0)
+                pvp_target_time = _safe_int(game_state.get('pvp_target_time', 0), 0)
+                elapsed_ms = int(current_time) - int(pvp_start_time) if pvp_start_time > 0 else 0
+                left_ms = max(0, int(pvp_target_time) * 1000 - elapsed_ms)
+                status = f"Temps: {_format_mmss(left_ms // 1000)}"
+            else:
+                pvp_target_kills = _safe_int(game_state.get('pvp_target_kills', getattr(config, 'PVP_DEFAULT_KILLS', 0)), 0)
+                status = f"Objectif: {pvp_target_kills} kills"
+        except Exception:
+            status = ""
+
+        title = f"PvP{(' - ' + status) if status else ''}"
+        lines.append(_pvp_player_line(p1_name, player_snake, p1_death_time))
+        lines.append(_pvp_player_line(p2_name, player2_snake, p2_death_time))
+
+    elif current_game_mode == config.MODE_SURVIVAL:
+        survival_wave = _safe_int(game_state.get('survival_wave', 0), 0)
+        survival_wave_start_time = _safe_int(game_state.get('survival_wave_start_time', 0), 0)
+        time_left_ms = 0
+        if survival_wave > 0 and survival_wave_start_time > 0:
+            try:
+                time_left_ms = max(0, (survival_wave_start_time + int(config.SURVIVAL_WAVE_DURATION)) - int(current_time))
+            except Exception:
+                time_left_ms = 0
+        title = f"Survie - Vague {survival_wave} ({time_left_ms/1000:.1f}s)"
+        lines.append(f"Score: {p1_score}" + (f" | Kills: {p1_kills}" if p1_kills else ""))
+        lines.append(f"Arm: {p1_armor} | Amm: {p1_ammo}")
+
+    elif current_game_mode == config.MODE_CLASSIC:
+        best_score = 0
+        try:
+            hs = utils.high_scores.get('classic', [])
+            if hs:
+                best_score = _safe_int(hs[0].get('score', 0), 0)
+        except Exception:
+            best_score = 0
+        title = "Classique"
+        lines.append(f"Score: {p1_score}")
+        lines.append(f"Record: {best_score}" if best_score else "Record: ---")
+
+    else:
+        title = str(mode_label)
+        lines.append(f"Score: {p1_score}" + (f" | Kills: {p1_kills}" if p1_kills else ""))
+        lines.append(f"Arm: {p1_armor} | Amm: {p1_ammo}")
+
+        try:
+            objective_display_text = str(game_state.get('objective_display_text', '') or '').strip()
+            objective_complete_timer = _safe_int(game_state.get('objective_complete_timer', 0), 0)
+            current_objective = game_state.get('current_objective')
+            obj_text = ""
+            if objective_complete_timer > 0 and int(current_time) < objective_complete_timer:
+                obj_text = "Objectif complété !"
+            elif current_objective and objective_display_text:
+                obj_text = objective_display_text
+                try:
+                    current_prog = current_objective.get('progress', 0)
+                    target_val = current_objective.get('target_value', 0)
+                except Exception:
+                    current_prog, target_val = 0, 0
+                if target_val:
+                    obj_text += f" ({int(current_prog)}/{int(target_val)})"
+            if obj_text:
+                lines.append(obj_text)
+        except Exception:
+            pass
+
+    lines = [str(s) for s in lines if str(s).strip()]
+    if len(lines) > 3:
+        lines = lines[:3]
+
+    pad = 12
+    gap = 4
+    max_w = 0
+    try:
+        max_w = max(max_w, int(font_default.size(title)[0]))
+    except Exception:
+        pass
+    try:
+        for s in lines:
+            max_w = max(max_w, int(font_small.size(s)[0]))
+    except Exception:
+        pass
+
+    title_h = int(font_default.get_linesize())
+    line_h = int(font_small.get_linesize())
+    panel_w = max(140, max_w + pad * 2)
+    panel_h = pad * 2 + title_h + (gap if lines else 0) + len(lines) * line_h
+
+    margin = 10
+    rect = pygame.Rect(margin, margin, panel_w, panel_h)
+    draw_ui_panel(surface, rect)
+
+    x = rect.left + pad
+    y = rect.top + pad
+    utils.draw_text_with_shadow(surface, title, font_default, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (x, y), "topleft")
+    y += title_h + gap
+    for s in lines:
+        utils.draw_text_with_shadow(surface, s, font_small, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (x, y), "topleft")
+        y += line_h
+
+
 def draw_game_elements_on_surface(target_surface, game_state, current_time=None):
     """Dessine tous les éléments du jeu sur la surface cible avec améliorations UX."""
     if current_time is None:
@@ -378,6 +549,31 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     # --- Mode Démo : rendu "clean" (sans HUD) ---
     if bool(game_state.get('demo_mode', False)):
         return
+
+    # --- HUD minimal ---
+    try:
+        if str(getattr(config, "HUD_MODE", "normal")).strip().lower() == "minimal":
+            _draw_minimal_hud(target_surface, game_state, current_time, font_small, font_default)
+            # FPS overlay (option)
+            try:
+                if bool(getattr(config, "SHOW_FPS", False)):
+                    clock = game_state.get('clock')
+                    fps = clock.get_fps() if clock else 0.0
+                    ui_margin = 8
+                    utils.draw_text_with_shadow(
+                        target_surface,
+                        f"FPS: {fps:.0f}",
+                        font_small,
+                        config.COLOR_TEXT_MENU,
+                        config.COLOR_UI_SHADOW,
+                        (config.SCREEN_WIDTH - ui_margin, config.SCREEN_HEIGHT - ui_margin),
+                        "bottomright",
+                    )
+            except Exception:
+                pass
+            return
+    except Exception:
+        pass
 
     # --- *** UI Elements *** ---
     ui_padding = 12
@@ -1233,11 +1429,23 @@ def reset_game(game_state):
                                     (config.GRID_WIDTH * 3 // 4, config.GRID_HEIGHT // 2), \
                                     (config.GRID_WIDTH * 3 // 4, config.GRID_HEIGHT // 2) # Positions par défaut
 
-    if selected_map_key == "Aléatoire":
-        print("Resetting game with generated random map.")
-        current_map_walls_list = game_state.get('current_random_map_walls', [])
-        # Utilise les positions de départ par défaut pour les cartes aléatoires
-        # (On pourrait aussi les rendre aléatoires, mais gardons simple pour l'instant)
+    dynamic_walls_raw = game_state.get('current_random_map_walls', None)
+    if dynamic_walls_raw is not None and selected_map_key not in config.MAPS:
+        if selected_map_key == "Aléatoire":
+            print("Resetting game with generated random map.")
+        else:
+            print(f"Resetting game with favorite map: {selected_map_key}")
+
+        current_map_walls_list = []
+        if isinstance(dynamic_walls_raw, list):
+            for p in dynamic_walls_raw:
+                if isinstance(p, (list, tuple)) and len(p) == 2:
+                    try:
+                        current_map_walls_list.append((int(p[0]), int(p[1])))
+                    except Exception:
+                        pass
+
+        # Utilise les positions de départ par défaut pour les cartes dynamiques (aléatoire / favori)
         p1_start_func = lambda gw, gh: (gw // 4, gh // 2)
         p2_start_func = lambda gw, gh: (gw * 3 // 4, gh // 2)
         ai_start_func = lambda gw, gh: (gw * 3 // 4, gh // 2)
@@ -1513,7 +1721,7 @@ def run_menu(events, dt, screen, game_state):
             elif event.type == pygame.JOYBUTTONDOWN:
                 # User specifically asked for "Button 1" to close.
                 # Button 1 is mapped to primary action/confirm.
-                if event.button == 1 or event.button == config.BUTTON_PRIMARY_ACTION:
+                if is_confirm_button(event.button):
                     game_state['show_version_popup'] = False
                     utils.play_sound("powerup_pickup")
                     # Clear events or return to prevent fall-through processing in the same frame
@@ -1606,7 +1814,7 @@ def run_menu(events, dt, screen, game_state):
                         except pygame.error as e:
                             logging.warning(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
                     last_axis_move_time = current_time
-                elif event.button == 8: # Bouton 8 pour quitter
+                elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
                     return False # Quitte le jeu
         # --- Fin de la gestion JOYBUTTONDOWN pour instance_id == 0 ---
@@ -1617,8 +1825,12 @@ def run_menu(events, dt, screen, game_state):
                 value = event.value
                 threshold = config.JOYSTICK_THRESHOLD # Utilise la valeur de config
 
-                # Axe 0 (Vertical dans l'exemple) pour HAUT/BAS
-                if axis == 0:
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+
+                # Axe vertical pour HAUT/BAS
+                if axis == axis_v:
+                    value = (-value) if inv_v else value
                     if value < -threshold: # HAUT
                         menu_selection_index = (menu_selection_index - 1 + num_options) % num_options
                         utils.play_sound("eat")
@@ -1626,7 +1838,7 @@ def run_menu(events, dt, screen, game_state):
                     elif value > threshold: # BAS
                         menu_selection_index = (menu_selection_index + 1) % num_options
                         utils.play_sound("eat")
-                    last_axis_move_time = current_time # Met à jour le temps
+                        last_axis_move_time = current_time # Met à jour le temps
 
         elif event.type == pygame.JOYHATMOTION:
             # Vérifie si l'événement vient du joystick 0, hat 0 et si assez de temps s'est écoulé
@@ -1687,7 +1899,7 @@ def run_menu(events, dt, screen, game_state):
                         try: utils.play_selected_music(base_path)
                         except pygame.error as e: print(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
                     last_axis_move_time = current_time # Évite répétition immédiate
-                elif event.button == 8: # Bouton 8 pour quitter
+                elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
                     return False # Quitte le jeu
         # --- FIN Gestion Joystick Menu ---
@@ -1920,6 +2132,7 @@ def run_options(events, dt, screen, game_state):
     font_small = game_state.get('font_small')
     font_default = game_state.get('font_default')
     font_medium = game_state.get('font_medium')
+    return_state = game_state.get('options_return_state', config.MENU)
 
     if not all([font_small, font_default, font_medium]):
         print("Erreur: Polices manquantes pour run_options")
@@ -1942,11 +2155,13 @@ def run_options(events, dt, screen, game_state):
         or 'pending_game_speed' not in game_state
         or 'pending_ai_difficulty' not in game_state
         or 'pending_wall_style' not in game_state
-        or 'pending_particle_density' not in game_state
-        or 'pending_screen_shake' not in game_state
-        or 'pending_show_fps' not in game_state
-        or 'pending_music_volume' not in game_state
-        or 'pending_sound_volume' not in game_state
+         or 'pending_particle_density' not in game_state
+         or 'pending_screen_shake' not in game_state
+         or 'pending_show_fps' not in game_state
+         or 'pending_hud_mode' not in game_state
+         or 'pending_ui_scale' not in game_state
+         or 'pending_music_volume' not in game_state
+         or 'pending_sound_volume' not in game_state
     ):
         try:
             opts = utils.load_game_options(base_path)
@@ -1976,6 +2191,12 @@ def run_options(events, dt, screen, game_state):
         pending_particle_density = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal")))
         pending_screen_shake = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         pending_show_fps = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
+        pending_hud_mode = str(opts.get("hud_mode", getattr(config, "HUD_MODE", "normal"))).strip().lower()
+        if pending_hud_mode not in ("normal", "minimal"):
+            pending_hud_mode = "normal"
+        pending_ui_scale = str(opts.get("ui_scale", getattr(config, "UI_SCALE", "normal"))).strip().lower()
+        if pending_ui_scale not in ("small", "normal", "large"):
+            pending_ui_scale = "normal"
         try:
             pending_music_volume = float(opts.get("music_volume", getattr(utils, "music_volume", 0.3)))
         except Exception:
@@ -1999,6 +2220,8 @@ def run_options(events, dt, screen, game_state):
         game_state['pending_particle_density'] = pending_particle_density
         game_state['pending_screen_shake'] = pending_screen_shake
         game_state['pending_show_fps'] = pending_show_fps
+        game_state['pending_hud_mode'] = pending_hud_mode
+        game_state['pending_ui_scale'] = pending_ui_scale
         game_state['pending_music_volume'] = pending_music_volume
         game_state['pending_sound_volume'] = pending_sound_volume
 
@@ -2028,6 +2251,12 @@ def run_options(events, dt, screen, game_state):
     pending_particle_density = str(game_state.get('pending_particle_density', getattr(config, "PARTICLE_DENSITY", "normal")))
     pending_screen_shake = bool(game_state.get('pending_screen_shake', getattr(config, "SCREEN_SHAKE_ENABLED", True)))
     pending_show_fps = bool(game_state.get('pending_show_fps', getattr(config, "SHOW_FPS", False)))
+    pending_hud_mode = str(game_state.get('pending_hud_mode', getattr(config, "HUD_MODE", "normal"))).strip().lower()
+    if pending_hud_mode not in ("normal", "minimal"):
+        pending_hud_mode = "normal"
+    pending_ui_scale = str(game_state.get('pending_ui_scale', getattr(config, "UI_SCALE", "normal"))).strip().lower()
+    if pending_ui_scale not in ("small", "normal", "large"):
+        pending_ui_scale = "normal"
     try:
         pending_music_volume = float(game_state.get('pending_music_volume', getattr(utils, "music_volume", 0.3)))
     except Exception:
@@ -2168,6 +2397,25 @@ def run_options(events, dt, screen, game_state):
         pending_particle_density = particle_density_keys[2]
     particle_density_display = dict(particle_densities).get(pending_particle_density, pending_particle_density)
 
+    ui_scales = [
+        ("small", "Petit"),
+        ("normal", "Normal"),
+        ("large", "Grand"),
+    ]
+    ui_scale_keys = [k for k, _ in ui_scales]
+    if pending_ui_scale not in ui_scale_keys:
+        pending_ui_scale = ui_scale_keys[1]
+    ui_scale_display = dict(ui_scales).get(pending_ui_scale, pending_ui_scale)
+
+    hud_modes = [
+        ("normal", "Normal"),
+        ("minimal", "Minimal"),
+    ]
+    hud_mode_keys = [k for k, _ in hud_modes]
+    if pending_hud_mode not in hud_mode_keys:
+        pending_hud_mode = hud_mode_keys[0]
+    hud_mode_display = dict(hud_modes).get(pending_hud_mode, pending_hud_mode)
+
     music_volume_display = f"{int(round(pending_music_volume * 100))}%"
     sound_volume_display = f"{int(round(pending_sound_volume * 100))}%"
 
@@ -2184,9 +2432,12 @@ def run_options(events, dt, screen, game_state):
         ("Difficulté IA (défaut)", ai_difficulty_display),
         ("Particules", particle_density_display),
         ("Secousse écran", "Oui" if pending_screen_shake else "Non"),
+        ("Échelle UI", ui_scale_display),
+        ("HUD", hud_mode_display),
         ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
         ("Volume musique", music_volume_display),
         ("Volume effets", sound_volume_display),
+        ("Contrôles", ""),
         ("Réinitialiser", ""),
         ("Appliquer", ""),
         ("Retour", ""),
@@ -2204,12 +2455,15 @@ def run_options(events, dt, screen, game_state):
     IDX_AI_DIFFICULTY = 9
     IDX_PARTICLES = 10
     IDX_SHAKE = 11
-    IDX_SHOW_FPS = 12
-    IDX_MUSIC_VOL = 13
-    IDX_SOUND_VOL = 14
-    IDX_RESET = 15
-    IDX_APPLY = 16
-    IDX_BACK = 17
+    IDX_UI_SCALE = 12
+    IDX_HUD_MODE = 13
+    IDX_SHOW_FPS = 14
+    IDX_MUSIC_VOL = 15
+    IDX_SOUND_VOL = 16
+    IDX_CONTROLS = 17
+    IDX_RESET = 18
+    IDX_APPLY = 19
+    IDX_BACK = 20
 
     selection_index = max(0, min(selection_index, len(menu_items) - 1))
 
@@ -2293,6 +2547,22 @@ def run_options(events, dt, screen, game_state):
             idx = 0
         pending_particle_density = particle_density_keys[(idx + delta) % len(particle_density_keys)]
 
+    def cycle_ui_scale(delta):
+        nonlocal pending_ui_scale
+        try:
+            idx = ui_scale_keys.index(pending_ui_scale)
+        except ValueError:
+            idx = 1
+        pending_ui_scale = ui_scale_keys[(idx + delta) % len(ui_scale_keys)]
+
+    def cycle_hud_mode(delta):
+        nonlocal pending_hud_mode
+        try:
+            idx = hud_mode_keys.index(pending_hud_mode)
+        except ValueError:
+            idx = 0
+        pending_hud_mode = hud_mode_keys[(idx + delta) % len(hud_mode_keys)]
+
     def adjust_music_volume(delta_steps):
         nonlocal pending_music_volume
         try:
@@ -2328,6 +2598,8 @@ def run_options(events, dt, screen, game_state):
         opts["particle_density"] = str(pending_particle_density)
         opts["screen_shake"] = bool(pending_screen_shake)
         opts["show_fps"] = bool(pending_show_fps)
+        opts["hud_mode"] = str(pending_hud_mode)
+        opts["ui_scale"] = str(pending_ui_scale)
         try:
             opts["music_volume"] = round(float(pending_music_volume), 2)
         except Exception:
@@ -2368,6 +2640,20 @@ def run_options(events, dt, screen, game_state):
         config.SCREEN_SHAKE_ENABLED = bool(pending_screen_shake)
         config.SHOW_FPS = bool(pending_show_fps)
         try:
+            hud_mode_key = str(pending_hud_mode).strip().lower()
+        except Exception:
+            hud_mode_key = "normal"
+        if hud_mode_key not in ("normal", "minimal"):
+            hud_mode_key = "normal"
+        config.HUD_MODE = hud_mode_key
+
+        ui_scale_key = str(pending_ui_scale).strip().lower()
+        ui_scale_map = {"small": 0.9, "normal": 1.0, "large": 1.15}
+        if ui_scale_key not in ui_scale_map:
+            ui_scale_key = "normal"
+        config.UI_SCALE = ui_scale_key
+        config.UI_SCALE_FACTOR = float(ui_scale_map.get(ui_scale_key, 1.0))
+        try:
             utils.set_music_volume(pending_music_volume)
             utils.set_sound_volume(pending_sound_volume)
         except Exception:
@@ -2390,6 +2676,38 @@ def run_options(events, dt, screen, game_state):
         except pygame.error as e:
             logging.error(f"Erreur set_mode après options: {e}", exc_info=True)
 
+        # Rebuild fonts (échelle UI)
+        try:
+            scale_factor = float(getattr(config, "UI_SCALE_FACTOR", 1.0))
+        except Exception:
+            scale_factor = 1.0
+
+        def _scaled_font_size(base_size):
+            return max(12, int(round(float(base_size) * scale_factor)))
+
+        try:
+            fonts = {}
+            try:
+                fonts['small'] = pygame.font.SysFont("Consolas", _scaled_font_size(18))
+                fonts['default'] = pygame.font.SysFont("Consolas", _scaled_font_size(24))
+                fonts['medium'] = pygame.font.SysFont("Consolas", _scaled_font_size(36))
+                fonts['large'] = pygame.font.SysFont("Consolas", _scaled_font_size(72))
+                fonts['title'] = pygame.font.SysFont("Consolas", _scaled_font_size(90))
+            except pygame.error:
+                fonts['small'] = pygame.font.Font(None, _scaled_font_size(22))
+                fonts['default'] = pygame.font.Font(None, _scaled_font_size(30))
+                fonts['medium'] = pygame.font.Font(None, _scaled_font_size(40))
+                fonts['large'] = pygame.font.Font(None, _scaled_font_size(72))
+                fonts['title'] = pygame.font.Font(None, _scaled_font_size(100))
+
+            game_state['font_small'] = fonts['small']
+            game_state['font_default'] = fonts['default']
+            game_state['font_medium'] = fonts['medium']
+            game_state['font_large'] = fonts['large']
+            game_state['font_title'] = fonts['title']
+        except Exception as e:
+            logging.error(f"Erreur rebuild fonts (ui_scale): {e}", exc_info=True)
+
         # Reload assets (rescale images) + menu background
         try:
             game_state['menu_background_image'] = utils.load_assets(base_path)
@@ -2411,7 +2729,7 @@ def run_options(events, dt, screen, game_state):
         nonlocal pending_show_grid, pending_grid_size
         nonlocal pending_snake_style_p1, pending_snake_style_p2, pending_snake_color_p1, pending_snake_color_p2
         nonlocal pending_wall_style, pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
-        nonlocal pending_screen_shake, pending_show_fps, pending_music_volume, pending_sound_volume
+        nonlocal pending_screen_shake, pending_show_fps, pending_hud_mode, pending_ui_scale, pending_music_volume, pending_sound_volume
 
         defaults = getattr(utils, "DEFAULT_GAME_OPTIONS", {}) if hasattr(utils, "DEFAULT_GAME_OPTIONS") else {}
 
@@ -2447,6 +2765,12 @@ def run_options(events, dt, screen, game_state):
 
         pending_screen_shake = bool(defaults.get("screen_shake", True))
         pending_show_fps = bool(defaults.get("show_fps", False))
+        pending_hud_mode = str(defaults.get("hud_mode", "normal")).strip().lower()
+        if pending_hud_mode not in ("normal", "minimal"):
+            pending_hud_mode = "normal"
+        pending_ui_scale = str(defaults.get("ui_scale", "normal")).strip().lower()
+        if pending_ui_scale not in ("small", "normal", "large"):
+            pending_ui_scale = "normal"
 
         try:
             pending_music_volume = float(defaults.get("music_volume", getattr(utils, "music_volume", 0.3)))
@@ -2487,6 +2811,10 @@ def run_options(events, dt, screen, game_state):
             cycle_particle_density(delta)
         elif selection_index == IDX_SHAKE:
             pending_screen_shake = not pending_screen_shake
+        elif selection_index == IDX_UI_SCALE:
+            cycle_ui_scale(delta)
+        elif selection_index == IDX_HUD_MODE:
+            cycle_hud_mode(delta)
         elif selection_index == IDX_SHOW_FPS:
             pending_show_fps = not pending_show_fps
         elif selection_index == IDX_MUSIC_VOL:
@@ -2500,12 +2828,20 @@ def run_options(events, dt, screen, game_state):
         if selection_index == IDX_APPLY:
             utils.play_sound("powerup_pickup")
             apply_options()
-            next_state = config.MENU
+            next_state = return_state
+            game_state.pop('options_return_state', None)
             return True
 
         if selection_index == IDX_BACK:
             utils.play_sound("combo_break")
-            next_state = config.MENU
+            next_state = return_state
+            game_state.pop('options_return_state', None)
+            return True
+
+        if selection_index == IDX_CONTROLS:
+            utils.play_sound("powerup_pickup")
+            game_state['controls_return_state'] = config.OPTIONS
+            next_state = config.CONTROLS
             return True
 
         if selection_index == IDX_RESET:
@@ -2530,8 +2866,14 @@ def run_options(events, dt, screen, game_state):
             if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
-                threshold = config.JOYSTICK_THRESHOLD
-                if axis == 0:  # Vertical
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+
+                if axis == axis_v:  # Vertical
+                    value = (-value) if inv_v else value
                     if value < -threshold:
                         selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
                         utils.play_sound("eat")
@@ -2540,15 +2882,14 @@ def run_options(events, dt, screen, game_state):
                         selection_index = (selection_index + 1) % len(menu_items)
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
-                elif axis == 1:  # Horizontal
-                    # NOTE: Sur certaines manettes (et dans le gameplay de ce projet), l'axe horizontal est inversé.
-                    # On aligne donc les menus sur la même convention que le jeu et l'écran de saisie des noms.
+                elif axis == axis_h:  # Horizontal
+                    value = (-value) if inv_h else value
                     if value < -threshold:
-                        adjust_current(1)
+                        adjust_current(-1)
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
                     elif value > threshold:
-                        adjust_current(-1)
+                        adjust_current(1)
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
 
@@ -2571,7 +2912,8 @@ def run_options(events, dt, screen, game_state):
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == 0:
                 if is_back_button(event.button):
-                    next_state = config.MENU
+                    next_state = return_state
+                    game_state.pop('options_return_state', None)
                     break
                 if is_confirm_button(event.button):
                     if handle_confirm():
@@ -2580,7 +2922,8 @@ def run_options(events, dt, screen, game_state):
         elif event.type == pygame.KEYDOWN:
             key = event.key
             if key == pygame.K_ESCAPE:
-                next_state = config.MENU
+                next_state = return_state
+                game_state.pop('options_return_state', None)
                 break
             if key == pygame.K_UP:
                 selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
@@ -2616,6 +2959,8 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_particle_density'] = pending_particle_density
     game_state['pending_screen_shake'] = pending_screen_shake
     game_state['pending_show_fps'] = pending_show_fps
+    game_state['pending_hud_mode'] = pending_hud_mode
+    game_state['pending_ui_scale'] = pending_ui_scale
     game_state['pending_music_volume'] = pending_music_volume
     game_state['pending_sound_volume'] = pending_sound_volume
     game_state['options_selection_index'] = selection_index
@@ -2666,6 +3011,8 @@ def run_options(events, dt, screen, game_state):
         game_speed_display = dict(game_speeds).get(pending_game_speed, pending_game_speed)
         ai_difficulty_display = dict(ai_difficulties).get(pending_ai_difficulty, pending_ai_difficulty)
         particle_density_display = dict(particle_densities).get(pending_particle_density, pending_particle_density)
+        ui_scale_display = dict(ui_scales).get(pending_ui_scale, pending_ui_scale)
+        hud_mode_display = dict(hud_modes).get(pending_hud_mode, pending_hud_mode)
         music_volume_display = f"{int(round(pending_music_volume * 100))}%"
         sound_volume_display = f"{int(round(pending_sound_volume * 100))}%"
 
@@ -2686,9 +3033,12 @@ def run_options(events, dt, screen, game_state):
             ("Difficulté IA (défaut)", ai_difficulty_display),
             ("Particules", particle_density_display),
             ("Secousse écran", "Oui" if pending_screen_shake else "Non"),
+            ("Échelle UI", ui_scale_display),
+            ("HUD", hud_mode_display),
             ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
+            ("Contrôles", ""),
             (reset_label, ""),
             ("Appliquer", ""),
             ("Retour", ""),
@@ -2776,7 +3126,7 @@ def run_options(events, dt, screen, game_state):
             f"Murs: {wall_style_display}",
             f"Classique: {classic_arena_display}",
             f"Vitesse: {game_speed_display} | Particules: {particle_density_display}",
-            f"Secousse: {'Oui' if pending_screen_shake else 'Non'} | FPS: {'Oui' if pending_show_fps else 'Non'}",
+            f"Secousse: {'Oui' if pending_screen_shake else 'Non'} | UI: {ui_scale_display} | HUD: {hud_mode_display} | FPS: {'Oui' if pending_show_fps else 'Non'}",
             f"Musique: {music_volume_display} | Effets: {sound_volume_display}",
         ]
         for line in summary_lines:
@@ -3062,6 +3412,8 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_particle_density', None)
         game_state.pop('pending_screen_shake', None)
         game_state.pop('pending_show_fps', None)
+        game_state.pop('pending_hud_mode', None)
+        game_state.pop('pending_ui_scale', None)
         game_state.pop('pending_music_volume', None)
         game_state.pop('pending_sound_volume', None)
         game_state.pop('options_reset_confirm_until', None)
@@ -3069,6 +3421,424 @@ def run_options(events, dt, screen, game_state):
 
     game_state['current_state'] = next_state
     return next_state
+
+
+def run_controls_remap(events, dt, screen, game_state):
+    """Écran de remapping des contrôles (joystick) basé sur controls.json."""
+    base_path = game_state.get('base_path', "")
+    return_state = game_state.get('controls_return_state', config.OPTIONS)
+    font_small = game_state.get('font_small')
+    font_default = game_state.get('font_default')
+    font_medium = game_state.get('font_medium')
+    font_large = game_state.get('font_large') or font_medium
+
+    if not all([font_small, font_default, font_medium, font_large]):
+        print("Erreur: Polices manquantes pour run_controls_remap")
+        return return_state
+
+    # Init pending config
+    if 'controls_pending' not in game_state or not isinstance(game_state.get('controls_pending'), dict):
+        try:
+            game_state['controls_pending'] = utils.load_controls(base_path)
+        except Exception:
+            game_state['controls_pending'] = dict(getattr(utils, "DEFAULT_CONTROLS", {}))
+        game_state['controls_listening_for'] = None
+        game_state['controls_message_until'] = 0
+        game_state['controls_last_input'] = {}
+
+    pending = game_state.get('controls_pending', {}) if isinstance(game_state.get('controls_pending'), dict) else {}
+    pending_buttons = pending.get('buttons') if isinstance(pending.get('buttons'), dict) else {}
+    pending_axes = pending.get('axes') if isinstance(pending.get('axes'), dict) else {}
+    pending_invert = pending.get('invert_axis') if isinstance(pending.get('invert_axis'), dict) else {}
+
+    def _get_int(d, key, fallback):
+        try:
+            return int(d.get(key, fallback))
+        except Exception:
+            return int(fallback)
+
+    def _get_bool(d, key, fallback=False):
+        try:
+            return bool(int(d.get(key, 1 if fallback else 0)))
+        except Exception:
+            try:
+                return bool(d.get(key, fallback))
+            except Exception:
+                return bool(fallback)
+
+    def _get_float(key, fallback):
+        try:
+            return float(pending.get(key, fallback))
+        except Exception:
+            return float(fallback)
+
+    # Normalise valeurs courantes
+    pending_buttons["PRIMARY"] = _get_int(pending_buttons, "PRIMARY", getattr(config, "BUTTON_PRIMARY_ACTION", 1))
+    pending_buttons["SECONDARY"] = _get_int(pending_buttons, "SECONDARY", getattr(config, "BUTTON_SECONDARY_ACTION", 2))
+    pending_buttons["TERTIARY"] = _get_int(pending_buttons, "TERTIARY", getattr(config, "BUTTON_TERTIARY_ACTION", 3))
+    pending_buttons["PAUSE"] = _get_int(pending_buttons, "PAUSE", getattr(config, "BUTTON_PAUSE", 7))
+    pending_buttons["BACK"] = _get_int(pending_buttons, "BACK", getattr(config, "BUTTON_BACK", 8))
+
+    pending_axes["H"] = _get_int(pending_axes, "H", getattr(config, "JOY_AXIS_H", 0))
+    pending_axes["V"] = _get_int(pending_axes, "V", getattr(config, "JOY_AXIS_V", 1))
+
+    pending_invert["H"] = 1 if _get_bool(pending_invert, "H", getattr(config, "JOY_INVERT_H", False)) else 0
+    pending_invert["V"] = 1 if _get_bool(pending_invert, "V", getattr(config, "JOY_INVERT_V", False)) else 0
+
+    threshold = max(0.05, min(0.95, _get_float("threshold", getattr(config, "JOYSTICK_THRESHOLD", 0.6))))
+    pending["threshold"] = threshold
+    pending["buttons"] = pending_buttons
+    pending["axes"] = pending_axes
+    pending["invert_axis"] = pending_invert
+
+    menu_items = [
+        ("PRIMARY", "Bouton Tir / Confirmer", "button"),
+        ("SECONDARY", "Bouton Dash / Retour", "button"),
+        ("TERTIARY", "Bouton Bouclier", "button"),
+        ("PAUSE", "Bouton Pause", "button"),
+        ("BACK", "Bouton Menu (Back)", "button"),
+        ("AXIS_H", "Axe horizontal", "axis"),
+        ("AXIS_V", "Axe vertical", "axis"),
+        ("INV_H", "Inverser axe horizontal", "toggle"),
+        ("INV_V", "Inverser axe vertical", "toggle"),
+        ("THRESH", "Seuil joystick", "threshold"),
+        ("RESET", "Réinitialiser", "action"),
+        ("SAVE", "Sauvegarder", "action"),
+        ("RETURN", "Retour", "action"),
+    ]
+
+    selection_index = int(game_state.get('controls_selection_index', 0) or 0)
+    selection_index = max(0, min(selection_index, len(menu_items) - 1))
+
+    listening_for = game_state.get('controls_listening_for', None)
+    listening_for = str(listening_for) if listening_for else None
+
+    axis_repeat_delay = 200
+    last_axis_move_time = int(game_state.get('last_axis_move_time_controls', 0) or 0)
+    current_time = pygame.time.get_ticks()
+
+    def set_message(text, duration_ms=1600):
+        game_state['controls_message'] = str(text)
+        game_state['controls_message_until'] = current_time + int(duration_ms)
+
+    def is_message_active():
+        try:
+            return current_time <= int(game_state.get('controls_message_until', 0) or 0)
+        except Exception:
+            return False
+
+    def get_value_display(item_id):
+        if item_id in ("PRIMARY", "SECONDARY", "TERTIARY", "PAUSE", "BACK"):
+            return f"B{_get_int(pending_buttons, item_id, 0)}"
+        if item_id == "AXIS_H":
+            return f"A{_get_int(pending_axes, 'H', 0)}"
+        if item_id == "AXIS_V":
+            return f"A{_get_int(pending_axes, 'V', 1)}"
+        if item_id == "INV_H":
+            return "Oui" if _get_bool(pending_invert, "H", False) else "Non"
+        if item_id == "INV_V":
+            return "Oui" if _get_bool(pending_invert, "V", False) else "Non"
+        if item_id == "THRESH":
+            return f"{float(threshold):.2f}"
+        return ""
+
+    def apply_and_save():
+        try:
+            utils.save_controls(pending, base_path)
+            utils.apply_controls_to_config(pending)
+            set_message("Contrôles sauvegardés.", 1400)
+            return True
+        except Exception as e:
+            set_message(f"Erreur sauvegarde: {e}", 2200)
+            return False
+
+    def reset_defaults():
+        defaults = dict(getattr(utils, "DEFAULT_CONTROLS", {}))
+        if not isinstance(defaults, dict) or not defaults:
+            defaults = {
+                "buttons": {"PRIMARY": 0, "SECONDARY": 1, "TERTIARY": 2, "PAUSE": 7, "BACK": 8},
+                "axes": {"H": 0, "V": 1},
+                "invert_axis": {"H": 0, "V": 0},
+                "threshold": 0.45,
+            }
+        game_state['controls_pending'] = defaults
+        set_message("Contrôles réinitialisés.", 1400)
+
+    def update_last_input(text):
+        try:
+            game_state['controls_last_input'] = {"text": str(text), "time": current_time}
+        except Exception:
+            pass
+
+    def handle_confirm():
+        nonlocal selection_index, listening_for
+        item_id, _label, item_type = menu_items[selection_index]
+
+        if item_id == "RETURN":
+            game_state.pop('controls_listening_for', None)
+            game_state.pop('controls_pending', None)
+            game_state.pop('controls_message', None)
+            game_state.pop('controls_message_until', None)
+            return return_state
+
+        if item_id == "RESET":
+            reset_defaults()
+            return config.CONTROLS
+
+        if item_id == "SAVE":
+            if apply_and_save():
+                game_state.pop('controls_listening_for', None)
+                return return_state
+            return config.CONTROLS
+
+        if item_type in ("button", "axis"):
+            listening_for = item_id
+            game_state['controls_listening_for'] = listening_for
+            set_message("En attente d'un input...", 1200)
+            return config.CONTROLS
+
+        if item_type == "toggle":
+            if item_id == "INV_H":
+                pending_invert["H"] = 0 if _get_bool(pending_invert, "H", False) else 1
+            elif item_id == "INV_V":
+                pending_invert["V"] = 0 if _get_bool(pending_invert, "V", False) else 1
+            utils.play_sound("eat")
+            return config.CONTROLS
+
+        return config.CONTROLS
+
+    def adjust_current(delta):
+        nonlocal threshold
+        item_id, _label, item_type = menu_items[selection_index]
+        if item_type == "threshold":
+            step = 0.02
+            threshold = max(0.05, min(0.95, round(float(threshold) + float(delta) * step, 2)))
+            pending["threshold"] = threshold
+            utils.play_sound("eat")
+        elif item_type == "toggle":
+            if item_id == "INV_H":
+                pending_invert["H"] = 0 if _get_bool(pending_invert, "H", False) else 1
+            elif item_id == "INV_V":
+                pending_invert["V"] = 0 if _get_bool(pending_invert, "V", False) else 1
+            utils.play_sound("eat")
+
+    for event in events:
+        if event.type == pygame.QUIT:
+            return False
+
+        # Capture inputs (test panel)
+        if event.type == pygame.JOYBUTTONDOWN:
+            update_last_input(f"JOY{getattr(event, 'instance_id', '?')} Bouton {event.button}")
+        elif event.type == pygame.JOYAXISMOTION:
+            try:
+                if abs(float(getattr(event, "value", 0.0))) > 0.2:
+                    update_last_input(f"JOY{getattr(event, 'instance_id', '?')} Axe {event.axis}: {event.value:+.2f}")
+            except Exception:
+                pass
+        elif event.type == pygame.JOYHATMOTION:
+            update_last_input(f"JOY{getattr(event, 'instance_id', '?')} Hat: {event.value}")
+
+        # Listening mode: assign to selected mapping
+        if listening_for:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                game_state['controls_listening_for'] = None
+                listening_for = None
+                set_message("Annulé.", 900)
+                continue
+
+            if event.type == pygame.JOYBUTTONDOWN and str(listening_for) in ("PRIMARY", "SECONDARY", "TERTIARY", "PAUSE", "BACK"):
+                pending_buttons[str(listening_for)] = int(event.button)
+                game_state['controls_listening_for'] = None
+                listening_for = None
+                utils.play_sound("powerup_pickup")
+                set_message("Assigné.", 900)
+                continue
+
+            if event.type == pygame.JOYAXISMOTION and str(listening_for) in ("AXIS_H", "AXIS_V"):
+                try:
+                    v = float(getattr(event, "value", 0.0))
+                    if abs(v) < 0.75:
+                        continue
+                except Exception:
+                    continue
+
+                if str(listening_for) == "AXIS_H":
+                    pending_axes["H"] = int(getattr(event, "axis", 0))
+                else:
+                    pending_axes["V"] = int(getattr(event, "axis", 1))
+                game_state['controls_listening_for'] = None
+                listening_for = None
+                utils.play_sound("powerup_pickup")
+                set_message("Axe assigné.", 900)
+                continue
+
+            # While listening: ignore navigation
+            continue
+
+        # Navigation (joystick)
+        if event.type == pygame.JOYHATMOTION:
+            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                hat_x, hat_y = event.value
+                if hat_y > 0:
+                    selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_y < 0:
+                    selection_index = (selection_index + 1) % len(menu_items)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_x != 0:
+                    adjust_current(1 if hat_x > 0 else -1)
+                    last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYAXISMOTION:
+            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                if int(getattr(event, "axis", -1)) == axis_v:
+                    value = float(getattr(event, "value", 0.0))
+                    value = (-value) if inv_v else value
+                    thr = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                    if value < -thr:
+                        selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                    elif value > thr:
+                        selection_index = (selection_index + 1) % len(menu_items)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYBUTTONDOWN:
+            if event.instance_id == 0:
+                if is_back_button(event.button):
+                    return return_state
+                if is_confirm_button(event.button):
+                    return handle_confirm()
+
+        # Keyboard
+        elif event.type == pygame.KEYDOWN:
+            key = event.key
+            if key == pygame.K_ESCAPE:
+                return return_state
+            if key == pygame.K_UP:
+                selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                utils.play_sound("eat")
+            elif key == pygame.K_DOWN:
+                selection_index = (selection_index + 1) % len(menu_items)
+                utils.play_sound("eat")
+            elif key == pygame.K_LEFT:
+                adjust_current(-1)
+            elif key == pygame.K_RIGHT:
+                adjust_current(1)
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                return handle_confirm()
+
+    game_state['controls_selection_index'] = selection_index
+    game_state['last_axis_move_time_controls'] = last_axis_move_time
+
+    # Draw
+    try:
+        screen.fill(config.COLOR_BACKGROUND)
+        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        screen.blit(overlay, (0, 0))
+
+        utils.draw_text_with_shadow(
+            screen,
+            "Contrôles",
+            font_large,
+            config.COLOR_TEXT_HIGHLIGHT,
+            config.COLOR_UI_SHADOW,
+            (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.10),
+            "center",
+        )
+
+        margin = 24
+        gap = 16
+        left_w = int(config.SCREEN_WIDTH * 0.54)
+        right_w = config.SCREEN_WIDTH - (margin * 2) - gap - left_w
+        panel_h = int(config.SCREEN_HEIGHT * 0.68)
+        panel_top = int(config.SCREEN_HEIGHT * 0.18)
+        left_rect = pygame.Rect(margin, panel_top, left_w, panel_h)
+        right_rect = pygame.Rect(left_rect.right + gap, panel_top, right_w, panel_h)
+        draw_ui_panel(screen, left_rect)
+        draw_ui_panel(screen, right_rect)
+
+        # Left list
+        row_h = max(36, int((left_rect.height - 20) / max(1, len(menu_items))))
+        y = left_rect.top + 14
+        for idx, (item_id, label, _t) in enumerate(menu_items):
+            is_sel = idx == selection_index
+            color = config.COLOR_TEXT_HIGHLIGHT if is_sel else config.COLOR_TEXT_MENU
+            prefix = "> " if is_sel else "  "
+            value = get_value_display(item_id)
+            utils.draw_text_with_shadow(screen, f"{prefix}{label}", font_default, color, config.COLOR_UI_SHADOW, (left_rect.left + 16, y), "topleft")
+            if value:
+                utils.draw_text(screen, value, font_default, color, (left_rect.right - 16, y), "topright")
+            y += row_h
+            if y > left_rect.bottom - 30:
+                break
+
+        # Right panel: test + warnings
+        rx = right_rect.left + 16
+        ry = right_rect.top + 14
+        utils.draw_text_with_shadow(screen, "Test inputs", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (right_rect.centerx, ry), "midtop")
+        ry += font_medium.get_linesize() + 10
+
+        last = game_state.get('controls_last_input', {}) if isinstance(game_state.get('controls_last_input'), dict) else {}
+        last_text = last.get('text', "—")
+        utils.draw_text(screen, f"Dernier: {last_text}", font_default, config.COLOR_TEXT_MENU, (rx, ry), "topleft")
+        ry += font_default.get_linesize() + 10
+
+        # Duplicates warning
+        try:
+            by_button = {}
+            for k in ("PRIMARY", "SECONDARY", "TERTIARY", "PAUSE", "BACK"):
+                b = _get_int(pending_buttons, k, -1)
+                by_button.setdefault(b, []).append(k)
+            duplicates = [(b, ks) for b, ks in by_button.items() if b >= 0 and len(ks) > 1]
+        except Exception:
+            duplicates = []
+        if duplicates:
+            utils.draw_text_with_shadow(screen, "Attention: doublons", font_default, config.COLOR_LOW_AMMO_WARN, config.COLOR_UI_SHADOW, (rx, ry), "topleft")
+            ry += font_default.get_linesize()
+            for b, ks in duplicates[:4]:
+                utils.draw_text(screen, f"B{b}: {', '.join(ks)}", font_small, config.COLOR_TEXT_MENU, (rx, ry), "topleft")
+                ry += font_small.get_linesize()
+        else:
+            utils.draw_text(screen, "Aucun doublon détecté.", font_default, config.COLOR_TEXT_MENU, (rx, ry), "topleft")
+            ry += font_default.get_linesize()
+
+        ry += 10
+        utils.draw_text(screen, f"Axe H: A{_get_int(pending_axes, 'H', 0)} (inv: {'oui' if _get_bool(pending_invert, 'H', False) else 'non'})", font_small, config.COLOR_TEXT_MENU, (rx, ry), "topleft")
+        ry += font_small.get_linesize()
+        utils.draw_text(screen, f"Axe V: A{_get_int(pending_axes, 'V', 1)} (inv: {'oui' if _get_bool(pending_invert, 'V', False) else 'non'})", font_small, config.COLOR_TEXT_MENU, (rx, ry), "topleft")
+        ry += font_small.get_linesize()
+        utils.draw_text(screen, f"Seuil: {float(threshold):.2f}", font_small, config.COLOR_TEXT_MENU, (rx, ry), "topleft")
+
+        # Message
+        if is_message_active():
+            msg = str(game_state.get('controls_message', ""))
+            if msg:
+                utils.draw_text_with_shadow(screen, msg, font_default, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, int(config.SCREEN_HEIGHT * 0.88)), "center")
+
+        # Instructions
+        help_y = int(config.SCREEN_HEIGHT * 0.92)
+        line_gap = max(18, int(font_small.get_linesize() * 1.05))
+        if listening_for:
+            help_1 = "Mode mapping: bouge un axe / appuie un bouton (Échap pour annuler)"
+        else:
+            help_1 = "Haut/Bas: naviguer | Entrée/A: modifier | Gauche/Droite: ajuster | Échap/B: retour"
+        help_2 = "Sauvegarder applique immédiatement (menus + jeu)."
+        utils.draw_text(screen, help_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y), "center")
+        utils.draw_text(screen, help_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y + line_gap), "center")
+    except Exception as e:
+        print(f"Erreur majeure lors du dessin de run_controls_remap: {e}")
+        traceback.print_exc()
+        return return_state
+
+    return config.CONTROLS
+
 
 # --- Clavier virtuel pour les écrans de saisie de noms ---
 # Liste des caractères disponibles pour le clavier virtuel
@@ -3185,46 +3955,52 @@ def run_name_entry_solo(events, dt, screen, game_state):
 
         # --- Gestion Joystick pour Navigation Clavier Virtuel ---
         elif event.type == pygame.JOYAXISMOTION:
-            # Assurez-vous que target_player_joystick_id est bien géré
-            # (actuellement, il alterne entre joystick 0 pour J1 et joystick 1 pour J2)
-            target_player_joystick_id = 0 # En mode solo, c'est toujours le joystick 0 
+            target_player_joystick_id = 0  # En mode solo, c'est toujours le joystick 0
             if event.instance_id == target_player_joystick_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
-                threshold = config.JOYSTICK_THRESHOLD
-                
-                if axis == 0: # Axe vertical
-                    if value < -threshold: # HAUT
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+
+                moved = False
+                if axis == axis_v:  # Axe vertical
+                    value = (-value) if inv_v else value
+                    if value < -threshold:  # HAUT
                         vk_row = (vk_row - 1 + len(VIRTUAL_KEYBOARD_CHARS)) % len(VIRTUAL_KEYBOARD_CHARS)
                         vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
                         utils.play_sound("eat")
-                        last_axis_move_time = current_time
-                        input_active = True
-                    elif value > threshold: # BAS
+                        moved = True
+                    elif value > threshold:  # BAS
                         vk_row = (vk_row + 1) % len(VIRTUAL_KEYBOARD_CHARS)
                         vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
                         utils.play_sound("eat")
-                        last_axis_move_time = current_time
-                        input_active = True
-                elif axis == 1: # Axe horizontal - LOGIQUE CORRIGÉE POUR CORRESPONDRE À CELLE DE SOLO
-                    if value < -threshold: # Devrait être STICK DROITE si l'axe est inversé (comme dans solo)
-                        vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row]) # Va à DROITE
+                        moved = True
+                elif axis == axis_h:  # Axe horizontal
+                    value = (-value) if inv_h else value
+                    if value < -threshold:  # GAUCHE
+                        vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
                         utils.play_sound("eat")
-                        last_axis_move_time = current_time
-                        input_active = True
-                    elif value > threshold: # Devrait être STICK GAUCHE si l'axe est inversé (comme dans solo)
-                        vk_col = (vk_col - 1 + len(VIRTUAL_KEYBOARD_CHARS[vk_row])) % len(VIRTUAL_KEYBOARD_CHARS[vk_row]) # Va à GAUCHE
+                        moved = True
+                    elif value > threshold:  # DROITE
+                        vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
                         utils.play_sound("eat")
-                        last_axis_move_time = current_time
-                        input_active = True
-                
-                game_state['vk_row_pvp'] = vk_row
-                game_state['vk_col_pvp'] = vk_col
-                game_state['last_axis_move_time_vk_pvp'] = last_axis_move_time
-                game_state['input_active_pvp'] = input_active
+                        moved = True
+
+                if moved:
+                    last_axis_move_time = current_time
+                    input_active = True
+
+                # Sauvegarde de la position dans le clavier virtuel
+                game_state['vk_row'] = vk_row
+                game_state['vk_col'] = vk_col
+                game_state['last_axis_move_time_vk'] = last_axis_move_time
+                game_state['input_active_solo'] = input_active
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id in allowed_joysticks and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 
                 if hat_y > 0: # HAUT
@@ -3259,59 +4035,58 @@ def run_name_entry_solo(events, dt, screen, game_state):
 
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == 0:
-                # N'accepter les boutons que si l'entrée est active
-                if input_active:
-                    if is_confirm_button(event.button): # Boutons A/B confirment la sélection actuelle
-                        # Obtenez le caractère sélectionné
-                        selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
-                        
-                        if selected_char == "OK": # Confirmation du nom
-                            name_entered = player1_name_input.strip()[:15]
-                            game_state['player1_name_input'] = name_entered if name_entered else "Thi"
-                            utils.play_sound("name_input_confirm")
-                            logging.info(f"Nom Joueur Solo/VsAI/Survie confirmé par joystick: '{game_state['player1_name_input']}'")
-
-                            # --- MODIFIÉ : Nettoyage des variables d'état ---
-                            game_state.pop('name_entry_start_time_solo', None)
-                            game_state.pop('input_active_solo', None)
-                            # Optionnel, mais propre : réinitialiser aussi la position du curseur et le nom en cours
-                            game_state.pop('vk_row', None) 
-                            game_state.pop('vk_col', None) 
-                            game_state.pop('last_axis_move_time_vk', None)
-                            # player1_name_input est déjà mis à jour dans game_state ci-dessus
-                            # --- FIN MODIFIÉ ---
-
-                            next_state = config.MAP_SELECTION
-                            game_state['current_state'] = next_state 
-                            return next_state
-                        elif selected_char == "<-": # Effacer
-                            if player1_name_input:
-                                player1_name_input = player1_name_input[:-1]  # Supprime le dernier caractère
-                                game_state['player1_name_input'] = player1_name_input
-                                utils.play_sound("combo_break")
-                        else: # Ajout d'un caractère
-                            if len(player1_name_input) < 15:
-                                player1_name_input += selected_char
-                                game_state['player1_name_input'] = player1_name_input
-                                utils.play_sound("name_input_char")
-                
-                elif event.button == 8: # Bouton 8 pour Echap/Retour
-                    logging.info("Joystick button 8 pressed in name entry solo, returning to MENU.")
+                if is_back_button(event.button):  # Retour menu
+                    logging.info("Joystick back pressed in name entry solo, returning to MENU.")
                     next_state = config.MENU
                     utils.play_sound("combo_break")
 
-                    # --- NOUVEAU: Nettoyage de l'état spécifique à cet écran ---
+                    # Nettoyage de l'état spécifique à cet écran
                     game_state.pop('name_entry_start_time_solo', None)
                     game_state.pop('input_active_solo', None)
-                    game_state.pop('player1_name_input', None) # Efface le nom en cours si on quitte
-                    # Optionnel: réinitialiser la position du curseur clavier
-                    game_state.pop('vk_row', None) 
-                    game_state.pop('vk_col', None) 
+                    game_state.pop('player1_name_input', None)  # Efface le nom en cours si on quitte
+                    game_state.pop('vk_row', None)
+                    game_state.pop('vk_col', None)
                     game_state.pop('last_axis_move_time_vk', None)
-                    # --- FIN NOUVEAU ---
 
-                    game_state['current_state'] = next_state 
+                    game_state['current_state'] = next_state
                     return next_state
+
+                # N'accepter les autres actions que si l'entrée est active
+                if not input_active:
+                    continue
+
+                if is_confirm_button(event.button):  # Valider la touche sélectionnée
+                    selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
+
+                    if selected_char == "OK":  # Confirmation du nom
+                        name_entered = player1_name_input.strip()[:15]
+                        game_state['player1_name_input'] = name_entered if name_entered else "Thi"
+                        utils.play_sound("name_input_confirm")
+                        logging.info(f"Nom Joueur Solo/VsAI/Survie confirmé par joystick: '{game_state['player1_name_input']}'")
+
+                        # Nettoyage des variables d'état
+                        game_state.pop('name_entry_start_time_solo', None)
+                        game_state.pop('input_active_solo', None)
+                        game_state.pop('vk_row', None)
+                        game_state.pop('vk_col', None)
+                        game_state.pop('last_axis_move_time_vk', None)
+
+                        next_state = config.MAP_SELECTION
+                        game_state['current_state'] = next_state
+                        return next_state
+
+                    if selected_char == "<-":  # Effacer
+                        if player1_name_input:
+                            player1_name_input = player1_name_input[:-1]
+                            game_state['player1_name_input'] = player1_name_input
+                            utils.play_sound("combo_break")
+                        continue
+
+                    # Ajout d'un caractère
+                    if len(player1_name_input) < 15:
+                        player1_name_input += selected_char
+                        game_state['player1_name_input'] = player1_name_input
+                        utils.play_sound("name_input_char")
 
         # --- Gestion Clavier pour rétrocompatibilité ---
         elif event.type == pygame.KEYDOWN:
@@ -3578,8 +4353,11 @@ def run_map_selection(events, dt, screen, game_state):
             if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
-                threshold = config.JOYSTICK_THRESHOLD
-                if axis == 0: # Axe Vertical pour HAUT/BAS
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                if axis == axis_v: # Axe vertical pour HAUT/BAS
+                    value = (-value) if inv_v else value
                     if value < -threshold: # HAUT
                         map_selection_index = (map_selection_index - 1 + num_maps_total) % num_maps_total
                         game_state['map_selection_index'] = map_selection_index
@@ -3606,7 +4384,7 @@ def run_map_selection(events, dt, screen, game_state):
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0 and (event.button == 0 or event.button == 1): # Confirmer
+            if event.instance_id == 0 and is_confirm_button(event.button): # Confirmer
                 try:
                     selected_key_or_label = _map_keys_display[map_selection_index]
                     game_state['selected_map_key'] = selected_key_or_label
@@ -3679,7 +4457,7 @@ def run_map_selection(events, dt, screen, game_state):
                         utils.play_sound("combo_break") # Son d'échec
                 else:
                     utils.play_sound("combo_break") # Pas un favori, ne peut pas supprimer
-            elif event.instance_id == 0 and event.button == 8: # Bouton 8 pour Retour (Echap)
+            elif event.instance_id == 0 and is_back_button(event.button): # Retour
                 _current_random_map_walls = None; _map_selection_needs_update = True
                 if current_game_mode == config.MODE_PVP: next_state = config.MENU
                 else: next_state = config.NAME_ENTRY_SOLO
@@ -3838,6 +4616,36 @@ def run_map_selection(events, dt, screen, game_state):
             except Exception as e:
                 print(f"Erreur génération murs preview map '{selected_key_or_label_preview}': {e}")
 
+        # Description contextuelle (1–2 lignes)
+        try:
+            walls_count = int(len(walls_to_preview))
+        except Exception:
+            walls_count = 0
+
+        map_desc_by_key = {
+            "Vide": "Arène ouverte, idéale pour s'échauffer",
+            "Boîte Simple": "Bords fermés, gameplay classique",
+            "Piliers": "Piliers centraux, contrôle de l'espace",
+            "Obstacle Central": "Bloc central, duels tendus",
+            "Couloirs": "Couloirs et rotations rapides",
+            "Chambres": "Séparations, lectures de trajectoire",
+        }
+
+        desc_lines = []
+        if selected_key_or_label_preview == "Aléatoire":
+            desc_lines = [
+                f"Labyrinthe aléatoire ({walls_count} murs).",
+                "G/D : nouvelle génération | F : sauvegarder en favori",
+            ]
+        elif selected_key_or_label_preview in _favorite_maps:
+            desc_lines = [
+                f"Carte favorite ({walls_count} murs).",
+                "Sauvegardée dans tes favoris.",
+            ]
+        else:
+            base_desc = map_desc_by_key.get(selected_key_or_label_preview, "Carte prédéfinie")
+            desc_lines = [f"{base_desc} ({walls_count} murs)."]
+
         # Dimensions et position de la zone d'aperçu
         preview_width_ratio, preview_height_ratio = 0.3, 0.3 # Légèrement plus grand
         preview_x_ratio, preview_y_ratio = 0.68, 0.5 # Décalé et centré verticalement
@@ -3846,6 +4654,64 @@ def run_map_selection(events, dt, screen, game_state):
         preview_x = int(config.SCREEN_WIDTH * preview_x_ratio)
         preview_y = int(config.SCREEN_HEIGHT * preview_y_ratio) - preview_h // 2
         preview_rect = pygame.Rect(preview_x, preview_y, preview_w, preview_h)
+
+        # Panneau "Configuration active" (au-dessus de l'aperçu)
+        try:
+            mode_name = str(getattr(current_game_mode, "name", "") or "").strip() or str(current_game_mode)
+        except Exception:
+            mode_name = "?"
+
+        wall_style_key = str(getattr(config, "WALL_STYLE", "panel") or "panel").strip().lower()
+        wall_style_display_map = {"classic": "Classique", "panel": "Panneaux", "neon": "Néon", "circuit": "Circuit"}
+        wall_style_display = wall_style_display_map.get(wall_style_key, wall_style_key)
+
+        speed_key = str(getattr(config, "GAME_SPEED", "normal") or "normal").strip().lower()
+        speed_display_map = {"slow": "Lent", "normal": "Normal", "fast": "Rapide"}
+        speed_display = speed_display_map.get(speed_key, speed_key)
+
+        arena_key = str(getattr(config, "CLASSIC_ARENA", "full") or "full").strip().lower()
+        arena_display_map = {"full": "Pleine", "large": "Grande", "medium": "Moyenne", "small": "Petite"}
+        arena_display = arena_display_map.get(arena_key, arena_key)
+
+        ai_key = str(getattr(config, "AI_DIFFICULTY", "normal") or "normal").strip().lower()
+        ai_display = ai_key
+        try:
+            presets = getattr(config, "AI_DIFFICULTY_PRESETS", {}) or {}
+            ai_display = str((presets.get(ai_key, {}) or {}).get("label", ai_key))
+        except Exception:
+            pass
+
+        config_lines = [
+            f"Mode : {mode_name}",
+            f"Grille : {config.GRID_WIDTH}x{config.GRID_HEIGHT} ({config.GRID_SIZE}px)",
+            f"Murs : {wall_style_display}",
+            f"Vitesse : {speed_display}",
+        ]
+        if current_game_mode == config.MODE_CLASSIC:
+            config_lines.append(f"Arène : {arena_display}")
+        elif current_game_mode in (config.MODE_VS_AI, config.MODE_SURVIVAL):
+            config_lines.append(f"IA : {ai_display}")
+
+        panel_pad = 12
+        config_panel_h = max(110, int(config.SCREEN_HEIGHT * 0.15))
+        config_panel_y = max(int(config.SCREEN_HEIGHT * 0.18), preview_rect.top - config_panel_h - 10)
+        config_panel_rect = pygame.Rect(preview_rect.left, config_panel_y, preview_rect.width, config_panel_h)
+        draw_ui_panel(screen, config_panel_rect)
+        utils.draw_text_with_shadow(
+            screen,
+            "Configuration active",
+            font_small,
+            config.COLOR_TEXT_HIGHLIGHT,
+            config.COLOR_UI_SHADOW,
+            (config_panel_rect.centerx, config_panel_rect.top + 8),
+            "midtop",
+        )
+        cfg_y = config_panel_rect.top + 8 + font_small.get_linesize() + 6
+        for line in config_lines:
+            if cfg_y > config_panel_rect.bottom - panel_pad:
+                break
+            utils.draw_text(screen, line, font_small, config.COLOR_TEXT_MENU, (config_panel_rect.left + panel_pad, cfg_y), "topleft")
+            cfg_y += font_small.get_linesize()
 
         # Dessine le cadre de l'aperçu
         pygame.draw.rect(screen, config.COLOR_GRID, preview_rect, 2)
@@ -3872,14 +4738,33 @@ def run_map_selection(events, dt, screen, game_state):
                      if clipped_rect.width > 0 and clipped_rect.height > 0:
                          draw_wall_tile(screen, clipped_rect, grid_pos=(wall_x_grid, wall_y_grid), current_time=current_time)
                  except Exception:
-                     pass  # Ignore les erreurs de dessin individuelles
+                      pass  # Ignore les erreurs de dessin individuelles
+
+        # Panneau description (sous l'aperçu)
+        try:
+            desc_top = preview_rect.bottom + 10
+            desc_bottom_limit = int(config.SCREEN_HEIGHT * 0.86)
+            desc_h = max(70, desc_bottom_limit - desc_top)
+            desc_rect = pygame.Rect(preview_rect.left, desc_top, preview_rect.width, desc_h)
+            if desc_rect.height > 0 and desc_rect.bottom > desc_rect.top:
+                draw_ui_panel(screen, desc_rect)
+                dy = desc_rect.top + panel_pad
+                for line in (desc_lines or [])[:2]:
+                    utils.draw_text(screen, line, font_small, config.COLOR_TEXT_MENU, (desc_rect.left + panel_pad, dy), "topleft")
+                    dy += font_small.get_linesize()
+        except Exception:
+            pass
 
         # Instructions en bas (modifiées pour inclure 'F' pour Favori)
-        instruction_y = config.SCREEN_HEIGHT * 0.90
-        instruction_text = "HAUT/BAS: Choisir | ENTRÉE: Confirmer | ECHAP: Retour"
+        instruction_y = config.SCREEN_HEIGHT * 0.88
+        line_gap = max(18, int(font_small.get_linesize() * 1.05))
+        instruction_text_1 = "Haut/Bas ou Stick: Choisir | Entrée ou A: Confirmer | Échap ou B: Retour"
+        instruction_text_2 = ""
         if _map_keys_display[current_selection_index] == "Aléatoire":
-            instruction_text += " | G/D: Nouvelle | F: Favori"
-        utils.draw_text(screen, instruction_text, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
+            instruction_text_2 = "G/D: Nouvelle | F: Sauver en favori"
+        utils.draw_text(screen, instruction_text_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
+        if instruction_text_2:
+            utils.draw_text(screen, instruction_text_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + line_gap), "center")
 
     except Exception as e:
         print(f"Erreur majeure lors du dessin de run_map_selection: {e}")
@@ -4066,8 +4951,13 @@ def run_classic_setup(events, dt, screen, game_state):
             if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
-                threshold = getattr(config, "JOYSTICK_THRESHOLD", 0.6)
-                if axis == 0:  # Vertical
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+                if axis == axis_v:  # Vertical
+                    value = (-value) if inv_v else value
                     if value < -threshold:
                         selection_index = (selection_index - 1 + menu_len) % menu_len
                         utils.play_sound("eat")
@@ -4076,13 +4966,14 @@ def run_classic_setup(events, dt, screen, game_state):
                         selection_index = (selection_index + 1) % menu_len
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
-                elif axis == 1:  # Horizontal (inversé)
+                elif axis == axis_h:  # Horizontal
+                    value = (-value) if inv_h else value
                     if value < -threshold:
-                        adjust_current(1)
+                        adjust_current(-1)
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
                     elif value > threshold:
-                        adjust_current(-1)
+                        adjust_current(1)
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
 
@@ -4312,16 +5203,18 @@ def run_vs_ai_setup(events, dt, screen, game_state):
             if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
-                threshold = getattr(config, "JOYSTICK_THRESHOLD", 0.6)
-                if axis == 1:  # Horizontal
-                    # Axe horizontal inversé (aligné avec la saisie des noms et les contrôles en jeu)
-                    if value < -threshold:
-                        idx = (idx + 1) % len(keys)
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+                if axis == axis_h:  # Horizontal
+                    value = (-value) if inv_h else value
+                    if value < -threshold:  # Gauche
+                        idx = (idx - 1) % len(keys)
                         cur = keys[idx]
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
-                    elif value > threshold:
-                        idx = (idx - 1) % len(keys)
+                    elif value > threshold:  # Droite
+                        idx = (idx + 1) % len(keys)
                         cur = keys[idx]
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
@@ -4526,8 +5419,14 @@ def run_pvp_setup(events, dt, screen, game_state):
             if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
-                threshold = config.JOYSTICK_THRESHOLD
-                if axis == 0: # Axe Vertical pour HAUT/BAS
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+
+                if axis == axis_v: # Axe vertical pour HAUT/BAS
+                    value = (-value) if inv_v else value
                     if value < -threshold: # HAUT
                         pvp_setup_index = (pvp_setup_index - 1 + num_options) % num_options
                         game_state['pvp_setup_index'] = pvp_setup_index
@@ -4538,16 +5437,16 @@ def run_pvp_setup(events, dt, screen, game_state):
                         game_state['pvp_setup_index'] = pvp_setup_index
                         utils.play_sound("eat")
                         last_axis_move_time = current_time
-                elif axis == 1: # Axe Horizontal pour GAUCHE/DROITE (modifier valeur)
+                elif axis == axis_h: # Axe horizontal pour GAUCHE/DROITE (modifier valeur)
+                    value = (-value) if inv_h else value
                     if 0 <= pvp_setup_index < num_options:
                         change_func = options[pvp_setup_index][2]
                         if change_func:
                             try:
-                                # Axe horizontal inversé (aligné avec les contrôles en jeu)
-                                if value < -threshold: # DROITE -> augmenter
-                                    change_func(1); utils.play_sound("shoot_p1")
-                                elif value > threshold: # GAUCHE -> diminuer
+                                if value < -threshold: # GAUCHE -> diminuer
                                     change_func(-1); utils.play_sound("shoot_p1")
+                                elif value > threshold: # DROITE -> augmenter
+                                    change_func(1); utils.play_sound("shoot_p1")
                                 last_axis_move_time = current_time
                             except Exception as e:
                                 logging.error(f"Erreur change_func PvP setup via axis: {e}")
@@ -4577,35 +5476,22 @@ def run_pvp_setup(events, dt, screen, game_state):
                             except Exception as e: logging.error(f"Erreur change_func PvP setup via hat: {e}")
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0 and (event.button == 0 or event.button == 1): # Confirmer
-                utils.play_sound("powerup_pickup")
-                # (Logique de confirmation déjà présente, pas besoin de la dupliquer)
-                pvp_cond = game_state.get('pvp_condition_type'); pvp_time = game_state.get('pvp_target_time')
-                pvp_kills = game_state.get('pvp_target_kills'); pvp_armor = game_state.get('pvp_start_armor')
-                pvp_ammo = game_state.get('pvp_start_ammo')                        
-                next_state = config.NAME_ENTRY_PVP
-                # Mise à jour explicite de l'état courant dans game_state
-                game_state['current_state'] = next_state
-                game_state['pvp_name_entry_stage'] = 1
-                game_state['last_axis_move_time_pvp'] = 0 # Reset timer
-                logging.debug(f"Exiting run_pvp_setup (JOYBUTTONDOWN confirm), next_state: {next_state}") # NOUVEAU LOG
-                return next_state
-            elif event.button == 8: # Bouton 8 pour Echap/Retour
-                logging.info("Joystick button 8 pressed in name entry solo, returning to MENU.")
-                next_state = config.MENU
-                utils.play_sound("combo_break")
+            if event.instance_id == 0:
+                if is_back_button(event.button):  # Retour carte
+                    utils.play_sound("combo_break")
+                    next_state = config.MAP_SELECTION
+                    game_state['current_state'] = next_state
+                    game_state['last_axis_move_time_pvp'] = 0
+                    return next_state
 
-                # --- NOUVEAU : Nettoyage des variables d'état ---
-                game_state.pop('name_entry_start_time_solo', None)
-                game_state.pop('input_active_solo', None)
-                game_state.pop('player1_name_input', None) # Important pour effacer le nom non confirmé
-                game_state.pop('vk_row', None) 
-                game_state.pop('vk_col', None) 
-                game_state.pop('last_axis_move_time_vk', None)
-                # --- FIN NOUVEAU ---
-
-                game_state['current_state'] = next_state 
-                return next_state
+                if is_confirm_button(event.button):  # Confirmer
+                    utils.play_sound("powerup_pickup")
+                    next_state = config.NAME_ENTRY_PVP
+                    game_state['current_state'] = next_state
+                    game_state['pvp_name_entry_stage'] = 1
+                    game_state['last_axis_move_time_pvp'] = 0  # Reset timer
+                    logging.debug(f"Exiting run_pvp_setup (JOYBUTTONDOWN confirm), next_state: {next_state}")
+                    return next_state
 
         # --- FIN AJOUT ---
 
@@ -4765,33 +5651,41 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             if event.instance_id in allowed_joysticks and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
-                threshold = config.JOYSTICK_THRESHOLD
-                
-                if axis == 0: # Axe vertical (positions dans notre implémentation)
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+
+                moved = False
+                if axis == axis_v: # Axe vertical
+                    value = (-value) if inv_v else value
                     if value < -threshold: # HAUT
                         vk_row = (vk_row - 1) % len(VIRTUAL_KEYBOARD_CHARS)
                         # S'assurer que la colonne est valide pour la nouvelle ligne
                         vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
                         utils.play_sound("eat")
-                        last_axis_move_time = current_time
+                        moved = True
                     elif value > threshold: # BAS
                         vk_row = (vk_row + 1) % len(VIRTUAL_KEYBOARD_CHARS)
                         # S'assurer que la colonne est valide pour la nouvelle ligne
                         vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
                         utils.play_sound("eat")
-                        last_axis_move_time = current_time
-                        input_active = True  # Activation de l'entrée après mouvement joystick
-                elif axis == 1: # Axe horizontal - LOGIQUE CORRIGÉE
-                    if value < -threshold: # Normalement GAUCHE, ici DROITE pour correspondre à solo
+                        moved = True
+                elif axis == axis_h: # Axe horizontal
+                    value = (-value) if inv_h else value
+                    if value < -threshold: # GAUCHE
+                        vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
+                        utils.play_sound("eat")
+                        moved = True
+                    elif value > threshold: # DROITE
                         vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
                         utils.play_sound("eat")
-                        last_axis_move_time = current_time
-                        input_active = True
-                    elif value > threshold: # Normalement DROITE, ici GAUCHE pour correspondre à solo
-                        vk_col = (vk_col - 1 + len(VIRTUAL_KEYBOARD_CHARS[vk_row])) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("eat")
-                        last_axis_move_time = current_time
-                        input_active = True
+                        moved = True
+
+                if moved:
+                    last_axis_move_time = current_time
+                    input_active = True
                 
                 # Sauvegarde de la position dans le clavier virtuel
                 game_state['vk_row_pvp'] = vk_row
@@ -4842,8 +5736,8 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             button = event.button
 
             # Bouton retour direct vers la config PvP
-            if button == 8:
-                logging.info("run_name_entry_pvp: Joystick button 8 pressed, returning to PVP_SETUP.")
+            if is_back_button(button):
+                logging.info("run_name_entry_pvp: Back pressed, returning to PVP_SETUP.")
                 game_state.pop('vk_row_pvp', None)
                 game_state.pop('vk_col_pvp', None)
                 game_state.pop('input_active_pvp_j1', None)
@@ -4854,6 +5748,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 game_state.pop('name_entry_start_time_pvp', None)
 
                 next_state = config.PVP_SETUP
+                game_state['pvp_name_entry_stage'] = 1
                 game_state['current_state'] = next_state
                 return next_state
 
@@ -5168,8 +6063,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
 
 
 def run_pause(events, dt, screen, game_state):
-    """Gère l'écran de pause."""
-    current_game_mode = game_state.get('current_game_mode')
+    """Gère l'écran de pause (menu)."""
     base_path = game_state.get('base_path', '')
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
@@ -5177,107 +6071,296 @@ def run_pause(events, dt, screen, game_state):
 
     if not all([font_small, font_medium, font_large]):
         print("Erreur: Polices manquantes pour run_pause")
-        return config.PAUSED # Reste en pause
+        return config.PAUSED  # Reste en pause
 
-    next_state = config.PAUSED # Par défaut, reste en pause
-    music_selected_this_pause = False # Flag pour savoir si une musique a été choisie pendant cette pause
+    menu_items = [
+        ("resume", "Reprendre", ["Retourner au jeu."]),
+        ("restart", "Recommencer", ["Relancer la partie avec la même configuration."]),
+        ("options", "Options", ["Régler l'UI, l'audio et le gameplay."]),
+        ("quit", "Quitter", ["Revenir au menu principal."]),
+    ]
+
+    current_time = pygame.time.get_ticks()
+    axis_repeat_delay = 200
+    last_axis_move_time = int(game_state.get('last_axis_move_time_pause', 0) or 0)
+    selection_index = int(game_state.get('pause_menu_selection', 0) or 0)
+    selection_index = max(0, min(selection_index, len(menu_items) - 1))
+
+    pause_button = getattr(config, 'BUTTON_PAUSE', 7)
+    back_button = getattr(config, 'BUTTON_SECONDARY_ACTION', 2)
+    tertiary_button = getattr(config, 'BUTTON_TERTIARY_ACTION', 3)
+    menu_button = getattr(config, 'BUTTON_BACK', 8)
+
+    def _resume_game(play_sound=True):
+        if play_sound:
+            try:
+                utils.play_sound("powerup_pickup")
+            except Exception:
+                pass
+        try:
+            music_changed = bool(game_state.get('pause_music_changed', False))
+            if music_changed:
+                utils.play_selected_music(base_path)
+                game_state['pause_music_changed'] = False
+            elif pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                pygame.mixer.music.unpause()
+            elif pygame.mixer.get_init() and (not pygame.mixer.music.get_busy()) and utils.selected_music_file:
+                utils.play_selected_music(base_path)
+        except pygame.error as music_e:
+            print(f"Erreur musique en quittant la pause: {music_e}")
+        previous_state = game_state.get('previous_state', config.PLAYING)
+        return previous_state
+
+    def _restart_game():
+        try:
+            player_snake = game_state.get('player_snake')
+            player2_snake = game_state.get('player2_snake')
+            if player_snake:
+                game_state['player1_name_input'] = player_snake.name
+            if player2_snake:
+                game_state['player2_name_input'] = player2_snake.name
+            reset_game(game_state)
+            game_state['pause_music_changed'] = False
+            return config.PLAYING
+        except Exception as e:
+            print(f"Erreur lors du reset depuis la pause: {e}")
+            traceback.print_exc()
+            return config.MENU
+
+    def _open_options():
+        game_state['options_return_state'] = config.PAUSED
+        return config.OPTIONS
+
+    def _quit_to_menu():
+        try:
+            pygame.mixer.music.stop()
+        except pygame.error:
+            pass
+        game_state['pause_music_changed'] = False
+        return config.MENU
+
+    def _toggle_hud_mode():
+        try:
+            cur = str(getattr(config, "HUD_MODE", "normal")).strip().lower()
+        except Exception:
+            cur = "normal"
+        new_mode = "minimal" if cur != "minimal" else "normal"
+        try:
+            config.HUD_MODE = new_mode
+        except Exception:
+            pass
+        try:
+            opts = utils.load_game_options(base_path)
+            opts["hud_mode"] = new_mode
+            utils.save_game_options(opts, base_path)
+        except Exception:
+            pass
+        try:
+            game_state['pause_hud_toast_text'] = f"HUD: {'Minimal' if new_mode == 'minimal' else 'Normal'}"
+            game_state['pause_hud_toast_until'] = pygame.time.get_ticks() + 1200
+        except Exception:
+            pass
+        try:
+            utils.play_sound("eat")
+        except Exception:
+            pass
+
+    def _activate_selected():
+        opt_id = menu_items[selection_index][0]
+        if opt_id == "resume":
+            return _resume_game()
+        if opt_id == "restart":
+            return _restart_game()
+        if opt_id == "options":
+            return _open_options()
+        if opt_id == "quit":
+            return _quit_to_menu()
+        return config.PAUSED
+
+    threshold = getattr(config, "JOYSTICK_THRESHOLD", 0.6)
 
     for event in events:
         if event.type == pygame.QUIT:
             return False
-        # --- AJOUT: Gestion Joystick Pause ---
+
+        elif event.type == pygame.JOYAXISMOTION:
+            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                if int(getattr(event, "axis", -1)) == axis_v:  # Vertical
+                    value = float(getattr(event, "value", 0.0))
+                    value = (-value) if inv_v else value
+                    if value < -threshold:
+                        selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                    elif value > threshold:
+                        selection_index = (selection_index + 1) % len(menu_items)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYHATMOTION:
+            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                hat_x, hat_y = event.value
+                if hat_y > 0:
+                    selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_y < 0:
+                    selection_index = (selection_index + 1) % len(menu_items)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                else:
+                    # Hat gauche/droite inutilisé dans le menu Pause
+                    pass
+
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == 0:
                 button = event.button
-                if button == 3: # Bouton 3 pour Reprendre
-                    try:
-                        if music_selected_this_pause: utils.play_selected_music(base_path)
-                        elif pygame.mixer.get_init() and pygame.mixer.music.get_busy(): pygame.mixer.music.unpause()
-                        elif pygame.mixer.get_init() and not pygame.mixer.music.get_busy() and utils.selected_music_file: utils.play_selected_music(base_path)
-                    except pygame.error as music_e: print(f"Erreur musique en quittant la pause: {music_e}")
-                    previous_state = game_state.get('previous_state', config.PLAYING)
-                    return previous_state
-                elif button == 4: # Bouton 4 pour changer musique
-                    music_num = (utils.selected_music_index % 9) + 1 # Cycle 1-9
+
+                # Raccourcis rapides
+                if button == menu_button:
+                    return _quit_to_menu()
+                if button in (pause_button, back_button):
+                    return _resume_game(play_sound=False)
+                if button == tertiary_button:
+                    _toggle_hud_mode()
+                    continue
+                if button == 4:
+                    # Cycle musique 1-9
+                    music_num = (utils.selected_music_index % 9) + 1
                     if utils.select_and_load_music(music_num, base_path):
-                        music_selected_this_pause = True # Flag pour jouer en quittant la pause
-                        utils.play_sound("powerup_pickup") # Feedback
-                elif button == 8: # Bouton 8 pour Retour Menu (Echap)
-                    logging.info("Joystick button 8 pressed in pause, returning to MENU.")
-                    next_state = config.MENU
-                    try: pygame.mixer.music.stop()
-                    except pygame.error: pass
-                    return next_state
-        # --- FIN AJOUT ---
+                        game_state['pause_music_changed'] = True
+                        utils.play_sound("powerup_pickup")
+                    continue
+
+                if is_confirm_button(button):
+                    return _activate_selected()
+
         elif event.type == pygame.KEYDOWN:
             key = event.key
             music_num = utils.get_number_from_key(key)
 
             if music_num is not None:
                 if utils.select_and_load_music(music_num, base_path):
-                    music_selected_this_pause = True
-            elif key == pygame.K_p: # Reprendre le jeu (Clavier)
-                try:
-                    if music_selected_this_pause: utils.play_selected_music(base_path)
-                    elif pygame.mixer.get_init() and pygame.mixer.music.get_busy(): pygame.mixer.music.unpause()
-                    elif pygame.mixer.get_init() and not pygame.mixer.music.get_busy() and utils.selected_music_file: utils.play_selected_music(base_path)
-                except pygame.error as music_e: print(f"Erreur musique en quittant la pause: {music_e}")
-                previous_state = game_state.get('previous_state', config.PLAYING)
-                return previous_state # Signal à main.py de retourner à cet état
-            elif key == pygame.K_r: # Recommencer la partie
-                try:
-                    # Conserver les noms des joueurs
-                    player_snake = game_state.get('player_snake')
-                    player2_snake = game_state.get('player2_snake')
-                    if player_snake:
-                        game_state['player1_name_input'] = player_snake.name
-                    if player2_snake:
-                        game_state['player2_name_input'] = player2_snake.name
+                    game_state['pause_music_changed'] = True
+                continue
 
-                    reset_game(game_state) # Réinitialise le jeu
-                    next_state = config.PLAYING # Passe directement à l'état PLAYING
-                    return next_state
-                except Exception as e:
-                    print(f"Erreur lors du reset depuis la pause: {e}")
-                    traceback.print_exc()
-                    next_state = config.MENU # Retour menu par sécurité
-                    return next_state
-            elif key == pygame.K_ESCAPE: # Retour au menu principal
-                next_state = config.MENU
-                try: pygame.mixer.music.stop()
-                except pygame.error: pass
-                return next_state
-            # Contrôles volume
-            elif key == pygame.K_PLUS or key == pygame.K_KP_PLUS: utils.update_music_volume(0.1)
-            elif key == pygame.K_MINUS or key == pygame.K_KP_MINUS: utils.update_music_volume(-0.1)
-            elif key == pygame.K_RIGHTBRACKET or key == pygame.K_KP_MULTIPLY: utils.update_sound_volume(0.1)
-            elif key == pygame.K_LEFTBRACKET or key == pygame.K_KP_DIVIDE: utils.update_sound_volume(-0.1)
+            if key == pygame.K_UP:
+                selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
+                utils.play_sound("eat")
+            elif key == pygame.K_DOWN:
+                selection_index = (selection_index + 1) % len(menu_items)
+                utils.play_sound("eat")
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                return _activate_selected()
+            elif key in (pygame.K_p, pygame.K_ESCAPE):
+                return _resume_game(play_sound=False)
+            elif key == pygame.K_h:
+                _toggle_hud_mode()
+            elif key == pygame.K_r:
+                return _restart_game()
+            elif key == pygame.K_o:
+                return _open_options()
+            elif key == pygame.K_m:
+                return _quit_to_menu()
+            # Contrôles volume (en pause)
+            elif key in (pygame.K_PLUS, pygame.K_KP_PLUS):
+                utils.update_music_volume(0.1)
+            elif key in (pygame.K_MINUS, pygame.K_KP_MINUS):
+                utils.update_music_volume(-0.1)
+            elif key in (pygame.K_RIGHTBRACKET, pygame.K_KP_MULTIPLY):
+                utils.update_sound_volume(0.1)
+            elif key in (pygame.K_LEFTBRACKET, pygame.K_KP_DIVIDE):
+                utils.update_sound_volume(-0.1)
+
+    # Persist état menu
+    game_state['pause_menu_selection'] = selection_index
+    game_state['last_axis_move_time_pause'] = last_axis_move_time
 
     # Dessin de l'écran de pause
-    try: # Bloc try autour du dessin complet
-        draw_game_elements_on_surface(screen, game_state, pygame.time.get_ticks())
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 180)); screen.blit(overlay, (0, 0))
-        utils.draw_text_with_shadow(screen, "PAUSE", font_large, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.20), "center")
-        y_opts, gap = config.SCREEN_HEIGHT * 0.38, 50
-        utils.draw_text(screen, "P: Reprendre", font_medium, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += gap
-        utils.draw_text(screen, "R: Recommencer", font_medium, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += gap
-        utils.draw_text(screen, "Echap: Retour Menu", font_medium, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += gap * 1.5
-        # --- MODIFICATION INSTRUCTIONS PAUSE ---
-        utils.draw_text(screen, "J1: Joystick/Hat + Boutons (0/1: Tir, 2: Dash, 3: Bouclier)", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += 25 # Updated instruction
-        # REMOVED: J2 instructions as keyboard controls are removed
-        # if current_game_mode == config.MODE_PVP: utils.draw_text(screen, "J2: ZQSD + Tab | Compétence: (Non assignée)", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += 25
-        # --- FIN MODIFICATION ---
-        y_opts += 20
-        utils.draw_text(screen, "0-9: Choix Musique", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += 25
-        music_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'} (Vol: {utils.music_volume:.1f})"
-        music_color = config.COLOR_TEXT_HIGHLIGHT if music_selected_this_pause else config.COLOR_TEXT
-        utils.draw_text(screen, music_text, font_small, music_color, (config.SCREEN_WIDTH / 2, y_opts), "center"); y_opts += 25
-        utils.draw_text(screen, f"+/- Musique, PavNum */ / Effets (Vol: {utils.sound_volume:.1f})", font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_opts), "center")
+    try:
+        draw_game_elements_on_surface(screen, game_state, current_time)
+        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        screen.blit(overlay, (0, 0))
+
+        utils.draw_text_with_shadow(
+            screen,
+            "PAUSE",
+            font_large,
+            config.COLOR_TEXT_MENU,
+            config.COLOR_UI_SHADOW,
+            (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.16),
+            "center",
+        )
+
+        panel_w = int(config.SCREEN_WIDTH * 0.48)
+        panel_h = int(config.SCREEN_HEIGHT * 0.42)
+        panel_x = (config.SCREEN_WIDTH - panel_w) // 2
+        panel_y = int(config.SCREEN_HEIGHT * 0.27)
+        menu_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        draw_ui_panel(screen, menu_rect)
+
+        line_h = max(int(font_medium.get_linesize() * 1.15), 44)
+        start_y = menu_rect.top + int(menu_rect.height * 0.20)
+
+        for idx, (_opt_id, label, _desc) in enumerate(menu_items):
+            y = start_y + idx * line_h
+            is_sel = idx == selection_index
+            color = config.COLOR_TEXT_HIGHLIGHT if is_sel else config.COLOR_TEXT_MENU
+            prefix = "> " if is_sel else "  "
+            utils.draw_text_with_shadow(
+                screen,
+                f"{prefix}{label}",
+                font_medium,
+                color,
+                config.COLOR_UI_SHADOW,
+                (menu_rect.centerx, y),
+                "center",
+            )
+
+        # Description contextuelle + infos audio
+        desc_h = int(config.SCREEN_HEIGHT * 0.16)
+        desc_rect = pygame.Rect(menu_rect.left, menu_rect.bottom + 12, menu_rect.width, desc_h)
+        draw_ui_panel(screen, desc_rect)
+
+        pad = 12
+        desc_lines = list(menu_items[selection_index][2])
+        try:
+            toast_until = int(game_state.get('pause_hud_toast_until', 0) or 0)
+        except Exception:
+            toast_until = 0
+        if toast_until and current_time <= toast_until:
+            toast_text = str(game_state.get('pause_hud_toast_text', '') or '').strip()
+            if toast_text:
+                desc_lines.insert(0, toast_text)
+
+        if game_state.get('pause_music_changed', False):
+            desc_lines.append("Musique: nouvelle piste prête (reprendre pour jouer).")
+
+        music_label = "Défaut" if utils.selected_music_index == 0 else f"Piste {utils.selected_music_index}"
+        desc_lines.append(f"Musique: {music_label} | Vol musique: {utils.music_volume:.1f} | Vol effets: {utils.sound_volume:.1f}")
+        hud_label = "Minimal" if str(getattr(config, "HUD_MODE", "normal")).strip().lower() == "minimal" else "Normal"
+        desc_lines.append(f"HUD: {hud_label} (H / Bouton Bouclier)")
+
+        dy = desc_rect.top + pad
+        for line in desc_lines[:3]:
+            utils.draw_text(screen, line, font_small, config.COLOR_TEXT_MENU, (desc_rect.left + pad, dy), "topleft")
+            dy += font_small.get_linesize()
+
+        # Légendes contrôles (uniformisées)
+        instruction_y = config.SCREEN_HEIGHT * 0.90
+        gap = max(18, int(font_small.get_linesize() * 1.05))
+        l1 = "Haut/Bas ou Stick: Naviguer | Entrée/A: Valider | P/Start: Reprendre | H/Bouclier: HUD"
+        l2 = "R: Recommencer | O: Options | M/Bouton Menu: Menu | 0-9: Musique | +/- et [ ]: Volumes"
+        utils.draw_text(screen, l1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
+        utils.draw_text(screen, l2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + gap), "center")
     except Exception as e:
         print(f"Erreur majeure lors du dessin de run_pause: {e}")
         traceback.print_exc()
 
-    return next_state # Reste en pause sauf si une action change l'état
+    return config.PAUSED  # Reste en pause sauf si une action change l'état
 
 
 def run_game_over(events, dt, screen, game_state):
@@ -5394,19 +6477,23 @@ def run_game_over(events, dt, screen, game_state):
 
             if allow_input and current_time - last_axis_move_time > axis_repeat_delay:
                 # Navigation haut/bas entre les options
-                if (event.type == pygame.JOYAXISMOTION and event.axis == 0):
-                    value = event.value
-                    threshold = 0.8 # Higher threshold for game over menu to prevent drift issues
-                    if value < -threshold: # Haut - option précédente
-                        gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
-                        utils.play_sound("eat")
-                        game_state['gameover_menu_selection'] = gameover_menu_selection
-                        last_axis_move_time = current_time
-                    elif value > threshold: # Bas - option suivante
-                        gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
-                        utils.play_sound("eat")
-                        game_state['gameover_menu_selection'] = gameover_menu_selection
-                        last_axis_move_time = current_time
+                if event.type == pygame.JOYAXISMOTION:
+                    axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                    inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                    if int(getattr(event, "axis", -1)) == axis_v:
+                        value = float(getattr(event, "value", 0.0))
+                        value = (-value) if inv_v else value
+                        threshold = 0.8  # Higher threshold for game over menu to prevent drift issues
+                        if value < -threshold: # Haut - option précédente
+                            gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
+                            utils.play_sound("eat")
+                            game_state['gameover_menu_selection'] = gameover_menu_selection
+                            last_axis_move_time = current_time
+                        elif value > threshold: # Bas - option suivante
+                            gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
+                            utils.play_sound("eat")
+                            game_state['gameover_menu_selection'] = gameover_menu_selection
+                            last_axis_move_time = current_time
                 # Navigation avec le hat (croix directionnelle)
                 elif event.type == pygame.JOYHATMOTION and event.hat == 0:
                     hat_x, hat_y = event.value
@@ -5503,7 +6590,7 @@ def run_game_over(events, dt, screen, game_state):
                     except: pass
                     next_state = config.MENU; return next_state
 
-            elif allow_confirm and button == 8: # Bouton 8 pour Menu (Echap) - raccourci direct
+            elif allow_confirm and is_back_button(button): # Retour menu (raccourci)
                 logging.info(f"Joystick button 8 pressed in game over by P{event.instance_id+1}, returning to MENU.")
                 game_state['game_over_hs_saved'] = False
                 game_state['game_over_start_time'] = 0 # Réinitialiser le timer
@@ -5613,7 +6700,7 @@ def run_hall_of_fame(events, dt, screen, game_state):
         if event.type == pygame.QUIT: return False
         # --- AJOUT: Gestion Joystick Hall of Fame ---
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0 and event.button == 8: # Bouton 8 pour Retour Menu (Echap)
+            if event.instance_id == 0 and is_back_button(event.button): # Retour menu
                 logging.info("Joystick button 8 pressed in Hall of Fame, returning to MENU.")
                 next_state = config.MENU; utils.play_sound("combo_break"); return next_state
         # --- FIN AJOUT ---
@@ -6342,26 +7429,30 @@ def run_game(events, dt, screen, game_state):
                 target_snake = player2_snake
 
             if target_snake:
-                axis = event.axis
-                value = event.value
-                threshold = config.JOYSTICK_THRESHOLD # Use config value
+                axis = int(getattr(event, "axis", -1))
+                value = float(getattr(event, "value", 0.0))
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
 
-                # --- CORRECTED AXIS MAPPING (Match example) ---
-                if axis == 0: # Vertical Axis (Up/Down in example)
-                    if value < -threshold:
-                        logging.debug(f"P{target_snake.player_num} Axis 0 turning UP (Value: {value:.2f})")
+                if axis == axis_v:  # Vertical
+                    v = (-value) if inv_v else value
+                    if v < -threshold:
+                        logging.debug(f"P{target_snake.player_num} Axis V turning UP (Value: {v:.2f})")
                         target_snake.turn(config.UP)
-                    elif value > threshold:
-                        logging.debug(f"P{target_snake.player_num} Axis 0 turning DOWN (Value: {value:.2f})")
+                    elif v > threshold:
+                        logging.debug(f"P{target_snake.player_num} Axis V turning DOWN (Value: {v:.2f})")
                         target_snake.turn(config.DOWN)
-                elif axis == 1: # Horizontal Axis (Left/Right in example)
-                    if value < -threshold: # Negative value = LEFT in example
-                        logging.debug(f"P{target_snake.player_num} Axis 1 turning LEFT (Value: {value:.2f})")
-                        target_snake.turn(config.RIGHT) # Reverted: Negative value -> RIGHT
-                    elif value > threshold: # Positive value = RIGHT in example
-                        logging.debug(f"P{target_snake.player_num} Axis 1 turning RIGHT (Value: {value:.2f})")
-                        target_snake.turn(config.LEFT) # Reverted: Positive value -> LEFT
-                # --- END CORRECTED AXIS MAPPING ---
+                elif axis == axis_h:  # Horizontal
+                    v = (-value) if inv_h else value
+                    if v < -threshold:
+                        logging.debug(f"P{target_snake.player_num} Axis H turning LEFT (Value: {v:.2f})")
+                        target_snake.turn(config.LEFT)
+                    elif v > threshold:
+                        logging.debug(f"P{target_snake.player_num} Axis H turning RIGHT (Value: {v:.2f})")
+                        target_snake.turn(config.RIGHT)
 
         elif event.type == pygame.JOYHATMOTION:
             target_snake_hat = None
@@ -6393,12 +7484,31 @@ def run_game(events, dt, screen, game_state):
              # --- Gestion Boutons Joystick J1 ---
             if player_snake and player_snake.alive and event.instance_id == 0:
                 button = event.button
-                dash_buttons = {0, getattr(config, 'BUTTON_SECONDARY_ACTION', 0)}
-                shoot_buttons = {1, getattr(config, 'BUTTON_PRIMARY_ACTION', 1)}
-                shield_buttons = {2, getattr(config, 'BUTTON_TERTIARY_ACTION', 2)}
-                pause_button = getattr(config, 'BUTTON_PAUSE', 7)
+                dash_button = int(getattr(config, 'BUTTON_SECONDARY_ACTION', 2))
+                shoot_button = int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1))
+                shield_button = int(getattr(config, 'BUTTON_TERTIARY_ACTION', 3))
+                pause_button = int(getattr(config, 'BUTTON_PAUSE', 7))
+                menu_button = int(getattr(config, 'BUTTON_BACK', 8))
 
-                if current_game_mode != config.MODE_CLASSIC and button in dash_buttons: # Dash
+                if button == pause_button:  # Pause (often Start)
+                    logging.info(f"Joystick button {button} pressed, pausing game.")
+                    try:
+                        pygame.mixer.music.pause()
+                    except Exception:
+                        pass
+                    game_state['previous_state'] = config.PLAYING
+                    game_state['current_state'] = config.PAUSED
+                    return config.PAUSED  # Return immediately
+                if button == menu_button:  # Menu (Back/Select)
+                    logging.info("Joystick menu button pressed in game, returning to MENU.")
+                    try:
+                        pygame.mixer.music.stop()
+                    except Exception:
+                        pass
+                    game_state['current_state'] = config.MENU
+                    return config.MENU  # Return immediately
+
+                if current_game_mode != config.MODE_CLASSIC and button == dash_button:  # Dash
                     logging.debug(f"P1 Button {button} (Dash) pressed")
                     if player_snake.dash_ready:
                         p1_obstacles_for_dash = utils.get_obstacles_for_player(player_snake, player_snake, player2_snake, enemy_snake, mines, current_map_walls, active_enemies)
@@ -6422,30 +7532,16 @@ def run_game(events, dt, screen, game_state):
                             logging.info(f"{player_snake.name} collided during dash with {dash_result_p1.get('type')}.")
                     else:
                         utils.play_sound("combo_break") # Son pour compétence non prête
-                elif current_game_mode != config.MODE_CLASSIC and button in shoot_buttons: # Tirer
+                elif current_game_mode != config.MODE_CLASSIC and button == shoot_button: # Tirer
                     logging.debug(f"Button {button} (Shoot) pressed")
                     new_projectiles_list = player_snake.shoot(current_time)
                     if new_projectiles_list:
                         game_state['player_projectiles'].extend(new_projectiles_list)
                         utils.play_sound(player_snake.shoot_sound)
-                elif current_game_mode != config.MODE_CLASSIC and button in shield_buttons: # Shield
+                elif current_game_mode != config.MODE_CLASSIC and button == shield_button: # Shield
                     logging.debug(f"Button {button} (Shield) pressed")
                     if player_snake.shield_ready: player_snake.activate_shield(current_time)
                     else: utils.play_sound("combo_break")
-                elif button == 3: # Ignore Button 3
-                    logging.debug(f"Button {button} pressed, explicitly ignored.")
-                    pass # Do nothing for button 3
-                elif button == pause_button: # Pause (often Start)
-                    logging.info(f"Joystick button {button} pressed, pausing game.")
-                    try: pygame.mixer.music.pause()
-                    except Exception: pass
-                    game_state['previous_state'] = config.PLAYING
-                    game_state['current_state'] = config.PAUSED; return config.PAUSED # Return immediately
-                elif button == 8: # Escape (Button 8 - often Select/Back)
-                    logging.info("Joystick button 8 pressed in game, returning to MENU.")
-                    try: pygame.mixer.music.stop()
-                    except Exception: pass
-                    game_state['current_state'] = config.MENU; return config.MENU # Return immediately
                  # else:
                  #     logging.debug(f"Button {button} pressed, but not mapped to an action.")
                  # --- END NEW BUTTON MAPPING ---
@@ -6453,11 +7549,11 @@ def run_game(events, dt, screen, game_state):
              # --- START: Player 2 Joystick Button Handling (PvP) ---
             elif current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and event.instance_id == 1:
                 button = event.button
-                dash_buttons = {0, getattr(config, 'BUTTON_SECONDARY_ACTION', 0)}
-                shoot_buttons = {1, getattr(config, 'BUTTON_PRIMARY_ACTION', 1)}
-                shield_buttons = {2, getattr(config, 'BUTTON_TERTIARY_ACTION', 2)}
+                dash_button = int(getattr(config, 'BUTTON_SECONDARY_ACTION', 2))
+                shoot_button = int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1))
+                shield_button = int(getattr(config, 'BUTTON_TERTIARY_ACTION', 3))
 
-                if button in dash_buttons: # Dash
+                if button == dash_button: # Dash
                     logging.debug(f"P2 Button {button} (Dash) pressed")
                     if player2_snake.dash_ready:
                         p2_obstacles_for_dash = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, None, mines, current_map_walls, [])
@@ -6472,13 +7568,13 @@ def run_game(events, dt, screen, game_state):
                             p2_moved_this_frame = True
                     else:
                         utils.play_sound("combo_break")
-                elif button in shoot_buttons: # Tirer
+                elif button == shoot_button: # Tirer
                     logging.debug(f"P2 Button {button} (Shoot) pressed")
                     new_projectiles_list_p2 = player2_snake.shoot(current_time)
                     if new_projectiles_list_p2:
                         game_state['player2_projectiles'].extend(new_projectiles_list_p2)
                         utils.play_sound(player2_snake.shoot_sound)
-                elif button in shield_buttons: # Shield
+                elif button == shield_button: # Shield
                     logging.debug(f"P2 Button {button} (Shield) pressed")
                     if player2_snake.shield_ready: player2_snake.activate_shield(current_time)
                     else: utils.play_sound("combo_break")

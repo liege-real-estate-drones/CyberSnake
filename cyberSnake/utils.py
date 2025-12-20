@@ -60,6 +60,27 @@ DEFAULT_GAME_OPTIONS = {
     "sound_volume": 0.6,
     # UI
     "show_fps": False,
+    "ui_scale": "normal",
+    "hud_mode": "normal",
+}
+
+DEFAULT_CONTROLS = {
+    "buttons": {
+        "PRIMARY": 0,
+        "SECONDARY": 1,
+        "TERTIARY": 2,
+        "PAUSE": 7,
+        "BACK": 8,
+    },
+    "axes": {
+        "H": 0,
+        "V": 1,
+    },
+    "invert_axis": {
+        "H": 0,
+        "V": 0,
+    },
+    "threshold": 0.45,
 }
 
 
@@ -104,6 +125,68 @@ def save_game_options(options, base_path=""):
     file_path = os.path.join(base_path, config.GAME_OPTIONS_FILE)
     to_save = _deep_merge_dict(DEFAULT_GAME_OPTIONS, options if isinstance(options, dict) else {})
     safe_write_json(file_path, to_save)
+
+
+def load_controls(base_path=""):
+    """Charge controls.json (avec defaults + compat)."""
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    filename = getattr(config, "CONTROLS_FILE", "controls.json")
+    file_path = os.path.join(base_path, filename)
+    loaded = read_json_or_default(file_path, DEFAULT_CONTROLS)
+    return _deep_merge_dict(DEFAULT_CONTROLS, loaded)
+
+
+def save_controls(controls, base_path=""):
+    """Sauvegarde controls.json (écriture atomique)."""
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    filename = getattr(config, "CONTROLS_FILE", "controls.json")
+    file_path = os.path.join(base_path, filename)
+    to_save = _deep_merge_dict(DEFAULT_CONTROLS, controls if isinstance(controls, dict) else {})
+    safe_write_json(file_path, to_save)
+
+
+def apply_controls_to_config(controls):
+    """Applique un dict controls.json aux constantes runtime (config.*)."""
+    if not isinstance(controls, dict):
+        return
+
+    buttons = controls.get("buttons", {}) if isinstance(controls.get("buttons", {}), dict) else {}
+    axes = controls.get("axes", {}) if isinstance(controls.get("axes", {}), dict) else {}
+    invert_axis = controls.get("invert_axis", {}) if isinstance(controls.get("invert_axis", {}), dict) else {}
+
+    def _as_int(value, fallback):
+        try:
+            return int(value)
+        except Exception:
+            return int(fallback)
+
+    def _as_bool_int(value, fallback=False):
+        try:
+            return bool(int(value))
+        except Exception:
+            try:
+                return bool(value)
+            except Exception:
+                return bool(fallback)
+
+    config.BUTTON_PRIMARY_ACTION = _as_int(buttons.get("PRIMARY", getattr(config, "BUTTON_PRIMARY_ACTION", 1)), 1)
+    config.BUTTON_SECONDARY_ACTION = _as_int(buttons.get("SECONDARY", getattr(config, "BUTTON_SECONDARY_ACTION", 2)), 2)
+    config.BUTTON_TERTIARY_ACTION = _as_int(buttons.get("TERTIARY", getattr(config, "BUTTON_TERTIARY_ACTION", 3)), 3)
+    config.BUTTON_PAUSE = _as_int(buttons.get("PAUSE", getattr(config, "BUTTON_PAUSE", 7)), 7)
+    config.BUTTON_BACK = _as_int(buttons.get("BACK", getattr(config, "BUTTON_BACK", 8)), 8)
+
+    config.JOY_AXIS_H = _as_int(axes.get("H", getattr(config, "JOY_AXIS_H", 0)), 0)
+    config.JOY_AXIS_V = _as_int(axes.get("V", getattr(config, "JOY_AXIS_V", 1)), 1)
+    config.JOY_INVERT_H = _as_bool_int(invert_axis.get("H", getattr(config, "JOY_INVERT_H", False)), False)
+    config.JOY_INVERT_V = _as_bool_int(invert_axis.get("V", getattr(config, "JOY_INVERT_V", False)), False)
+
+    try:
+        threshold = float(controls.get("threshold", getattr(config, "JOYSTICK_THRESHOLD", 0.6)))
+    except Exception:
+        threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+    config.JOYSTICK_THRESHOLD = max(0.05, min(0.95, threshold))
 
 # --- Variables globales gérées par ce module ---
 # ... (inchangé) ...
@@ -358,6 +441,8 @@ def save_high_score(name, score, mode_key, base_path):
 # --- NOUVEAU: Fonctions Favorite Maps ---
 def load_favorite_maps(base_path):
     """Charge les cartes favorites depuis le fichier JSON."""
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(base_path, config.FAVORITE_MAP_FILE)
     favorites = {} # Dictionnaire pour stocker les favoris chargés {name: walls_list}
     if os.path.exists(file_path):
@@ -374,7 +459,7 @@ def load_favorite_maps(base_path):
                                 # Validation simple des murs (liste de tuples/listes de 2 entiers)
                                 if isinstance(walls, list) and all(isinstance(p, (list, tuple)) and len(p) == 2 and all(isinstance(c, int) for c in p) for p in walls):
                                     if name not in favorites: # Évite doublons de noms au chargement
-                                        favorites[name] = walls
+                                        favorites[name] = [(int(p[0]), int(p[1])) for p in walls]
                                     else:
                                         print(f"Attention: Nom de carte favori dupliqué trouvé et ignoré: {name}")
                                 else:
@@ -395,8 +480,13 @@ def load_favorite_maps(base_path):
 
 def save_favorite_map(walls_list, base_path):
     """Sauvegarde une carte (liste de murs) dans les favoris avec un nom auto-généré."""
-    if not isinstance(walls_list, list):
-        print("Erreur sauvegarde favori: walls_list n'est pas une liste.")
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    if not isinstance(walls_list, list) or not all(
+        isinstance(p, (list, tuple)) and len(p) == 2 and all(isinstance(c, int) for c in p)
+        for p in walls_list
+    ):
+        print("Erreur sauvegarde favori: format de murs invalide.")
         return False, None
 
     favorites_dict = load_favorite_maps(base_path) # Charge les favoris existants
@@ -409,7 +499,7 @@ def save_favorite_map(walls_list, base_path):
     new_map_name = f"Favori {fav_index}"
 
     # Ajoute la nouvelle carte
-    favorites_dict[new_map_name] = walls_list
+    favorites_dict[new_map_name] = [(int(p[0]), int(p[1])) for p in walls_list]
 
     # Convertit le dictionnaire en liste pour la sauvegarde JSON
     favorites_list_to_save = [{"name": name, "walls": walls} for name, walls in favorites_dict.items()]
@@ -430,6 +520,8 @@ def save_favorite_map(walls_list, base_path):
 
 def delete_favorite_map(map_name_to_delete, base_path):
     """Supprime une carte favorite spécifiée du fichier JSON."""
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
     if not map_name_to_delete:
         print("Erreur suppression favori: Nom de carte vide.")
         return False
@@ -1033,155 +1125,83 @@ def check_objective_completion(action_key, current_objective, value=1):
 # --- NOUVEAU: Fonction de Génération de Carte Aléatoire ---
 def generate_random_walls(grid_width, grid_height):
     """Génère une liste de coordonnées de murs aléatoires."""
+    try:
+        grid_width = int(grid_width)
+        grid_height = int(grid_height)
+    except Exception:
+        return []
+    if grid_width < 5 or grid_height < 5:
+        return []
+
     walls = []
-    num_segments = random.randint(4, 8) # Nombre de segments de mur
-    min_len, max_len = 3, 10 # Longueur min/max des segments
-def bresenham_line(start_pos, end_pos):
-    """Génère les points de la grille sur une ligne entre deux points (Algorithme de Bresenham).
-
-    Args:
-        start_pos (tuple): Coordonnées (x, y) du point de départ.
-        end_pos (tuple): Coordonnées (x, y) du point d'arrivée.
-
-    Returns:
-        list: Une liste de tuples (x, y) représentant les points de la grille sur la ligne.
-    """
-    x0, y0 = start_pos
-    x1, y1 = end_pos
-    points = []
-    dx = abs(x1 - x0)
-    dy = -abs(y1 - y0) # Utilise -dy car l'axe Y est inversé dans Pygame (haut -> bas)
-
-    # Détermine la direction du pas pour x et y
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-
-    err = dx + dy  # Variable d'erreur
-
-    while True:
-        points.append((x0, y0)) # Ajoute le point courant
-        if x0 == x1 and y0 == y1:
-            break # Point final atteint
-
-        e2 = 2 * err
-        # Ajuste l'erreur et déplace x si nécessaire
-        if e2 >= dy:
-            if x0 == x1: # Évite dépassement si déjà à la fin x
-                break
-            err += dy
-            x0 += sx
-        # Ajuste l'erreur et déplace y si nécessaire
-        if e2 <= dx:
-            if y0 == y1: # Évite dépassement si déjà à la fin y
-                break
-            err += dx
-            y0 += sy
-    return points
+    num_segments = random.randint(4, 8)  # Nombre de segments de mur
+    min_len, max_len = 3, 10  # Longueur min/max des segments
 
     # Zones de départ par défaut (approximatives) à éviter
     p1_start_zone = (grid_width // 4, grid_height // 2)
     p2_start_zone = (grid_width * 3 // 4, grid_height // 2)
-    avoid_radius_sq = 5**2 # Rayon carré autour des zones de départ
+    avoid_radius_sq = 5**2  # Rayon carré autour des zones de départ
 
     for _ in range(num_segments):
         segment_len = random.randint(min_len, max_len)
         is_horizontal = random.choice([True, False])
 
         # Tente de trouver une position de départ valide
-        placed = False
-        for attempt in range(10): # Limite les tentatives pour éviter boucle infinie
+        for _attempt in range(10):  # Limite les tentatives pour éviter boucle infinie
             start_x = random.randint(1, grid_width - 2)
             start_y = random.randint(1, grid_height - 2)
 
             # Vérifie si trop près des zones de départ
-            dist_sq_p1 = (start_x - p1_start_zone[0])**2 + (start_y - p1_start_zone[1])**2
-            dist_sq_p2 = (start_x - p2_start_zone[0])**2 + (start_y - p2_start_zone[1])**2
+            dist_sq_p1 = (start_x - p1_start_zone[0]) ** 2 + (start_y - p1_start_zone[1]) ** 2
+            dist_sq_p2 = (start_x - p2_start_zone[0]) ** 2 + (start_y - p2_start_zone[1]) ** 2
             if dist_sq_p1 < avoid_radius_sq or dist_sq_p2 < avoid_radius_sq:
-                continue # Trop près, essaie une autre position
+                continue  # Trop près, essaie une autre position
 
             if is_horizontal:
                 # Assure que le segment ne sort pas des bords
                 end_x = min(grid_width - 2, start_x + segment_len - 1)
-                segment_len = end_x - start_x + 1 # Recalcule la longueur réelle
-                if segment_len < min_len: continue # Segment trop court après ajustement
+                real_len = end_x - start_x + 1
+                if real_len < min_len:
+                    continue  # Segment trop court après ajustement
 
                 # Vérifie si le segment est trop près des zones de départ
                 too_close = False
                 for x in range(start_x, end_x + 1):
-                    dist_sq_p1 = (x - p1_start_zone[0])**2 + (start_y - p1_start_zone[1])**2
-                    dist_sq_p2 = (x - p2_start_zone[0])**2 + (start_y - p2_start_zone[1])**2
+                    dist_sq_p1 = (x - p1_start_zone[0]) ** 2 + (start_y - p1_start_zone[1]) ** 2
+                    dist_sq_p2 = (x - p2_start_zone[0]) ** 2 + (start_y - p2_start_zone[1]) ** 2
                     if dist_sq_p1 < avoid_radius_sq or dist_sq_p2 < avoid_radius_sq:
-                        too_close = True; break
-                if too_close: continue
+                        too_close = True
+                        break
+                if too_close:
+                    continue
 
-                # Ajoute les murs
                 for x in range(start_x, end_x + 1):
                     walls.append((x, start_y))
-                placed = True; break # Segment placé, sort de la boucle d'essai
-            else: # Vertical
+            else:  # Vertical
                 # Assure que le segment ne sort pas des bords
                 end_y = min(grid_height - 2, start_y + segment_len - 1)
-                segment_len = end_y - start_y + 1 # Recalcule la longueur réelle
-                if segment_len < min_len: continue # Segment trop court
+                real_len = end_y - start_y + 1
+                if real_len < min_len:
+                    continue  # Segment trop court
 
                 # Vérifie si le segment est trop près des zones de départ
                 too_close = False
                 for y in range(start_y, end_y + 1):
-                    dist_sq_p1 = (start_x - p1_start_zone[0])**2 + (y - p1_start_zone[1])**2
-                    dist_sq_p2 = (start_x - p2_start_zone[0])**2 + (y - p2_start_zone[1])**2
+                    dist_sq_p1 = (start_x - p1_start_zone[0]) ** 2 + (y - p1_start_zone[1]) ** 2
+                    dist_sq_p2 = (start_x - p2_start_zone[0]) ** 2 + (y - p2_start_zone[1]) ** 2
                     if dist_sq_p1 < avoid_radius_sq or dist_sq_p2 < avoid_radius_sq:
-                        too_close = True; break
-                if too_close: continue
+                        too_close = True
+                        break
+                if too_close:
+                    continue
 
-                # Ajoute les murs
                 for y in range(start_y, end_y + 1):
                     walls.append((start_x, y))
-                placed = True; break # Segment placé
+
+            break  # Segment placé, passe au segment suivant
 
     # Retourne la liste unique des positions de murs
     return list(set(walls))
 # --- FIN NOUVEAU ---
-
-def bresenham_line(start_pos, end_pos):
-    """Génère les points de la grille sur une ligne entre deux points (Algorithme de Bresenham).
-
-    Args:
-        start_pos (tuple): Coordonnées (x, y) du point de départ.
-        end_pos (tuple): Coordonnées (x, y) du point d'arrivée.
-
-    Returns:
-        list: Une liste de tuples (x, y) représentant les points de la grille sur la ligne.
-    """
-    x0, y0 = start_pos
-    x1, y1 = end_pos
-    points = []
-    dx = abs(x1 - x0)
-    dy = -abs(y1 - y0) # Utilise -dy car l'axe Y est inversé dans Pygame (haut -> bas)
-
-    # Détermine la direction du pas pour x et y
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-
-    err = dx + dy  # Variable d'erreur
-
-    while True:
-        points.append((x0, y0)) # Ajoute le point courant
-        if x0 == x1 and y0 == y1:
-            break # Point final atteint
-
-        e2 = 2 * err
-        # Ajuste l'erreur et déplace x si nécessaire
-        if e2 >= dy:
-            if x0 == x1: # Évite dépassement si déjà à la fin x
-                break
-            err += dy
-            x0 += sx
-        # Ajuste l'erreur et déplace y si nécessaire
-        if e2 <= dx:
-            if y0 == y1: # Évite dépassement si déjà à la fin y
-                break
-            err += dx
-            y0 += sy
-    return points
 
 # --- END OF FILE utils.py ---

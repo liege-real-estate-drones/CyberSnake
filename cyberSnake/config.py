@@ -33,6 +33,13 @@ PARTICLE_FACTOR = 1.0
 SCREEN_SHAKE_ENABLED = True
 SHOW_FPS = False
 
+# UI
+# Échelle UI (polices/menus): "small", "normal", "large"
+UI_SCALE = "normal"
+UI_SCALE_FACTOR = 1.0
+# HUD: "normal" ou "minimal"
+HUD_MODE = "normal"
+
 # Couleurs (customisation)
 SNAKE_COLOR_PRESETS = {
     "cyber": (0, 255, 150),
@@ -608,6 +615,7 @@ MENU_BACKGROUND_IMAGE_FILE = "cover.jpg"
 HIGH_SCORE_FILE = "highscores.json"
 GAME_OPTIONS_FILE = "game_options.json"
 FAVORITE_MAP_FILE = "favorite_maps.json" # NOUVEAU
+CONTROLS_FILE = "controls.json"
 MAX_HIGH_SCORES = 10
 
 
@@ -627,6 +635,7 @@ OPTIONS = 100 # Menu Options (doit éviter les valeurs de GameMode)
 DEMO = 101 # Mode démo / attract (inactivité)
 VS_AI_SETUP = 102 # Choix difficulté avant Vs IA
 CLASSIC_SETUP = 103 # Options rapides avant Classique
+CONTROLS = 104 # Remapping contrôles
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)
@@ -663,4 +672,11 @@ BUTTON_PRIMARY_ACTION = 1      # Tirer (en jeu), Confirmer (menus)
 BUTTON_SECONDARY_ACTION = 2    # Dash (en jeu), Annuler/Retour (menus)
 BUTTON_TERTIARY_ACTION = 3     # Bouclier (en jeu)
 BUTTON_PAUSE = 7               # Pause / Reprendre (souvent le bouton Start)
+BUTTON_BACK = 8                # Retour/Menu (souvent Select/Back)
+
+# Axes joystick (0-indexed) + inversion
+JOY_AXIS_H = 0
+JOY_AXIS_V = 1
+JOY_INVERT_H = False
+JOY_INVERT_V = False
 VERSION = '1.1.3'

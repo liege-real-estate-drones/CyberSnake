@@ -170,6 +170,25 @@ def main():
         config.SCREEN_SHAKE_ENABLED = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         config.SHOW_FPS = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
 
+        ui_scale_key = str(opts.get("ui_scale", getattr(config, "UI_SCALE", "normal"))).strip().lower()
+        ui_scale_map = {"small": 0.9, "normal": 1.0, "large": 1.15}
+        if ui_scale_key not in ui_scale_map:
+            ui_scale_key = "normal"
+        config.UI_SCALE = ui_scale_key
+        config.UI_SCALE_FACTOR = float(ui_scale_map.get(ui_scale_key, 1.0))
+
+        hud_mode_key = str(opts.get("hud_mode", getattr(config, "HUD_MODE", "normal"))).strip().lower()
+        if hud_mode_key not in ("normal", "minimal"):
+            hud_mode_key = "normal"
+        config.HUD_MODE = hud_mode_key
+
+        # Contrôles (joystick) via controls.json
+        try:
+            controls_cfg = utils.load_controls(base_path_assets)
+            utils.apply_controls_to_config(controls_cfg)
+        except Exception as e:
+            logging.warning(f"Attention: Impossible de charger controls.json: {e}", exc_info=True)
+
         try:
             utils.set_music_volume(opts.get("music_volume", utils.music_volume))
             utils.set_sound_volume(opts.get("sound_volume", utils.sound_volume))
@@ -231,20 +250,28 @@ def main():
     # --- Chargement des Polices ---
     fonts = {}
     try:
-        fonts['small'] = pygame.font.SysFont("Consolas", 18)
-        fonts['default'] = pygame.font.SysFont("Consolas", 24)
-        fonts['medium'] = pygame.font.SysFont("Consolas", 36)
-        fonts['large'] = pygame.font.SysFont("Consolas", 72)
-        fonts['title'] = pygame.font.SysFont("Consolas", 90)
+        ui_scale_factor = float(getattr(config, "UI_SCALE_FACTOR", 1.0))
+    except Exception:
+        ui_scale_factor = 1.0
+
+    def _scaled_font_size(base_size):
+        return max(12, int(round(float(base_size) * ui_scale_factor)))
+
+    try:
+        fonts['small'] = pygame.font.SysFont("Consolas", _scaled_font_size(18))
+        fonts['default'] = pygame.font.SysFont("Consolas", _scaled_font_size(24))
+        fonts['medium'] = pygame.font.SysFont("Consolas", _scaled_font_size(36))
+        fonts['large'] = pygame.font.SysFont("Consolas", _scaled_font_size(72))
+        fonts['title'] = pygame.font.SysFont("Consolas", _scaled_font_size(90))
         logging.info("Police Consolas chargée.")
     except pygame.error:
         logging.warning("Erreur SysFont Consolas. Utilisation police défaut.", exc_info=False) # Log léger
         try:
-            fonts['small'] = pygame.font.Font(None, 22)
-            fonts['default'] = pygame.font.Font(None, 30)
-            fonts['medium'] = pygame.font.Font(None, 40)
-            fonts['large'] = pygame.font.Font(None, 72)
-            fonts['title'] = pygame.font.Font(None, 100)
+            fonts['small'] = pygame.font.Font(None, _scaled_font_size(22))
+            fonts['default'] = pygame.font.Font(None, _scaled_font_size(30))
+            fonts['medium'] = pygame.font.Font(None, _scaled_font_size(40))
+            fonts['large'] = pygame.font.Font(None, _scaled_font_size(72))
+            fonts['title'] = pygame.font.Font(None, _scaled_font_size(100))
             logging.info("Police défaut chargée.")
         except Exception as font_e:
             logging.critical(f"FATAL: Erreur chargement police défaut: {font_e}", exc_info=True)
@@ -318,6 +345,7 @@ def main():
     state_functions = {
         config.MENU: game_states.run_menu,
         config.OPTIONS: game_states.run_options,
+        config.CONTROLS: game_states.run_controls_remap,
         config.NAME_ENTRY_SOLO: game_states.run_name_entry_solo,
         config.MAP_SELECTION: game_states.run_map_selection,
         config.VS_AI_SETUP: game_states.run_vs_ai_setup,
