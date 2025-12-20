@@ -1575,6 +1575,8 @@ def run_menu(events, dt, screen, game_state):
                                     targeted_next_state = config.MAP_SELECTION
                                 elif selected_option == config.MODE_VS_AI:
                                     targeted_next_state = config.VS_AI_SETUP
+                                elif selected_option == config.MODE_CLASSIC:
+                                    targeted_next_state = config.CLASSIC_SETUP
                                 else:
                                     targeted_next_state = config.NAME_ENTRY_SOLO
                             else:
@@ -1661,6 +1663,8 @@ def run_menu(events, dt, screen, game_state):
                                 next_state = config.MAP_SELECTION # PvP va à la sélection de carte
                             elif selected_option == config.MODE_VS_AI:
                                 next_state = config.VS_AI_SETUP
+                            elif selected_option == config.MODE_CLASSIC:
+                                next_state = config.CLASSIC_SETUP
                             else:
                                 next_state = config.NAME_ENTRY_SOLO # Autres modes vont à la saisie du nom
                         else:
@@ -1718,6 +1722,8 @@ def run_menu(events, dt, screen, game_state):
                              next_state = config.MAP_SELECTION
                         elif selected_option == config.MODE_VS_AI:
                              next_state = config.VS_AI_SETUP
+                        elif selected_option == config.MODE_CLASSIC:
+                             next_state = config.CLASSIC_SETUP
                         else:
                              next_state = config.NAME_ENTRY_SOLO
                     else:
@@ -3886,6 +3892,349 @@ def run_map_selection(events, dt, screen, game_state):
     game_state['map_selection_index'] = map_selection_index
     game_state['last_axis_move_time_map'] = last_axis_move_time # Sauvegarde le temps
     return next_state
+
+
+def run_classic_setup(events, dt, screen, game_state):
+    """Écran rapide de setup Classique (taille, bordures, style serpent)."""
+    font_small = game_state.get('font_small')
+    font_default = game_state.get('font_default')
+    font_medium = game_state.get('font_medium')
+    menu_background_image = game_state.get('menu_background_image')
+    current_time = pygame.time.get_ticks()
+
+    if not all([font_small, font_default, font_medium]):
+        return config.MENU
+
+    # Assure le mode
+    game_state['current_game_mode'] = config.MODE_CLASSIC
+
+    # Valeurs courantes (session) - ne persiste pas sur disque
+    pending_classic_arena = game_state.get('classic_setup_arena', getattr(config, "CLASSIC_ARENA", "full"))
+    pending_wall_style = game_state.get('classic_setup_wall_style', getattr(config, "WALL_STYLE", "panel"))
+    pending_snake_style_p1 = game_state.get('classic_setup_snake_style_p1', getattr(config, "SNAKE_STYLE_P1", None))
+
+    if isinstance(pending_classic_arena, str):
+        pending_classic_arena = pending_classic_arena.strip().lower()
+    else:
+        pending_classic_arena = str(getattr(config, "CLASSIC_ARENA", "full") or "full").strip().lower()
+
+    if isinstance(pending_wall_style, str):
+        pending_wall_style = pending_wall_style.strip().lower()
+    else:
+        pending_wall_style = str(getattr(config, "WALL_STYLE", "panel") or "panel").strip().lower()
+
+    if isinstance(pending_snake_style_p1, str):
+        pending_snake_style_p1 = pending_snake_style_p1.strip().lower() or None
+    else:
+        pending_snake_style_p1 = None
+
+    classic_arenas = [
+        ("full", "Pleine"),
+        ("large", "Grande"),
+        ("medium", "Moyenne"),
+        ("small", "Petite"),
+    ]
+    classic_arena_keys = [k for k, _ in classic_arenas]
+    if pending_classic_arena not in classic_arena_keys:
+        pending_classic_arena = "full" if "full" in classic_arena_keys else classic_arena_keys[0]
+    classic_arena_display_map = dict(classic_arenas)
+
+    wall_styles = [
+        ("classic", "Classique"),
+        ("panel", "Panneaux"),
+        ("neon", "Neon"),
+        ("circuit", "Circuit"),
+    ]
+    wall_style_keys = [k for k, _ in wall_styles]
+    if pending_wall_style not in wall_style_keys:
+        pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
+    wall_style_display_map = dict(wall_styles)
+
+    snake_styles = [
+        (None, "Auto"),
+        ("sprites", "Sprites"),
+        ("blocks", "Blocs"),
+        ("rounded", "Arrondi"),
+        ("glass", "Verre"),
+        ("circuit", "Circuit"),
+        ("pixel", "Pixel"),
+        ("neon", "Neon"),
+        ("wire", "Fil"),
+    ]
+    snake_style_keys = [k for k, _ in snake_styles]
+    if pending_snake_style_p1 not in snake_style_keys:
+        pending_snake_style_p1 = None
+    snake_style_display_map = dict(snake_styles)
+    global_style_key = str(getattr(config, "SNAKE_STYLE", "sprites") or "sprites").strip().lower()
+
+    def format_style(style_key):
+        if style_key is None:
+            return f"Auto ({snake_style_display_map.get(global_style_key, global_style_key)})"
+        return snake_style_display_map.get(style_key, style_key)
+
+    selection_index = int(game_state.get('classic_setup_selection_index', 0) or 0)
+    axis_repeat_delay = 200
+    last_axis_move_time = int(game_state.get('last_axis_move_time_classic_setup', 0) or 0)
+
+    IDX_START = 0
+    IDX_CLASSIC_ARENA = 1
+    IDX_WALL_STYLE = 2
+    IDX_SNAKE_STYLE = 3
+    IDX_BACK = 4
+    menu_len = 5
+
+    selection_index = max(0, min(selection_index, menu_len - 1))
+
+    def cycle_classic_arena(delta):
+        nonlocal pending_classic_arena
+        try:
+            idx = classic_arena_keys.index(pending_classic_arena)
+        except ValueError:
+            idx = 0
+        pending_classic_arena = classic_arena_keys[(idx + delta) % len(classic_arena_keys)]
+
+    def cycle_wall_style(delta):
+        nonlocal pending_wall_style
+        try:
+            idx = wall_style_keys.index(pending_wall_style)
+        except ValueError:
+            idx = 0
+        pending_wall_style = wall_style_keys[(idx + delta) % len(wall_style_keys)]
+
+    def cycle_snake_style(delta):
+        nonlocal pending_snake_style_p1
+        try:
+            idx = snake_style_keys.index(pending_snake_style_p1)
+        except ValueError:
+            idx = 0
+        pending_snake_style_p1 = snake_style_keys[(idx + delta) % len(snake_style_keys)]
+
+    def adjust_current(delta):
+        if selection_index == IDX_CLASSIC_ARENA:
+            cycle_classic_arena(delta)
+        elif selection_index == IDX_WALL_STYLE:
+            cycle_wall_style(delta)
+        elif selection_index == IDX_SNAKE_STYLE:
+            cycle_snake_style(delta)
+
+    def apply_choice():
+        try:
+            config.CLASSIC_ARENA = str(pending_classic_arena).strip().lower()
+        except Exception:
+            config.CLASSIC_ARENA = "full"
+
+        try:
+            config.WALL_STYLE = str(pending_wall_style).strip().lower()
+        except Exception:
+            config.WALL_STYLE = "panel"
+
+        try:
+            config.SNAKE_STYLE_P1 = pending_snake_style_p1 if pending_snake_style_p1 else None
+        except Exception:
+            config.SNAKE_STYLE_P1 = None
+
+        # Mémorise le dernier choix pour la session
+        game_state['classic_setup_arena'] = config.CLASSIC_ARENA
+        game_state['classic_setup_wall_style'] = config.WALL_STYLE
+        game_state['classic_setup_snake_style_p1'] = config.SNAKE_STYLE_P1
+
+    def handle_confirm():
+        if selection_index == IDX_START:
+            utils.play_sound("powerup_pickup")
+            apply_choice()
+            game_state['classic_setup_selection_index'] = 0
+            game_state['last_axis_move_time_classic_setup'] = 0
+            game_state['current_state'] = config.NAME_ENTRY_SOLO
+            return config.NAME_ENTRY_SOLO
+
+        if selection_index == IDX_BACK:
+            utils.play_sound("combo_break")
+            game_state['classic_setup_selection_index'] = 0
+            game_state['last_axis_move_time_classic_setup'] = 0
+            game_state['current_state'] = config.MENU
+            return config.MENU
+
+        adjust_current(1)
+        utils.play_sound("eat")
+        return config.CLASSIC_SETUP
+
+    for event in events:
+        if event.type == pygame.QUIT:
+            return False
+
+        elif event.type == pygame.JOYAXISMOTION:
+            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                axis = event.axis
+                value = event.value
+                threshold = getattr(config, "JOYSTICK_THRESHOLD", 0.6)
+                if axis == 0:  # Vertical
+                    if value < -threshold:
+                        selection_index = (selection_index - 1 + menu_len) % menu_len
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                    elif value > threshold:
+                        selection_index = (selection_index + 1) % menu_len
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                elif axis == 1:  # Horizontal (inversé)
+                    if value < -threshold:
+                        adjust_current(1)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                    elif value > threshold:
+                        adjust_current(-1)
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYHATMOTION:
+            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                hat_x, hat_y = event.value
+                if hat_y > 0:
+                    selection_index = (selection_index - 1 + menu_len) % menu_len
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_y < 0:
+                    selection_index = (selection_index + 1) % menu_len
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_x != 0:
+                    adjust_current(1 if hat_x > 0 else -1)
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYBUTTONDOWN:
+            if event.instance_id == 0:
+                if is_back_button(event.button):
+                    utils.play_sound("combo_break")
+                    game_state['classic_setup_selection_index'] = 0
+                    game_state['last_axis_move_time_classic_setup'] = 0
+                    game_state['current_state'] = config.MENU
+                    return config.MENU
+                if is_confirm_button(event.button):
+                    return handle_confirm()
+
+        elif event.type == pygame.KEYDOWN:
+            key = event.key
+            if key == pygame.K_ESCAPE:
+                utils.play_sound("combo_break")
+                game_state['classic_setup_selection_index'] = 0
+                game_state['last_axis_move_time_classic_setup'] = 0
+                game_state['current_state'] = config.MENU
+                return config.MENU
+            if key in (pygame.K_UP, pygame.K_w):
+                selection_index = (selection_index - 1 + menu_len) % menu_len
+                utils.play_sound("eat")
+            elif key in (pygame.K_DOWN, pygame.K_s):
+                selection_index = (selection_index + 1) % menu_len
+                utils.play_sound("eat")
+            elif key in (pygame.K_LEFT, pygame.K_a):
+                adjust_current(-1)
+                utils.play_sound("eat")
+            elif key in (pygame.K_RIGHT, pygame.K_d):
+                adjust_current(1)
+                utils.play_sound("eat")
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                return handle_confirm()
+
+    # Persistance intra-session (navigation + choix) - sans impact sur game_options.json
+    game_state['last_axis_move_time_classic_setup'] = last_axis_move_time
+    game_state['classic_setup_selection_index'] = selection_index
+    game_state['classic_setup_arena'] = pending_classic_arena
+    game_state['classic_setup_wall_style'] = pending_wall_style
+    game_state['classic_setup_snake_style_p1'] = pending_snake_style_p1
+
+    # --- Dessin ---
+    try:
+        if menu_background_image:
+            try:
+                screen.blit(menu_background_image, (0, 0))
+            except Exception:
+                screen.fill(config.COLOR_BACKGROUND)
+        else:
+            screen.fill(config.COLOR_BACKGROUND)
+
+        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        screen.blit(overlay, (0, 0))
+
+        sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
+        utils.draw_text_with_shadow(
+            screen,
+            "MODE CLASSIQUE",
+            font_medium,
+            config.COLOR_TEXT_HIGHLIGHT,
+            config.COLOR_UI_SHADOW,
+            (sw / 2, sh * 0.14),
+            "center",
+        )
+
+        panel_w = min(740, int(sw * 0.82))
+        panel_top_min = int(sh * 0.24)
+        row_h = max(46, min(62, int((sh * 0.44) / max(1, menu_len))))
+        panel_h = max(240, (menu_len * row_h) + 60)
+        panel_x = (sw - panel_w) // 2
+        panel_y = max(12, panel_top_min)
+        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
+        draw_ui_panel(screen, panel_rect)
+
+        items = [
+            ("Démarrer", ""),
+            ("Taille arène", classic_arena_display_map.get(pending_classic_arena, pending_classic_arena)),
+            ("Style bordures", wall_style_display_map.get(pending_wall_style, pending_wall_style)),
+            ("Style serpent", format_style(pending_snake_style_p1)),
+            ("Retour", ""),
+        ]
+
+        content_pad = 18
+        row_x = panel_rect.left + content_pad
+        row_w = panel_rect.width - (content_pad * 2)
+        row_y0 = panel_rect.top + 22
+
+        pulse = 0.55 + 0.45 * math.sin(current_time * 0.008)
+        hl_alpha = int(40 + 60 * pulse)
+
+        for i, (label, value) in enumerate(items):
+            y = row_y0 + (i * row_h)
+            row_rect = pygame.Rect(row_x, y, row_w, row_h - 8)
+            is_selected = (i == selection_index)
+
+            if is_selected:
+                hl = pygame.Surface(row_rect.size, pygame.SRCALPHA)
+                hl.fill((255, 255, 255, hl_alpha))
+                screen.blit(hl, row_rect.topleft)
+                try:
+                    pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT, row_rect, 2, border_radius=10)
+                except Exception:
+                    pass
+
+            main_color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT_MENU
+            utils.draw_text_with_shadow(
+                screen,
+                label,
+                font_default,
+                main_color,
+                config.COLOR_UI_SHADOW,
+                (row_rect.left + 18, row_rect.centery),
+                "midleft",
+            )
+            if value:
+                utils.draw_text_with_shadow(
+                    screen,
+                    str(value),
+                    font_default,
+                    main_color,
+                    config.COLOR_UI_SHADOW,
+                    (row_rect.right - 18, row_rect.centery),
+                    "midright",
+                )
+
+        hint = "Haut/Bas: choisir | Gauche/Droite: changer | Entrée/A: valider | Echap/B: retour"
+        utils.draw_text(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.92), "center")
+        utils.draw_text(screen, "Astuce: 'Démarrer' = défaut si tu n'as rien changé", font_small, config.COLOR_TEXT, (sw / 2, sh * 0.955), "center")
+    except Exception:
+        pass
+
+    return config.CLASSIC_SETUP
 
 
 def run_vs_ai_setup(events, dt, screen, game_state):

@@ -626,6 +626,7 @@ UPDATE = 9 # --- NOUVEAU: État pour la mise à jour ---
 OPTIONS = 100 # Menu Options (doit éviter les valeurs de GameMode)
 DEMO = 101 # Mode démo / attract (inactivité)
 VS_AI_SETUP = 102 # Choix difficulté avant Vs IA
+CLASSIC_SETUP = 103 # Options rapides avant Classique
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)
