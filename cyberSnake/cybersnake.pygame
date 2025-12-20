@@ -154,6 +154,14 @@ def main():
             ai_key = "normal"
         config.AI_DIFFICULTY = ai_key
 
+        try:
+            wall_key = str(opts.get("wall_style", getattr(config, "WALL_STYLE", "panel"))).strip().lower()
+        except Exception:
+            wall_key = str(getattr(config, "WALL_STYLE", "panel")).strip().lower()
+        if wall_key not in ("classic", "panel", "neon", "circuit"):
+            wall_key = "panel"
+        config.WALL_STYLE = wall_key
+
         particle_key = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal"))).strip().lower()
         particle_map = {"off": 0.0, "low": 0.5, "normal": 1.0, "high": 1.6}
         config.PARTICLE_DENSITY = particle_key if particle_key in particle_map else "normal"
@@ -266,7 +274,7 @@ def main():
         'selected_map_key': config.DEFAULT_MAP_KEY,
         'map_selection_index': 0, 'menu_selection_index': 0, # Index commence à 0
         'pvp_setup_index': 0, 'hall_of_fame_index': 0,
-        'player1_name_input': "Joueur 1", 'player2_name_input': "Joueur 2",
+        'player1_name_input': "Thi", 'player2_name_input': "Alex",
         'pvp_name_entry_stage': 1,
         'pvp_condition_type': config.PVP_DEFAULT_CONDITION,
         'pvp_target_time': config.PVP_DEFAULT_TIME_SECONDS,
@@ -312,6 +320,7 @@ def main():
         config.OPTIONS: game_states.run_options,
         config.NAME_ENTRY_SOLO: game_states.run_name_entry_solo,
         config.MAP_SELECTION: game_states.run_map_selection,
+        config.VS_AI_SETUP: game_states.run_vs_ai_setup,
         config.PVP_SETUP: game_states.run_pvp_setup,
         config.NAME_ENTRY_PVP: game_states.run_name_entry_pvp,
         config.PLAYING: game_states.run_game,

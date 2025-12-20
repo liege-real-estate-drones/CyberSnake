@@ -46,6 +46,9 @@ import threading
 def draw_ui_panel(surface, rect):
     """Dessine un panneau UI semi-transparent avec bordure."""
     try:
+        if rect.width <= 0 or rect.height <= 0:
+            return
+
         ui_alpha = max(0, min(255, 180))
         if len(config.COLOR_UI_SHADOW) == 4:
             base_color = config.COLOR_UI_SHADOW[:3]
@@ -56,12 +59,179 @@ def draw_ui_panel(surface, rect):
         panel_surf.fill(ui_panel_color)
         border_thickness = getattr(config, 'ui_border_thickness', 2)
         panel_radius = getattr(config, 'ui_panel_radius', 5)
+
+        # --- Subtle "cyber" details (scanlines + accents) ---
+        try:
+            w, h = panel_surf.get_size()
+            scan_step = 6
+            scan_col = (0, 0, 0, 14)
+            for y in range(0, h, scan_step):
+                pygame.draw.line(panel_surf, scan_col, (0, y), (w, y))
+        except Exception:
+            pass
+
+        try:
+            accent = getattr(config, "COLOR_SNAKE_P1", (0, 255, 150))
+            if not isinstance(accent, (tuple, list)):
+                accent = (0, 255, 150)
+            accent = tuple(max(0, min(255, int(c))) for c in accent[:3])
+
+            w, h = panel_surf.get_size()
+            pad = max(int(border_thickness) + 3, 6)
+            corner_len = max(10, int(min(w, h) * 0.14))
+            corner_col = (accent[0], accent[1], accent[2], 48)
+
+            # Top highlight
+            pygame.draw.line(
+                panel_surf,
+                (accent[0], accent[1], accent[2], 22),
+                (pad, pad),
+                (w - pad - 1, pad),
+                1,
+            )
+
+            # Corner brackets
+            lw = 2 if min(w, h) >= 120 else 1
+            # Top-left
+            pygame.draw.line(panel_surf, corner_col, (pad, pad), (pad + corner_len, pad), lw)
+            pygame.draw.line(panel_surf, corner_col, (pad, pad), (pad, pad + corner_len), lw)
+            # Top-right
+            pygame.draw.line(panel_surf, corner_col, (w - pad - 1, pad), (w - pad - 1 - corner_len, pad), lw)
+            pygame.draw.line(panel_surf, corner_col, (w - pad - 1, pad), (w - pad - 1, pad + corner_len), lw)
+            # Bottom-left
+            pygame.draw.line(panel_surf, corner_col, (pad, h - pad - 1), (pad + corner_len, h - pad - 1), lw)
+            pygame.draw.line(panel_surf, corner_col, (pad, h - pad - 1), (pad, h - pad - 1 - corner_len), lw)
+            # Bottom-right
+            pygame.draw.line(panel_surf, corner_col, (w - pad - 1, h - pad - 1), (w - pad - 1 - corner_len, h - pad - 1), lw)
+            pygame.draw.line(panel_surf, corner_col, (w - pad - 1, h - pad - 1), (w - pad - 1, h - pad - 1 - corner_len), lw)
+        except Exception:
+            pass
+
         pygame.draw.rect(panel_surf, config.COLOR_GRID, panel_surf.get_rect(), border_thickness, border_radius=panel_radius)
         surface.blit(panel_surf, rect.topleft)
     except Exception as e:
         if not getattr(draw_ui_panel, 'has_warned', False):
              print(f"Warning: Error drawing UI panel (will warn only once): {e}")
              draw_ui_panel.has_warned = True
+
+
+def _clamp_color_rgb(color):
+    try:
+        r, g, b = color[:3]
+    except Exception:
+        return (255, 255, 255)
+    return (max(0, min(255, int(r))), max(0, min(255, int(g))), max(0, min(255, int(b))))
+
+
+def _lighten_rgb(color, amount):
+    r, g, b = _clamp_color_rgb(color)
+    a = int(amount)
+    return (min(255, r + a), min(255, g + a), min(255, b + a))
+
+
+def _darken_rgb(color, amount):
+    r, g, b = _clamp_color_rgb(color)
+    a = int(amount)
+    return (max(0, r - a), max(0, g - a), max(0, b - a))
+
+
+def draw_wall_tile(surface, rect, grid_pos=None, current_time=0, style=None):
+    """Dessine un mur (tuile) avec un style visuel plus cyber."""
+    try:
+        style_key = str(style if style is not None else getattr(config, "WALL_STYLE", "classic") or "classic").strip().lower()
+    except Exception:
+        style_key = "classic"
+
+    base = _clamp_color_rgb(getattr(config, "COLOR_WALL", (100, 110, 120)))
+    accent = _clamp_color_rgb(getattr(config, "COLOR_SNAKE_P1", (0, 255, 150)))
+
+    # Légère variation pour casser l'effet "mur plat"
+    try:
+        if isinstance(grid_pos, tuple) and len(grid_pos) == 2:
+            parity = (int(grid_pos[0]) + int(grid_pos[1])) & 1
+            if parity:
+                base = _darken_rgb(base, 8)
+            else:
+                base = _lighten_rgb(base, 6)
+    except Exception:
+        pass
+
+    w = int(rect.width)
+    h = int(rect.height)
+    if w <= 0 or h <= 0:
+        return
+
+    # Styles simplifiés si très petit (aperçus)
+    if min(w, h) < 6:
+        try:
+            pygame.draw.rect(surface, base, rect)
+        except Exception:
+            pass
+        return
+
+    try:
+        if style_key == "classic":
+            pygame.draw.rect(surface, base, rect)
+            pygame.draw.rect(surface, _darken_rgb(base, 30), rect, 1)
+            return
+
+        if style_key == "panel":
+            pygame.draw.rect(surface, _darken_rgb(base, 10), rect, border_radius=2)
+            # Biseaux (haut/gauche clair, bas/droite sombre)
+            pygame.draw.line(surface, _lighten_rgb(base, 32), rect.topleft, (rect.right - 1, rect.top), 1)
+            pygame.draw.line(surface, _lighten_rgb(base, 18), rect.topleft, (rect.left, rect.bottom - 1), 1)
+            pygame.draw.line(surface, _darken_rgb(base, 40), (rect.left, rect.bottom - 1), (rect.right - 1, rect.bottom - 1), 1)
+            pygame.draw.line(surface, _darken_rgb(base, 28), (rect.right - 1, rect.top), (rect.right - 1, rect.bottom - 1), 1)
+
+            inset = rect.inflate(-max(2, w // 6), -max(2, h // 6))
+            if inset.width > 0 and inset.height > 0:
+                pygame.draw.rect(surface, _darken_rgb(base, 18), inset, 1, border_radius=2)
+            return
+
+        if style_key == "neon":
+            # Base sombre + double bordure accent
+            pygame.draw.rect(surface, _darken_rgb(base, 55), rect, border_radius=3)
+            pygame.draw.rect(surface, _darken_rgb(accent, 90), rect, 3, border_radius=3)
+            pygame.draw.rect(surface, accent, rect, 1, border_radius=3)
+
+            # Petit pulse (sans alpha) sur une arrête
+            try:
+                pulse = 0 if int(current_time // 300) % 2 == 0 else 12
+            except Exception:
+                pulse = 0
+            edge_col = _lighten_rgb(accent, pulse)
+            pygame.draw.line(surface, edge_col, (rect.left + 2, rect.top + 2), (rect.right - 3, rect.top + 2), 1)
+            return
+
+        if style_key == "circuit":
+            pygame.draw.rect(surface, _darken_rgb(base, 22), rect, border_radius=2)
+            pygame.draw.rect(surface, _darken_rgb(base, 40), rect, 1, border_radius=2)
+
+            # Traces internes (dépend de la case)
+            try:
+                gx, gy = grid_pos if isinstance(grid_pos, tuple) else (0, 0)
+                s = (int(gx) * 31 + int(gy) * 17) & 3
+            except Exception:
+                s = 0
+
+            midy = rect.centery
+            midx = rect.centerx
+            line_col = _darken_rgb(accent, 30)
+            if s in (0, 2):
+                pygame.draw.line(surface, line_col, (rect.left + 3, midy), (rect.right - 4, midy), 1)
+            if s in (1, 2):
+                pygame.draw.line(surface, line_col, (midx, rect.top + 3), (midx, rect.bottom - 4), 1)
+            # Nœuds
+            node_r = max(1, min(w, h) // 8)
+            pygame.draw.circle(surface, accent, (rect.left + 4, rect.top + 4), node_r)
+            pygame.draw.circle(surface, accent, (rect.right - 5, rect.bottom - 5), node_r)
+            return
+
+        # Fallback
+        pygame.draw.rect(surface, base, rect)
+        pygame.draw.rect(surface, _darken_rgb(base, 30), rect, 1)
+    except Exception:
+        pass
 
 # --- Fonction de Dessin Principale (appelle draw_ui_panel) ---
 def draw_game_elements_on_surface(target_surface, game_state, current_time=None):
@@ -127,9 +297,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     for wall_pos in current_map_walls:
         wall_rect = pygame.Rect(wall_pos[0] * config.GRID_SIZE, wall_pos[1] * config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
         try:
-            pygame.draw.rect(target_surface, config.COLOR_WALL, wall_rect)
-            border_color = tuple(max(0, c - 30) for c in config.COLOR_WALL)
-            pygame.draw.rect(target_surface, border_color, wall_rect, 1)
+            draw_wall_tile(target_surface, wall_rect, grid_pos=wall_pos, current_time=current_time)
         except Exception: pass
 
     # --- Copies des listes d'objets ---
@@ -1053,7 +1221,7 @@ def reset_game(game_state):
         current_game_mode = config.MODE_SOLO
         game_state['current_game_mode'] = current_game_mode
     selected_map_key = game_state.get('selected_map_key', config.DEFAULT_MAP_KEY)
-    player1_name = game_state.get('player1_name_input', "Joueur 1")
+    player1_name = game_state.get('player1_name_input', "Thi")
     base_path = game_state.get('base_path', "")
     pvp_start_armor = game_state.get('pvp_start_armor', config.pvp_start_armor)
     pvp_start_ammo = game_state.get('pvp_start_ammo', config.pvp_start_ammo)
@@ -1180,7 +1348,7 @@ def reset_game(game_state):
         num_initial_nests = min(1, config.MAX_NESTS_SURVIVAL) # Vague 1 = 1 nid
         # =======================================================
     elif current_game_mode == config.MODE_PVP:
-        player2_name = game_state.get('player2_name_input', "Joueur 2")
+        player2_name = game_state.get('player2_name_input', "Alex")
         print(f"DEBUG PVP RESET: Tentative de création de player2_snake avec nom: {player2_name}, start_pos: {p2_start}")
         try:
             game_state['player2_snake'] = game_objects.Snake(
@@ -1403,6 +1571,8 @@ def run_menu(events, dt, screen, game_state):
                                 game_state['current_game_mode'] = selected_option
                                 if selected_option == config.MODE_PVP:
                                     targeted_next_state = config.MAP_SELECTION
+                                elif selected_option == config.MODE_VS_AI:
+                                    targeted_next_state = config.VS_AI_SETUP
                                 else:
                                     targeted_next_state = config.NAME_ENTRY_SOLO
                             else:
@@ -1487,6 +1657,8 @@ def run_menu(events, dt, screen, game_state):
                             game_state['current_game_mode'] = selected_option
                             if selected_option == config.MODE_PVP:
                                 next_state = config.MAP_SELECTION # PvP va à la sélection de carte
+                            elif selected_option == config.MODE_VS_AI:
+                                next_state = config.VS_AI_SETUP
                             else:
                                 next_state = config.NAME_ENTRY_SOLO # Autres modes vont à la saisie du nom
                         else:
@@ -1542,6 +1714,8 @@ def run_menu(events, dt, screen, game_state):
                         game_state['current_game_mode'] = selected_option
                         if selected_option == config.MODE_PVP:
                              next_state = config.MAP_SELECTION
+                        elif selected_option == config.MODE_VS_AI:
+                             next_state = config.VS_AI_SETUP
                         else:
                              next_state = config.NAME_ENTRY_SOLO
                     else:
@@ -1759,6 +1933,7 @@ def run_options(events, dt, screen, game_state):
         or 'pending_classic_arena' not in game_state
         or 'pending_game_speed' not in game_state
         or 'pending_ai_difficulty' not in game_state
+        or 'pending_wall_style' not in game_state
         or 'pending_particle_density' not in game_state
         or 'pending_screen_shake' not in game_state
         or 'pending_show_fps' not in game_state
@@ -1789,6 +1964,7 @@ def run_options(events, dt, screen, game_state):
         pending_classic_arena = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
         pending_game_speed = str(opts.get("game_speed", getattr(config, "GAME_SPEED", "normal")))
         pending_ai_difficulty = str(opts.get("ai_difficulty", getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
+        pending_wall_style = str(opts.get("wall_style", getattr(config, "WALL_STYLE", "panel"))).strip().lower()
         pending_particle_density = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal")))
         pending_screen_shake = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         pending_show_fps = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
@@ -1811,6 +1987,7 @@ def run_options(events, dt, screen, game_state):
         game_state['pending_classic_arena'] = pending_classic_arena
         game_state['pending_game_speed'] = pending_game_speed
         game_state['pending_ai_difficulty'] = pending_ai_difficulty
+        game_state['pending_wall_style'] = pending_wall_style
         game_state['pending_particle_density'] = pending_particle_density
         game_state['pending_screen_shake'] = pending_screen_shake
         game_state['pending_show_fps'] = pending_show_fps
@@ -1839,6 +2016,7 @@ def run_options(events, dt, screen, game_state):
     pending_classic_arena = str(game_state.get('pending_classic_arena', getattr(config, "CLASSIC_ARENA", "full")))
     pending_game_speed = str(game_state.get('pending_game_speed', getattr(config, "GAME_SPEED", "normal")))
     pending_ai_difficulty = str(game_state.get('pending_ai_difficulty', getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
+    pending_wall_style = str(game_state.get('pending_wall_style', getattr(config, "WALL_STYLE", "panel"))).strip().lower()
     pending_particle_density = str(game_state.get('pending_particle_density', getattr(config, "PARTICLE_DENSITY", "normal")))
     pending_screen_shake = bool(game_state.get('pending_screen_shake', getattr(config, "SCREEN_SHAKE_ENABLED", True)))
     pending_show_fps = bool(game_state.get('pending_show_fps', getattr(config, "SHOW_FPS", False)))
@@ -1873,6 +2051,9 @@ def run_options(events, dt, screen, game_state):
         ("sprites", "Sprites"),
         ("blocks", "Blocs"),
         ("rounded", "Arrondi"),
+        ("glass", "Verre"),
+        ("circuit", "Circuit"),
+        ("pixel", "Pixel"),
         ("neon", "Neon"),
         ("wire", "Fil"),
     ]
@@ -1911,6 +2092,19 @@ def run_options(events, dt, screen, game_state):
     snake_color_display_map = dict(snake_colors)
     snake_color_display_p1 = snake_color_display_map.get(pending_snake_color_p1, pending_snake_color_p1)
     snake_color_display_p2 = snake_color_display_map.get(pending_snake_color_p2, pending_snake_color_p2)
+
+    wall_styles = [
+        ("classic", "Classique"),
+        ("panel", "Panneaux"),
+        ("neon", "Neon"),
+        ("circuit", "Circuit"),
+    ]
+    wall_style_keys = [k for k, _ in wall_styles]
+    pending_wall_style = str(pending_wall_style).strip().lower()
+    if pending_wall_style not in wall_style_keys:
+        pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
+    wall_style_display_map = dict(wall_styles)
+    wall_style_display = wall_style_display_map.get(pending_wall_style, pending_wall_style)
 
     classic_arenas = [
         ("full", "Pleine"),
@@ -1976,6 +2170,7 @@ def run_options(events, dt, screen, game_state):
         ("Style serpent J2", snake_style_display_p2),
         ("Couleur J1", snake_color_display_p1),
         ("Couleur J2", snake_color_display_p2),
+        ("Style murs", wall_style_display),
         ("Arène classique", classic_arena_display),
         ("Vitesse jeu", game_speed_display),
         ("Difficulté IA", ai_difficulty_display),
@@ -1995,17 +2190,18 @@ def run_options(events, dt, screen, game_state):
     IDX_STYLE_P2 = 3
     IDX_COLOR_P1 = 4
     IDX_COLOR_P2 = 5
-    IDX_CLASSIC_ARENA = 6
-    IDX_GAME_SPEED = 7
-    IDX_AI_DIFFICULTY = 8
-    IDX_PARTICLES = 9
-    IDX_SHAKE = 10
-    IDX_SHOW_FPS = 11
-    IDX_MUSIC_VOL = 12
-    IDX_SOUND_VOL = 13
-    IDX_RESET = 14
-    IDX_APPLY = 15
-    IDX_BACK = 16
+    IDX_WALL_STYLE = 6
+    IDX_CLASSIC_ARENA = 7
+    IDX_GAME_SPEED = 8
+    IDX_AI_DIFFICULTY = 9
+    IDX_PARTICLES = 10
+    IDX_SHAKE = 11
+    IDX_SHOW_FPS = 12
+    IDX_MUSIC_VOL = 13
+    IDX_SOUND_VOL = 14
+    IDX_RESET = 15
+    IDX_APPLY = 16
+    IDX_BACK = 17
 
     selection_index = max(0, min(selection_index, len(menu_items) - 1))
 
@@ -2048,6 +2244,14 @@ def run_options(events, dt, screen, game_state):
         except ValueError:
             idx = 0
         pending_snake_color_p2 = snake_color_keys[(idx + delta) % len(snake_color_keys)]
+
+    def cycle_wall_style(delta):
+        nonlocal pending_wall_style
+        try:
+            idx = wall_style_keys.index(pending_wall_style)
+        except ValueError:
+            idx = 0
+        pending_wall_style = wall_style_keys[(idx + delta) % len(wall_style_keys)]
 
     def cycle_classic_arena(delta):
         nonlocal pending_classic_arena
@@ -2109,6 +2313,7 @@ def run_options(events, dt, screen, game_state):
         opts["snake_style_p2"] = pending_snake_style_p2 if pending_snake_style_p2 else None
         opts["snake_color_p1"] = str(pending_snake_color_p1)
         opts["snake_color_p2"] = str(pending_snake_color_p2)
+        opts["wall_style"] = str(pending_wall_style)
         opts["classic_arena"] = str(pending_classic_arena)
         opts["game_speed"] = str(pending_game_speed)
         opts["ai_difficulty"] = str(pending_ai_difficulty)
@@ -2134,6 +2339,10 @@ def run_options(events, dt, screen, game_state):
         except Exception:
             pass
         config.CLASSIC_ARENA = str(pending_classic_arena)
+        try:
+            config.WALL_STYLE = str(pending_wall_style).strip().lower()
+        except Exception:
+            config.WALL_STYLE = "panel"
 
         speed_map = {"slow": 1.25, "normal": 1.0, "fast": 0.85}
         config.GAME_SPEED = str(pending_game_speed).strip().lower()
@@ -2193,7 +2402,7 @@ def run_options(events, dt, screen, game_state):
     def reset_to_defaults():
         nonlocal pending_show_grid, pending_grid_size
         nonlocal pending_snake_style_p1, pending_snake_style_p2, pending_snake_color_p1, pending_snake_color_p2
-        nonlocal pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
+        nonlocal pending_wall_style, pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
         nonlocal pending_screen_shake, pending_show_fps, pending_music_volume, pending_sound_volume
 
         defaults = getattr(utils, "DEFAULT_GAME_OPTIONS", {}) if hasattr(utils, "DEFAULT_GAME_OPTIONS") else {}
@@ -2219,6 +2428,10 @@ def run_options(events, dt, screen, game_state):
         pending_snake_color_p1 = str(defaults.get("snake_color_p1", "cyber")).strip().lower()
         pending_snake_color_p2 = str(defaults.get("snake_color_p2", "pink")).strip().lower()
 
+        pending_wall_style = str(defaults.get("wall_style", "panel")).strip().lower()
+        if pending_wall_style not in wall_style_keys:
+            pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
+
         pending_classic_arena = str(defaults.get("classic_arena", "full")).strip().lower()
         pending_game_speed = str(defaults.get("game_speed", "normal")).strip().lower()
         pending_ai_difficulty = str(defaults.get("ai_difficulty", getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
@@ -2240,7 +2453,7 @@ def run_options(events, dt, screen, game_state):
         pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
 
     def adjust_current(delta):
-        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_ai_difficulty
+        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_ai_difficulty, pending_wall_style
 
         if selection_index == IDX_SHOW_GRID:
             pending_show_grid = not pending_show_grid
@@ -2254,6 +2467,8 @@ def run_options(events, dt, screen, game_state):
             cycle_snake_color_p1(delta)
         elif selection_index == IDX_COLOR_P2:
             cycle_snake_color_p2(delta)
+        elif selection_index == IDX_WALL_STYLE:
+            cycle_wall_style(delta)
         elif selection_index == IDX_CLASSIC_ARENA:
             cycle_classic_arena(delta)
         elif selection_index == IDX_GAME_SPEED:
@@ -2384,6 +2599,7 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_snake_style_p2'] = pending_snake_style_p2
     game_state['pending_snake_color_p1'] = pending_snake_color_p1
     game_state['pending_snake_color_p2'] = pending_snake_color_p2
+    game_state['pending_wall_style'] = pending_wall_style
     game_state['pending_classic_arena'] = pending_classic_arena
     game_state['pending_game_speed'] = pending_game_speed
     game_state['pending_ai_difficulty'] = pending_ai_difficulty
@@ -2434,6 +2650,7 @@ def run_options(events, dt, screen, game_state):
         snake_style_display_p2 = format_style(pending_snake_style_p2)
         snake_color_display_p1 = snake_color_display_map.get(pending_snake_color_p1, pending_snake_color_p1)
         snake_color_display_p2 = snake_color_display_map.get(pending_snake_color_p2, pending_snake_color_p2)
+        wall_style_display = wall_style_display_map.get(pending_wall_style, pending_wall_style)
 
         classic_arena_display = dict(classic_arenas).get(pending_classic_arena, pending_classic_arena)
         game_speed_display = dict(game_speeds).get(pending_game_speed, pending_game_speed)
@@ -2453,6 +2670,7 @@ def run_options(events, dt, screen, game_state):
             ("Style serpent J2", snake_style_display_p2),
             ("Couleur J1", snake_color_display_p1),
             ("Couleur J2", snake_color_display_p2),
+            ("Style murs", wall_style_display),
             ("Arène classique", classic_arena_display),
             ("Vitesse jeu", game_speed_display),
             ("Difficulté IA", ai_difficulty_display),
@@ -2545,6 +2763,7 @@ def run_options(events, dt, screen, game_state):
             f"Grille: {preview_w}x{preview_h} cases  (case: {pending_grid_size}px)",
             f"J1: {snake_style_display_p1} | {snake_color_display_p1}",
             f"J2: {snake_style_display_p2} | {snake_color_display_p2}",
+            f"Murs: {wall_style_display}",
             f"Classique: {classic_arena_display}",
             f"Vitesse: {game_speed_display} | Particules: {particle_density_display}",
             f"Secousse: {'Oui' if pending_screen_shake else 'Non'} | FPS: {'Oui' if pending_show_fps else 'Non'}",
@@ -2706,6 +2925,32 @@ def run_options(events, dt, screen, game_state):
                     pygame.draw.rect(screen, (0, 0, 0), r, 1)
                     continue
 
+                if eff_style == "pixel":
+                    pygame.draw.rect(screen, color, r)
+                    pygame.draw.rect(screen, (0, 0, 0), r, 1)
+                    try:
+                        hi = tuple(min(255, int(c) + 55) for c in color[:3])
+                        lo = tuple(max(0, int(c) - 35) for c in color[:3])
+                    except Exception:
+                        hi = color
+                        lo = color
+                    pix = max(2, cell_px // 5)
+                    x0 = r.left + 2
+                    y0 = r.top + 2
+                    x1 = r.right - pix - 2
+                    y1 = r.bottom - pix - 2
+                    try:
+                        pat = (idx + int(r.left) + int(r.top)) & 1
+                    except Exception:
+                        pat = 0
+                    if pat == 0:
+                        pygame.draw.rect(screen, hi, pygame.Rect(x0, y0, pix, pix))
+                        pygame.draw.rect(screen, lo, pygame.Rect(x1, y1, pix, pix))
+                    else:
+                        pygame.draw.rect(screen, hi, pygame.Rect(x1, y0, pix, pix))
+                        pygame.draw.rect(screen, lo, pygame.Rect(x0, y1, pix, pix))
+                    continue
+
                 draw_rect = r.inflate(-pad_px * 2, -pad_px * 2)
                 if draw_rect.width <= 0 or draw_rect.height <= 0:
                     draw_rect = r
@@ -2719,6 +2964,27 @@ def run_options(events, dt, screen, game_state):
 
                 pygame.draw.rect(screen, color, draw_rect, border_radius=radius)
                 pygame.draw.rect(screen, (0, 0, 0), draw_rect, 1, border_radius=radius)
+
+                if eff_style == "glass":
+                    try:
+                        hi = tuple(min(255, int(c) + 60) for c in color[:3])
+                        mid = tuple(min(255, int(c) + 25) for c in color[:3])
+                    except Exception:
+                        hi = color
+                        mid = color
+                    pygame.draw.line(screen, hi, (draw_rect.left + 2, draw_rect.top + 2), (draw_rect.right - 3, draw_rect.top + 2), 1)
+                    pygame.draw.line(screen, mid, (draw_rect.left + 2, draw_rect.top + 2), (draw_rect.left + 2, draw_rect.bottom - 3), 1)
+
+                if eff_style == "circuit":
+                    try:
+                        line_col = tuple(max(0, int(c) - 35) for c in color[:3])
+                        node_col = tuple(min(255, int(c) + 35) for c in color[:3])
+                    except Exception:
+                        line_col = color
+                        node_col = color
+                    pygame.draw.line(screen, line_col, (draw_rect.left + 2, draw_rect.centery), (draw_rect.right - 3, draw_rect.centery), 1)
+                    pygame.draw.circle(screen, node_col, (draw_rect.left + 3, draw_rect.top + 3), max(1, cell_px // 10))
+                    pygame.draw.circle(screen, node_col, (draw_rect.right - 4, draw_rect.bottom - 4), max(1, cell_px // 10))
 
         try:
             content = snake_rect.inflate(-14, -14)
@@ -2763,8 +3029,10 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_snake_style_p2', None)
         game_state.pop('pending_snake_color_p1', None)
         game_state.pop('pending_snake_color_p2', None)
+        game_state.pop('pending_wall_style', None)
         game_state.pop('pending_classic_arena', None)
         game_state.pop('pending_game_speed', None)
+        game_state.pop('pending_ai_difficulty', None)
         game_state.pop('pending_particle_density', None)
         game_state.pop('pending_screen_shake', None)
         game_state.pop('pending_show_fps', None)
@@ -2819,7 +3087,7 @@ VK_MOVE_EFFECT_DURATION = 150   # Durée de l'effet de déplacement en ms
 
 def run_name_entry_solo(events, dt, screen, game_state):
     """Gère l'écran de saisie du nom pour les modes Solo, Vs AI, Survie avec support manette."""
-    player1_name_input = game_state.get('player1_name_input', "Joueur 1")
+    player1_name_input = game_state.get('player1_name_input', "Thi")
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
@@ -2973,7 +3241,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                         
                         if selected_char == "OK": # Confirmation du nom
                             name_entered = player1_name_input.strip()[:15]
-                            game_state['player1_name_input'] = name_entered if name_entered else "Joueur 1"
+                            game_state['player1_name_input'] = name_entered if name_entered else "Thi"
                             utils.play_sound("name_input_confirm")
                             logging.info(f"Nom Joueur Solo/VsAI/Survie confirmé par joystick: '{game_state['player1_name_input']}'")
 
@@ -3024,7 +3292,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
             key = event.key
             if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                 name_entered = player1_name_input.strip()[:15] # Limite à 15 caractères
-                game_state['player1_name_input'] = name_entered if name_entered else "Joueur 1" # Nom par défaut si vide
+                game_state['player1_name_input'] = name_entered if name_entered else "Thi" # Nom par défaut si vide
                 utils.play_sound("name_input_confirm")
                 print(f"Nom Joueur Solo/VsAI/Survie: '{game_state['player1_name_input']}'")
                 next_state = config.MAP_SELECTION # Après le nom, on choisit la carte
@@ -3572,12 +3840,13 @@ def run_map_selection(events, dt, screen, game_state):
              wall_draw_rect = pygame.Rect(preview_wall_x, preview_wall_y, preview_wall_size, preview_wall_size)
              # Dessine seulement si dans les limites de l'aperçu
              if preview_rect.colliderect(wall_draw_rect):
-                  try:
-                      # Utilise clip pour s'assurer qu'on ne dessine pas hors du cadre
-                      clipped_rect = wall_draw_rect.clip(preview_rect)
-                      if clipped_rect.width > 0 and clipped_rect.height > 0:
-                          pygame.draw.rect(screen, config.COLOR_WALL, clipped_rect)
-                  except Exception: pass # Ignore les erreurs de dessin individuelles
+                 try:
+                     # Utilise clip pour s'assurer qu'on ne dessine pas hors du cadre
+                     clipped_rect = wall_draw_rect.clip(preview_rect)
+                     if clipped_rect.width > 0 and clipped_rect.height > 0:
+                         draw_wall_tile(screen, clipped_rect, grid_pos=(wall_x_grid, wall_y_grid), current_time=current_time)
+                 except Exception:
+                     pass  # Ignore les erreurs de dessin individuelles
 
         # Instructions en bas (modifiées pour inclure 'F' pour Favori)
         instruction_y = config.SCREEN_HEIGHT * 0.90
@@ -3597,6 +3866,178 @@ def run_map_selection(events, dt, screen, game_state):
     game_state['map_selection_index'] = map_selection_index
     game_state['last_axis_move_time_map'] = last_axis_move_time # Sauvegarde le temps
     return next_state
+
+
+def run_vs_ai_setup(events, dt, screen, game_state):
+    """Écran simple de setup Vs IA (choix de difficulté avant de lancer la partie)."""
+    font_small = game_state.get('font_small')
+    font_default = game_state.get('font_default')
+    font_medium = game_state.get('font_medium')
+    base_path = game_state.get('base_path', "")
+    current_time = pygame.time.get_ticks()
+
+    if not all([font_small, font_default, font_medium]):
+        return config.MENU
+
+    # Assure le mode
+    game_state['current_game_mode'] = config.MODE_VS_AI
+
+    presets = getattr(config, "AI_DIFFICULTY_PRESETS", {}) or {}
+    order = list(getattr(config, "AI_DIFFICULTY_ORDER", [])) or list(presets.keys())
+    keys = [k for k in order if k in presets]
+    if not keys:
+        keys = ["easy", "normal", "hard", "insane"]
+
+    # Valeur courante (persistée si possible)
+    cur = game_state.get('pending_ai_difficulty', None)
+    if not isinstance(cur, str) or not cur:
+        cur = getattr(config, "AI_DIFFICULTY", "normal")
+    cur = str(cur).strip().lower()
+    if cur not in keys:
+        cur = "normal" if "normal" in keys else keys[0]
+
+    idx = keys.index(cur)
+    axis_repeat_delay = 200
+    last_axis_move_time = int(game_state.get('last_axis_move_time_vsai_setup', 0) or 0)
+
+    def _apply_choice():
+        nonlocal cur
+        try:
+            cur = str(cur).strip().lower()
+        except Exception:
+            cur = "normal"
+        if cur not in keys:
+            cur = "normal" if "normal" in keys else keys[0]
+
+        # Persist dans game_options.json
+        try:
+            opts = utils.load_game_options(base_path)
+            opts["ai_difficulty"] = str(cur)
+            utils.save_game_options(opts, base_path)
+        except Exception:
+            pass
+
+        # Applique immédiatement pour la session
+        try:
+            config.AI_DIFFICULTY = str(cur)
+        except Exception:
+            config.AI_DIFFICULTY = "normal"
+        game_state['pending_ai_difficulty'] = config.AI_DIFFICULTY
+
+    for event in events:
+        if event.type == pygame.QUIT:
+            return False
+
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE,):
+                utils.play_sound("combo_break")
+                game_state['current_state'] = config.MENU
+                return config.MENU
+            if event.key in (pygame.K_LEFT, pygame.K_a):
+                idx = (idx - 1) % len(keys)
+                cur = keys[idx]
+                utils.play_sound("eat")
+            elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                idx = (idx + 1) % len(keys)
+                cur = keys[idx]
+                utils.play_sound("eat")
+            elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                utils.play_sound("powerup_pickup")
+                _apply_choice()
+                game_state['current_state'] = config.NAME_ENTRY_SOLO
+                return config.NAME_ENTRY_SOLO
+
+        elif event.type == pygame.JOYAXISMOTION:
+            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                axis = event.axis
+                value = event.value
+                threshold = getattr(config, "JOYSTICK_THRESHOLD", 0.6)
+                if axis == 1:  # Horizontal
+                    if value < -threshold:
+                        idx = (idx - 1) % len(keys)
+                        cur = keys[idx]
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+                    elif value > threshold:
+                        idx = (idx + 1) % len(keys)
+                        cur = keys[idx]
+                        utils.play_sound("eat")
+                        last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYHATMOTION:
+            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+                hat_x, hat_y = event.value
+                if hat_x < 0:
+                    idx = (idx - 1) % len(keys)
+                    cur = keys[idx]
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+                elif hat_x > 0:
+                    idx = (idx + 1) % len(keys)
+                    cur = keys[idx]
+                    utils.play_sound("eat")
+                    last_axis_move_time = current_time
+
+        elif event.type == pygame.JOYBUTTONDOWN:
+            if event.instance_id == 0:
+                if is_back_button(event.button):
+                    utils.play_sound("combo_break")
+                    game_state['current_state'] = config.MENU
+                    return config.MENU
+                if is_confirm_button(event.button):
+                    utils.play_sound("powerup_pickup")
+                    _apply_choice()
+                    game_state['current_state'] = config.NAME_ENTRY_SOLO
+                    return config.NAME_ENTRY_SOLO
+
+    game_state['last_axis_move_time_vsai_setup'] = last_axis_move_time
+    game_state['pending_ai_difficulty'] = cur
+
+    # --- Dessin ---
+    try:
+        screen.fill(config.COLOR_BACKGROUND)
+        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        screen.blit(overlay, (0, 0))
+
+        sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
+        title = "VS IA - DIFFICULTÉ"
+        utils.draw_text_with_shadow(screen, title, font_medium, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (sw / 2, sh * 0.14), "center")
+
+        panel_w = int(sw * 0.72)
+        panel_h = int(sh * 0.36)
+        panel_rect = pygame.Rect((sw - panel_w) // 2, int(sh * 0.26), panel_w, panel_h)
+        draw_ui_panel(screen, panel_rect)
+
+        preset = presets.get(cur, {}) if isinstance(presets, dict) else {}
+        label = preset.get("label", cur)
+
+        utils.draw_text_with_shadow(
+            screen,
+            f"{label}",
+            font_medium,
+            config.COLOR_TEXT_MENU,
+            config.COLOR_UI_SHADOW,
+            (panel_rect.centerx, panel_rect.top + 50),
+            "center",
+        )
+
+        desc_map = {
+            "easy": "IA hésitante, tire peu, pardonne les erreurs.",
+            "normal": "Équilibré, proche d'un joueur moyen.",
+            "hard": "Plus rapide et opportuniste, punit mieux.",
+            "insane": "Très rapide, agressive et disciplinée.",
+        }
+        desc = desc_map.get(cur, "")
+        if desc:
+            utils.draw_text(screen, desc, font_default, config.COLOR_TEXT, (panel_rect.centerx, panel_rect.centery + 10), "center")
+
+        hint = "Gauche/Droite: changer | Entrée/A: confirmer | Echap/B: retour"
+        utils.draw_text(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.90), "center")
+    except Exception:
+        pass
+
+    return config.VS_AI_SETUP
 
 
 def run_pvp_setup(events, dt, screen, game_state):
@@ -3877,8 +4318,8 @@ def run_pvp_setup(events, dt, screen, game_state):
 
 def run_name_entry_pvp(events, dt, screen, game_state):
     """Gère l'écran de saisie des noms pour le mode PvP (deux étapes) avec support manette."""
-    player1_name_input = game_state.get('player1_name_input', "Joueur 1")
-    player2_name_input = game_state.get('player2_name_input', "Joueur 2")
+    player1_name_input = game_state.get('player1_name_input', "Thi")
+    player2_name_input = game_state.get('player2_name_input', "Alex")
     stage = game_state.get('pvp_name_entry_stage', 1) # 1 pour J1, 2 pour J2
 
     # Joysticks autorisés pour cette étape (J1 puis J2). On garde J1 en secours si J2 est absent.
@@ -4062,7 +4503,8 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             if selected_char == "OK":  # Confirmation du nom
                 current_input_name = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
                 name_entered = current_input_name.strip()[:15]
-                name_entered = name_entered if name_entered else f"Joueur {stage}"
+                default_name = "Thi" if stage == 1 else "Alex"
+                name_entered = name_entered if name_entered else default_name
                 utils.play_sound("name_input_confirm")
 
                 if stage == 1:
@@ -4146,7 +4588,8 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                     try:
                         name_entered = current_input_value.strip()[:15] # Nettoie et limite
-                        name_entered = name_entered if name_entered else f"Joueur {stage}" # Nom par défaut
+                        default_name = "Thi" if stage == 1 else "Alex"
+                        name_entered = name_entered if name_entered else default_name # Nom par défaut
                         utils.play_sound("name_input_confirm")
                         if stage == 1:
                             game_state['player1_name_input'] = name_entered
@@ -4492,14 +4935,14 @@ def run_game_over(events, dt, screen, game_state):
     last_axis_move_time = game_state.get('last_axis_move_time_gameover', 0)
     current_time = pygame.time.get_ticks()
     
-    # Verrouillage des entrées pendant 5 secondes au démarrage du menu game over
+    # Verrouillage des entrées pendant 2 secondes au démarrage du menu game over
     game_over_start_time = game_state.get('game_over_start_time')
     if not game_over_start_time or 'game_over_start_time' not in game_state:
         game_over_start_time = current_time
         game_state['game_over_start_time'] = current_time
         # Réinitialiser la sélection du menu à chaque nouvelle game over
         game_state['gameover_menu_selection'] = 0
-    input_lock_duration = 5000  # 5 secondes
+    input_lock_duration = 2000  # 2 secondes
     inputs_locked = (current_time - game_over_start_time < input_lock_duration)
 
     # Forcer la sélection à 0 pendant le verrouillage
@@ -5781,8 +6224,17 @@ def run_game(events, dt, screen, game_state):
                 enemy_snake.next_direction = safe_dir
                 enemy_snake.alive = True
                 enemy_snake.death_time = 0
-                if player_snake:
-                    enemy_snake.update_difficulty(player_snake.score)
+                # Re-applique la difficulté Vs IA (évolution temporelle) après respawn
+                try:
+                    start_t = int(game_state.get('vs_ai_start_time', 0) or 0)
+                    step = int(getattr(config, "DIFFICULTY_TIME_STEP", 30000) or 30000)
+                    difficulty_level = max(0, int((current_time - start_t) // max(1, step))) if start_t > 0 else 0
+                except Exception:
+                    difficulty_level = 0
+                try:
+                    enemy_snake.update_difficulty(difficulty_level)
+                except Exception:
+                    pass
 
     # --- Mouvements et Logique des Serpents ---
     p1_moved_this_frame, p1_new_head = False, None
@@ -5846,7 +6298,7 @@ def run_game(events, dt, screen, game_state):
 
             if current_ai == enemy_snake:
                 ai_moved_this_frame = moved_this_ai; ai_new_head = new_head_this_ai; ai_should_shoot = should_shoot_this_ai
-                if player_snake: current_ai.update_difficulty(player_snake.score)
+                # Difficulté Vs IA gérée via timer (DIFFICULTY_TIME_STEP)
             else: # Bébé IA
                 try:
                      baby_ai_actions.append({'ai_obj': current_ai, 'should_shoot': should_shoot_this_ai})

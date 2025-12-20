@@ -42,6 +42,7 @@ DEFAULT_GAME_OPTIONS = {
     # Si null/absent: comportement auto (calcul dynamique existant)
     "grid_size": None,
     "snake_style": "sprites",
+    "wall_style": "panel",
     # Styles séparés (si null: utilise snake_style)
     "snake_style_p1": None,
     "snake_style_p2": None,

@@ -18,6 +18,8 @@ SNAKE_STYLE = "sprites"
 # Styles par joueur (si None: utilise SNAKE_STYLE)
 SNAKE_STYLE_P1 = None
 SNAKE_STYLE_P2 = None
+# Style de rendu des murs: "classic", "panel", "neon", "circuit"
+WALL_STYLE = "panel"
 # Taille de l'arène en mode Classique: "full", "large", "medium", "small"
 CLASSIC_ARENA = "full"
 
@@ -124,40 +126,40 @@ AI_DIFFICULTY_PRESETS = {
     # Objectif: plus lent, moins agressif, moins précis, plus d'hésitations.
     "easy": {
         "label": "Facile",
-        "move_interval_mult": 1.25,
-        "shoot_cooldown_mult": 1.40,
-        "decision_interval_ms": 220,
-        "turn_inertia": 0.90,
-        "randomness": 0.25,
+        "move_interval_mult": 1.35,
+        "shoot_cooldown_mult": 1.65,
+        "decision_interval_ms": 260,
+        "turn_inertia": 0.92,
+        "randomness": 0.30,
         "space_nodes": 45,
-        "space_weight": 0.10,
-        "adjacent_obstacle_penalty": 2.2,
-        "chase_weight": 0.75,
-        "retreat_too_close_penalty": 6.0,
-        "seek_shot_bonus": 2.5,
-        "shoot_probability": 0.22,
+        "space_weight": 0.08,
+        "adjacent_obstacle_penalty": 1.8,
+        "chase_weight": 0.60,
+        "retreat_too_close_penalty": 4.0,
+        "seek_shot_bonus": 1.8,
+        "shoot_probability": 0.14,
         "burst_max": 1,
         "burst_window_ms": 1200,
-        "burst_pause_ms": 700,
+        "burst_pause_ms": 900,
     },
     # Par défaut: comportement équilibré, déjà "humain".
     "normal": {
         "label": "Normal",
-        "move_interval_mult": 1.00,
-        "shoot_cooldown_mult": 1.00,
-        "decision_interval_ms": 160,
-        "turn_inertia": 0.85,
-        "randomness": 0.12,
-        "space_nodes": 80,
-        "space_weight": 0.13,
-        "adjacent_obstacle_penalty": 2.0,
-        "chase_weight": 1.00,
-        "retreat_too_close_penalty": 5.5,
-        "seek_shot_bonus": 4.0,
-        "shoot_probability": 0.42,
+        "move_interval_mult": 1.05,
+        "shoot_cooldown_mult": 1.15,
+        "decision_interval_ms": 180,
+        "turn_inertia": 0.88,
+        "randomness": 0.15,
+        "space_nodes": 75,
+        "space_weight": 0.11,
+        "adjacent_obstacle_penalty": 1.9,
+        "chase_weight": 0.85,
+        "retreat_too_close_penalty": 4.8,
+        "seek_shot_bonus": 3.2,
+        "shoot_probability": 0.34,
         "burst_max": 2,
         "burst_window_ms": 1400,
-        "burst_pause_ms": 650,
+        "burst_pause_ms": 720,
     },
     # Difficile: plus opportuniste et meilleur placement, sans être "perfect".
     "hard": {
@@ -623,6 +625,7 @@ NAME_ENTRY_SOLO = 8
 UPDATE = 9 # --- NOUVEAU: État pour la mise à jour ---
 OPTIONS = 100 # Menu Options (doit éviter les valeurs de GameMode)
 DEMO = 101 # Mode démo / attract (inactivité)
+VS_AI_SETUP = 102 # Choix difficulté avant Vs IA
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)

@@ -1723,7 +1723,7 @@ class Snake:
                     style = str(p2_style).strip().lower()
         except Exception:
             pass
-        if style in ("blocks", "rounded", "neon", "wire"):
+        if style in ("blocks", "rounded", "neon", "wire", "glass", "circuit", "pixel"):
             grid_px = int(getattr(config, "GRID_SIZE", 20))
 
             # Bordure (armure / charge bouclier) - commune à tous les styles
@@ -1787,7 +1787,7 @@ class Snake:
                 self.draw_status_effects(surface, current_time, font_small)
                 return
 
-            # --- Styles "blocks" / "rounded" / "neon" ---
+            # --- Styles "blocks" / "rounded" / "neon" / "glass" / "circuit" / "pixel" ---
             for i, p in enumerate(self.positions):
                 px = p[0] * grid_px
                 py = p[1] * grid_px
@@ -1805,6 +1805,49 @@ class Snake:
                         draw_rect = r
                         draw_radius = 0
                         pygame.draw.rect(surface, seg_color, draw_rect)
+                    elif style == "pixel":
+                        draw_rect = r.inflate(-pad * 2, -pad * 2)
+                        if draw_rect.width <= 0 or draw_rect.height <= 0:
+                            draw_rect = r
+                        draw_radius = 0
+
+                        pygame.draw.rect(surface, seg_color, draw_rect)
+
+                        # Motif "pixel" déterministe (pas de flicker)
+                        try:
+                            seed = (int(p[0]) * 73856093) ^ (int(p[1]) * 19349663) ^ (int(i) * 83492791) ^ (int(self.player_num) * 2654435761)
+                            pat = seed & 3
+                        except Exception:
+                            pat = 0
+
+                        try:
+                            hi = tuple(min(255, int(c) + 55) for c in seg_color[:3])
+                            lo = tuple(max(0, int(c) - 35) for c in seg_color[:3])
+                        except Exception:
+                            hi = seg_color
+                            lo = seg_color
+
+                        pix = max(2, grid_px // 5)
+                        x0 = draw_rect.left + 2
+                        y0 = draw_rect.top + 2
+                        x1 = draw_rect.right - pix - 2
+                        y1 = draw_rect.bottom - pix - 2
+                        coords = [
+                            (x0, y0),
+                            (x1, y0),
+                            (x0, y1),
+                            (x1, y1),
+                        ]
+                        if pat in (0, 2):
+                            pygame.draw.rect(surface, hi, pygame.Rect(coords[0], (pix, pix)))
+                            pygame.draw.rect(surface, lo, pygame.Rect(coords[3], (pix, pix)))
+                        else:
+                            pygame.draw.rect(surface, hi, pygame.Rect(coords[1], (pix, pix)))
+                            pygame.draw.rect(surface, lo, pygame.Rect(coords[2], (pix, pix)))
+                        # petit "spark" central
+                        cx = draw_rect.centerx - pix // 2
+                        cy = draw_rect.centery - pix // 2
+                        pygame.draw.rect(surface, hi, pygame.Rect(cx, cy, max(2, pix // 2), max(2, pix // 2)))
                     else:
                         draw_rect = r.inflate(-pad * 2, -pad * 2)
                         if draw_rect.width <= 0 or draw_rect.height <= 0:
@@ -1819,6 +1862,34 @@ class Snake:
                             surface.blit(glow, (px, py))
 
                         pygame.draw.rect(surface, seg_color, draw_rect, border_radius=draw_radius)
+
+                        if style == "glass":
+                            try:
+                                hi = tuple(min(255, int(c) + 60) for c in seg_color[:3])
+                                mid = tuple(min(255, int(c) + 25) for c in seg_color[:3])
+                            except Exception:
+                                hi = seg_color
+                                mid = seg_color
+                            # Highlight "verre"
+                            pygame.draw.line(surface, hi, (draw_rect.left + 2, draw_rect.top + 2), (draw_rect.right - 3, draw_rect.top + 2), 1)
+                            pygame.draw.line(surface, mid, (draw_rect.left + 2, draw_rect.top + 2), (draw_rect.left + 2, draw_rect.bottom - 3), 1)
+                            pygame.draw.circle(surface, hi, (draw_rect.left + 4, draw_rect.top + 4), max(1, grid_px // 10))
+
+                        if style == "circuit":
+                            try:
+                                line_col = tuple(max(0, int(c) - 35) for c in seg_color[:3])
+                                node_col = tuple(min(255, int(c) + 35) for c in seg_color[:3])
+                            except Exception:
+                                line_col = seg_color
+                                node_col = seg_color
+                            midx = draw_rect.centerx
+                            midy = draw_rect.centery
+                            pygame.draw.line(surface, line_col, (draw_rect.left + 2, midy), (draw_rect.right - 3, midy), 1)
+                            if (i + p[0] + p[1]) % 2 == 0:
+                                pygame.draw.line(surface, line_col, (midx, draw_rect.top + 2), (midx, draw_rect.bottom - 3), 1)
+                            r_node = max(1, grid_px // 10)
+                            pygame.draw.circle(surface, node_col, (draw_rect.left + 3, draw_rect.top + 3), r_node)
+                            pygame.draw.circle(surface, node_col, (draw_rect.right - 4, draw_rect.bottom - 4), r_node)
 
                     if border_thickness > 1:
                         pygame.draw.rect(surface, border_color, draw_rect, border_thickness, border_radius=draw_radius)
