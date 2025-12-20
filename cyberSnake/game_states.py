@@ -230,6 +230,69 @@ def draw_wall_tile(surface, rect, grid_pos=None, current_time=0, style=None):
             pygame.draw.circle(surface, accent, (rect.right - 5, rect.bottom - 5), node_r)
             return
 
+        if style_key == "glass":
+            # Base sombre + reflets type "verre"
+            pygame.draw.rect(surface, _darken_rgb(base, 35), rect, border_radius=3)
+            pygame.draw.rect(surface, _darken_rgb(base, 55), rect, 1, border_radius=3)
+
+            hi = _lighten_rgb(base, 40)
+            mid = _lighten_rgb(base, 18)
+            pygame.draw.line(surface, hi, (rect.left + 2, rect.top + 2), (rect.right - 3, rect.top + 2), 1)
+            pygame.draw.line(surface, mid, (rect.left + 2, rect.top + 2), (rect.left + 2, rect.bottom - 3), 1)
+
+            try:
+                sparkle = 0 if int(current_time // 220) % 3 else 18
+            except Exception:
+                sparkle = 0
+            sp_col = _lighten_rgb(accent, sparkle)
+            pygame.draw.circle(surface, sp_col, (rect.left + 5, rect.top + 5), max(1, min(w, h) // 10))
+            return
+
+        if style_key == "grid":
+            pygame.draw.rect(surface, _darken_rgb(base, 26), rect, border_radius=2)
+            pygame.draw.rect(surface, _darken_rgb(base, 48), rect, 1, border_radius=2)
+
+            step = max(4, min(w, h) // 3)
+            grid_col = _darken_rgb(accent, 70)
+            x = rect.left + step
+            while x < rect.right - 2:
+                pygame.draw.line(surface, grid_col, (x, rect.top + 2), (x, rect.bottom - 3), 1)
+                x += step
+            y = rect.top + step
+            while y < rect.bottom - 2:
+                pygame.draw.line(surface, grid_col, (rect.left + 2, y), (rect.right - 3, y), 1)
+                y += step
+            return
+
+        if style_key == "hazard":
+            # Rayures diagonales type "warning"
+            pygame.draw.rect(surface, _darken_rgb(base, 62), rect, border_radius=2)
+            pygame.draw.rect(surface, _darken_rgb(base, 82), rect, 1, border_radius=2)
+
+            stripe_w = max(3, min(w, h) // 5)
+            col_a = (246, 210, 52)
+            col_b = (18, 18, 22)
+            try:
+                gx, gy = grid_pos if isinstance(grid_pos, tuple) else (0, 0)
+                toggle = ((int(gx) + int(gy)) & 1) == 1
+            except Exception:
+                toggle = False
+
+            start = rect.left - h
+            end = rect.right + w
+            x = start
+            while x < end:
+                pygame.draw.line(
+                    surface,
+                    col_a if toggle else col_b,
+                    (x, rect.bottom - 2),
+                    (x + w + h, rect.top + 1),
+                    stripe_w,
+                )
+                toggle = not toggle
+                x += stripe_w
+            return
+
         # Fallback
         pygame.draw.rect(surface, base, rect)
         pygame.draw.rect(surface, _darken_rgb(base, 30), rect, 1)
@@ -1419,7 +1482,7 @@ def reset_game(game_state):
         current_game_mode = config.MODE_SOLO
         game_state['current_game_mode'] = current_game_mode
     selected_map_key = game_state.get('selected_map_key', config.DEFAULT_MAP_KEY)
-    player1_name = game_state.get('player1_name_input', "Thi")
+    player1_name = game_state.get('player1_name_input', "Thib")
     base_path = game_state.get('base_path', "")
     pvp_start_armor = game_state.get('pvp_start_armor', config.pvp_start_armor)
     pvp_start_ammo = game_state.get('pvp_start_ammo', config.pvp_start_ammo)
@@ -2288,6 +2351,8 @@ def run_options(events, dt, screen, game_state):
         ("sprites", "Sprites"),
         ("blocks", "Blocs"),
         ("rounded", "Arrondi"),
+        ("striped", "Rayures"),
+        ("scanline", "Scanlines"),
         ("glass", "Verre"),
         ("circuit", "Circuit"),
         ("pixel", "Pixel"),
@@ -2331,17 +2396,35 @@ def run_options(events, dt, screen, game_state):
     snake_color_display_p2 = snake_color_display_map.get(pending_snake_color_p2, pending_snake_color_p2)
 
     wall_styles = [
+        ("random", "Aleatoire"),
         ("classic", "Classique"),
         ("panel", "Panneaux"),
         ("neon", "Neon"),
         ("circuit", "Circuit"),
+        ("glass", "Verre"),
+        ("grid", "Grille"),
+        ("hazard", "Danger"),
     ]
     wall_style_keys = [k for k, _ in wall_styles]
     pending_wall_style = str(pending_wall_style).strip().lower()
     if pending_wall_style not in wall_style_keys:
         pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
     wall_style_display_map = dict(wall_styles)
-    wall_style_display = wall_style_display_map.get(pending_wall_style, pending_wall_style)
+
+    non_random_wall_style_keys = [k for k in wall_style_keys if k != "random"]
+    pending_wall_style_random_choice = game_state.get('pending_wall_style_random_choice', None)
+    if pending_wall_style_random_choice not in non_random_wall_style_keys:
+        pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "panel"
+
+    if pending_wall_style == "random":
+        resolved_wall_style = pending_wall_style_random_choice
+        wall_style_display = f"{wall_style_display_map.get('random', 'Random')} ({wall_style_display_map.get(resolved_wall_style, resolved_wall_style)})"
+    else:
+        resolved_wall_style = pending_wall_style
+        if str(pending_wall_style).strip().lower() == "random":
+            wall_style_display = f"{wall_style_display_map.get('random', 'Random')} ({wall_style_display_map.get(pending_wall_style_random_choice, pending_wall_style_random_choice)})"
+        else:
+            wall_style_display = wall_style_display_map.get(pending_wall_style, pending_wall_style)
 
     classic_arenas = [
         ("full", "Pleine"),
@@ -2508,12 +2591,32 @@ def run_options(events, dt, screen, game_state):
         pending_snake_color_p2 = snake_color_keys[(idx + delta) % len(snake_color_keys)]
 
     def cycle_wall_style(delta):
-        nonlocal pending_wall_style
+        nonlocal pending_wall_style, pending_wall_style_random_choice
+
+        def _reroll():
+            nonlocal pending_wall_style_random_choice
+            if not non_random_wall_style_keys:
+                pending_wall_style_random_choice = "panel"
+                return
+            new_choice = random.choice(non_random_wall_style_keys)
+            if len(non_random_wall_style_keys) > 1:
+                for _ in range(6):
+                    if new_choice != pending_wall_style_random_choice:
+                        break
+                    new_choice = random.choice(non_random_wall_style_keys)
+            pending_wall_style_random_choice = new_choice
+
+        if pending_wall_style == "random":
+            _reroll()
+            return
+
         try:
             idx = wall_style_keys.index(pending_wall_style)
         except ValueError:
             idx = 0
         pending_wall_style = wall_style_keys[(idx + delta) % len(wall_style_keys)]
+        if pending_wall_style == "random":
+            _reroll()
 
     def cycle_classic_arena(delta):
         nonlocal pending_classic_arena
@@ -2591,7 +2694,16 @@ def run_options(events, dt, screen, game_state):
         opts["snake_style_p2"] = pending_snake_style_p2 if pending_snake_style_p2 else None
         opts["snake_color_p1"] = str(pending_snake_color_p1)
         opts["snake_color_p2"] = str(pending_snake_color_p2)
-        opts["wall_style"] = str(pending_wall_style)
+        try:
+            wall_key = str(pending_wall_style).strip().lower()
+        except Exception:
+            wall_key = "panel"
+        if wall_key == "random":
+            try:
+                wall_key = str(pending_wall_style_random_choice).strip().lower()
+            except Exception:
+                wall_key = "panel"
+        opts["wall_style"] = wall_key
         opts["classic_arena"] = str(pending_classic_arena)
         opts["game_speed"] = str(pending_game_speed)
         opts["ai_difficulty"] = str(pending_ai_difficulty)
@@ -2620,7 +2732,7 @@ def run_options(events, dt, screen, game_state):
             pass
         config.CLASSIC_ARENA = str(pending_classic_arena)
         try:
-            config.WALL_STYLE = str(pending_wall_style).strip().lower()
+            config.WALL_STYLE = str(wall_key).strip().lower()
         except Exception:
             config.WALL_STYLE = "panel"
 
@@ -2728,7 +2840,7 @@ def run_options(events, dt, screen, game_state):
     def reset_to_defaults():
         nonlocal pending_show_grid, pending_grid_size
         nonlocal pending_snake_style_p1, pending_snake_style_p2, pending_snake_color_p1, pending_snake_color_p2
-        nonlocal pending_wall_style, pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
+        nonlocal pending_wall_style, pending_wall_style_random_choice, pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
         nonlocal pending_screen_shake, pending_show_fps, pending_hud_mode, pending_ui_scale, pending_music_volume, pending_sound_volume
 
         defaults = getattr(utils, "DEFAULT_GAME_OPTIONS", {}) if hasattr(utils, "DEFAULT_GAME_OPTIONS") else {}
@@ -2757,6 +2869,8 @@ def run_options(events, dt, screen, game_state):
         pending_wall_style = str(defaults.get("wall_style", "panel")).strip().lower()
         if pending_wall_style not in wall_style_keys:
             pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
+        if pending_wall_style_random_choice not in non_random_wall_style_keys:
+            pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "panel"
 
         pending_classic_arena = str(defaults.get("classic_arena", "full")).strip().lower()
         pending_game_speed = str(defaults.get("game_speed", "normal")).strip().lower()
@@ -2823,7 +2937,7 @@ def run_options(events, dt, screen, game_state):
             adjust_sound_volume(delta)
 
     def handle_confirm():
-        nonlocal next_state, reset_confirm_until
+        nonlocal next_state, reset_confirm_until, pending_wall_style, pending_wall_style_random_choice
 
         if selection_index == IDX_APPLY:
             utils.play_sound("powerup_pickup")
@@ -2852,6 +2966,14 @@ def run_options(events, dt, screen, game_state):
             else:
                 reset_confirm_until = current_time + 2000
                 utils.play_sound("combo_break")
+            return False
+
+        if selection_index == IDX_WALL_STYLE and str(pending_wall_style).strip().lower() == "random":
+            try:
+                pending_wall_style = str(pending_wall_style_random_choice).strip().lower()
+            except Exception:
+                pending_wall_style = "panel"
+            utils.play_sound("powerup_pickup")
             return False
 
         adjust_current(1)
@@ -2953,6 +3075,7 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_snake_color_p1'] = pending_snake_color_p1
     game_state['pending_snake_color_p2'] = pending_snake_color_p2
     game_state['pending_wall_style'] = pending_wall_style
+    game_state['pending_wall_style_random_choice'] = pending_wall_style_random_choice
     game_state['pending_classic_arena'] = pending_classic_arena
     game_state['pending_game_speed'] = pending_game_speed
     game_state['pending_ai_difficulty'] = pending_ai_difficulty
@@ -3005,7 +3128,10 @@ def run_options(events, dt, screen, game_state):
         snake_style_display_p2 = format_style(pending_snake_style_p2)
         snake_color_display_p1 = snake_color_display_map.get(pending_snake_color_p1, pending_snake_color_p1)
         snake_color_display_p2 = snake_color_display_map.get(pending_snake_color_p2, pending_snake_color_p2)
-        wall_style_display = wall_style_display_map.get(pending_wall_style, pending_wall_style)
+        if str(pending_wall_style).strip().lower() == "random":
+            wall_style_display = f"{wall_style_display_map.get('random', 'Random')} ({wall_style_display_map.get(pending_wall_style_random_choice, pending_wall_style_random_choice)})"
+        else:
+            wall_style_display = wall_style_display_map.get(pending_wall_style, pending_wall_style)
 
         classic_arena_display = dict(classic_arenas).get(pending_classic_arena, pending_classic_arena)
         game_speed_display = dict(game_speeds).get(pending_game_speed, pending_game_speed)
@@ -3209,7 +3335,13 @@ def run_options(events, dt, screen, game_state):
             if y > map_rect.top + 12:
                 for i in range(tile_count):
                     r = pygame.Rect(start_x + i * (tile_size + gap_px), y, tile_size, tile_size)
-                    draw_wall_tile(screen, r, grid_pos=(i, (i * 2 + 1)), current_time=current_time, style=pending_wall_style)
+                    draw_wall_tile(
+                        screen,
+                        r,
+                        grid_pos=(i, (i * 2 + 1)),
+                        current_time=current_time,
+                        style=(pending_wall_style_random_choice if pending_wall_style == "random" else pending_wall_style),
+                    )
                     pygame.draw.rect(screen, (0, 0, 0), r, 1)
         except Exception:
             pass
@@ -3362,6 +3494,48 @@ def run_options(events, dt, screen, game_state):
                     pygame.draw.circle(screen, node_col, (draw_rect.left + 3, draw_rect.top + 3), max(1, cell_px // 10))
                     pygame.draw.circle(screen, node_col, (draw_rect.right - 4, draw_rect.bottom - 4), max(1, cell_px // 10))
 
+                if eff_style == "striped":
+                    try:
+                        stripe_col = tuple(min(255, int(c) + 70) for c in color[:3])
+                        stripe_w = max(1, cell_px // 10)
+                        step = max(6, cell_px // 2)
+                        phase = int((current_time // 90 + idx * 3) % step)
+                        x = draw_rect.left - draw_rect.height + phase
+                        while x < draw_rect.right:
+                            pygame.draw.line(
+                                screen,
+                                stripe_col,
+                                (x, draw_rect.bottom - 2),
+                                (x + draw_rect.height, draw_rect.top + 1),
+                                stripe_w,
+                            )
+                            x += step
+                    except Exception:
+                        pass
+
+                if eff_style == "scanline":
+                    try:
+                        line_col = tuple(min(255, int(c) + 55) for c in color[:3])
+                        dim_col = tuple(max(0, int(c) - 35) for c in color[:3])
+                        step = max(4, cell_px // 3)
+                        y = draw_rect.top + 2
+                        toggle = (idx & 1) == 0
+                        while y < draw_rect.bottom - 2:
+                            pygame.draw.line(
+                                screen,
+                                dim_col if toggle else line_col,
+                                (draw_rect.left + 2, y),
+                                (draw_rect.right - 3, y),
+                                1,
+                            )
+                            toggle = not toggle
+                            y += step
+                        phase = int((current_time // 45 + idx * 7) % max(1, draw_rect.height - 4))
+                        y = draw_rect.top + 2 + phase
+                        pygame.draw.line(screen, line_col, (draw_rect.left + 2, y), (draw_rect.right - 3, y), 2)
+                    except Exception:
+                        pass
+
         try:
             content = snake_rect.inflate(-14, -14)
             gap_snake = 12
@@ -3406,6 +3580,7 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_snake_color_p1', None)
         game_state.pop('pending_snake_color_p2', None)
         game_state.pop('pending_wall_style', None)
+        game_state.pop('pending_wall_style_random_choice', None)
         game_state.pop('pending_classic_arena', None)
         game_state.pop('pending_game_speed', None)
         game_state.pop('pending_ai_difficulty', None)
@@ -3883,7 +4058,7 @@ VK_MOVE_EFFECT_DURATION = 150   # Durée de l'effet de déplacement en ms
 
 def run_name_entry_solo(events, dt, screen, game_state):
     """Gère l'écran de saisie du nom pour les modes Solo, Vs AI, Survie avec support manette."""
-    player1_name_input = game_state.get('player1_name_input', "Thi")
+    player1_name_input = game_state.get('player1_name_input', "Thib")
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
@@ -4060,7 +4235,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
 
                     if selected_char == "OK":  # Confirmation du nom
                         name_entered = player1_name_input.strip()[:15]
-                        game_state['player1_name_input'] = name_entered if name_entered else "Thi"
+                        game_state['player1_name_input'] = name_entered if name_entered else "Thib"
                         utils.play_sound("name_input_confirm")
                         logging.info(f"Nom Joueur Solo/VsAI/Survie confirmé par joystick: '{game_state['player1_name_input']}'")
 
@@ -4093,7 +4268,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
             key = event.key
             if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                 name_entered = player1_name_input.strip()[:15] # Limite à 15 caractères
-                game_state['player1_name_input'] = name_entered if name_entered else "Thi" # Nom par défaut si vide
+                game_state['player1_name_input'] = name_entered if name_entered else "Thib" # Nom par défaut si vide
                 utils.play_sound("name_input_confirm")
                 print(f"Nom Joueur Solo/VsAI/Survie: '{game_state['player1_name_input']}'")
                 next_state = config.MAP_SELECTION # Après le nom, on choisit la carte
@@ -4662,7 +4837,15 @@ def run_map_selection(events, dt, screen, game_state):
             mode_name = "?"
 
         wall_style_key = str(getattr(config, "WALL_STYLE", "panel") or "panel").strip().lower()
-        wall_style_display_map = {"classic": "Classique", "panel": "Panneaux", "neon": "Néon", "circuit": "Circuit"}
+        wall_style_display_map = {
+            "classic": "Classique",
+            "panel": "Panneaux",
+            "neon": "Neon",
+            "circuit": "Circuit",
+            "glass": "Verre",
+            "grid": "Grille",
+            "hazard": "Danger",
+        }
         wall_style_display = wall_style_display_map.get(wall_style_key, wall_style_key)
 
         speed_key = str(getattr(config, "GAME_SPEED", "normal") or "normal").strip().lower()
@@ -4825,21 +5008,39 @@ def run_classic_setup(events, dt, screen, game_state):
     classic_arena_display_map = dict(classic_arenas)
 
     wall_styles = [
+        ("random", "Aleatoire"),
         ("classic", "Classique"),
         ("panel", "Panneaux"),
         ("neon", "Neon"),
         ("circuit", "Circuit"),
+        ("glass", "Verre"),
+        ("grid", "Grille"),
+        ("hazard", "Danger"),
     ]
     wall_style_keys = [k for k, _ in wall_styles]
     if pending_wall_style not in wall_style_keys:
         pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
     wall_style_display_map = dict(wall_styles)
 
+    non_random_wall_style_keys = [k for k in wall_style_keys if k != "random"]
+    pending_wall_style_random_choice = game_state.get('classic_setup_wall_style_random_choice', None)
+    if pending_wall_style_random_choice not in non_random_wall_style_keys:
+        pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "panel"
+
+    def format_wall_style(style_key):
+        sk = str(style_key).strip().lower()
+        if sk == "random":
+            resolved = pending_wall_style_random_choice
+            return f"{wall_style_display_map.get('random', 'Random')} ({wall_style_display_map.get(resolved, resolved)})"
+        return wall_style_display_map.get(sk, sk)
+
     snake_styles = [
         (None, "Auto"),
         ("sprites", "Sprites"),
         ("blocks", "Blocs"),
         ("rounded", "Arrondi"),
+        ("striped", "Rayures"),
+        ("scanline", "Scanlines"),
         ("glass", "Verre"),
         ("circuit", "Circuit"),
         ("pixel", "Pixel"),
@@ -4879,12 +5080,32 @@ def run_classic_setup(events, dt, screen, game_state):
         pending_classic_arena = classic_arena_keys[(idx + delta) % len(classic_arena_keys)]
 
     def cycle_wall_style(delta):
-        nonlocal pending_wall_style
+        nonlocal pending_wall_style, pending_wall_style_random_choice
+
+        def _reroll():
+            nonlocal pending_wall_style_random_choice
+            if not non_random_wall_style_keys:
+                pending_wall_style_random_choice = "panel"
+                return
+            new_choice = random.choice(non_random_wall_style_keys)
+            if len(non_random_wall_style_keys) > 1:
+                for _ in range(6):
+                    if new_choice != pending_wall_style_random_choice:
+                        break
+                    new_choice = random.choice(non_random_wall_style_keys)
+            pending_wall_style_random_choice = new_choice
+
+        if pending_wall_style == "random":
+            _reroll()
+            return
+
         try:
             idx = wall_style_keys.index(pending_wall_style)
         except ValueError:
             idx = 0
         pending_wall_style = wall_style_keys[(idx + delta) % len(wall_style_keys)]
+        if pending_wall_style == "random":
+            _reroll()
 
     def cycle_snake_style(delta):
         nonlocal pending_snake_style_p1
@@ -4909,7 +5130,16 @@ def run_classic_setup(events, dt, screen, game_state):
             config.CLASSIC_ARENA = "full"
 
         try:
-            config.WALL_STYLE = str(pending_wall_style).strip().lower()
+            wall_key = str(pending_wall_style).strip().lower()
+        except Exception:
+            wall_key = "panel"
+        if wall_key == "random":
+            try:
+                wall_key = str(pending_wall_style_random_choice).strip().lower()
+            except Exception:
+                wall_key = "panel"
+        try:
+            config.WALL_STYLE = str(wall_key).strip().lower()
         except Exception:
             config.WALL_STYLE = "panel"
 
@@ -4924,6 +5154,8 @@ def run_classic_setup(events, dt, screen, game_state):
         game_state['classic_setup_snake_style_p1'] = config.SNAKE_STYLE_P1
 
     def handle_confirm():
+        nonlocal pending_wall_style, pending_wall_style_random_choice
+
         if selection_index == IDX_START:
             utils.play_sound("powerup_pickup")
             apply_choice()
@@ -4938,6 +5170,14 @@ def run_classic_setup(events, dt, screen, game_state):
             game_state['last_axis_move_time_classic_setup'] = 0
             game_state['current_state'] = config.MENU
             return config.MENU
+
+        if selection_index == IDX_WALL_STYLE and str(pending_wall_style).strip().lower() == "random":
+            try:
+                pending_wall_style = str(pending_wall_style_random_choice).strip().lower()
+            except Exception:
+                pending_wall_style = "panel"
+            utils.play_sound("powerup_pickup")
+            return config.CLASSIC_SETUP
 
         adjust_current(1)
         utils.play_sound("eat")
@@ -5032,6 +5272,7 @@ def run_classic_setup(events, dt, screen, game_state):
     game_state['classic_setup_selection_index'] = selection_index
     game_state['classic_setup_arena'] = pending_classic_arena
     game_state['classic_setup_wall_style'] = pending_wall_style
+    game_state['classic_setup_wall_style_random_choice'] = pending_wall_style_random_choice
     game_state['classic_setup_snake_style_p1'] = pending_snake_style_p1
 
     # --- Dessin ---
@@ -5059,36 +5300,45 @@ def run_classic_setup(events, dt, screen, game_state):
             "center",
         )
 
-        panel_w = min(740, int(sw * 0.82))
-        panel_top_min = int(sh * 0.24)
-        row_h = max(46, min(62, int((sh * 0.44) / max(1, menu_len))))
-        panel_h = max(240, (menu_len * row_h) + 60)
-        panel_x = (sw - panel_w) // 2
-        panel_y = max(12, panel_top_min)
-        panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
-        draw_ui_panel(screen, panel_rect)
+        # --- Layout: options (gauche) + aperçu (droite) ---
+        margin = max(24, int(sw * 0.05))
+        gap = max(18, int(sw * 0.03))
+        panel_top = int(sh * 0.22)
+        panel_h = max(320, int(sh * 0.62))
+        max_h = int(sh * 0.84) - panel_top
+        if max_h > 200:
+            panel_h = min(panel_h, max_h)
+
+        avail_w = max(320, sw - margin * 2 - gap)
+        left_w = int(avail_w * 0.44)
+        right_w = avail_w - left_w
+        if right_w < 260:
+            right_w = 260
+            left_w = max(240, avail_w - right_w)
+
+        options_rect = pygame.Rect(margin, panel_top, left_w, panel_h)
+        preview_rect = pygame.Rect(options_rect.right + gap, panel_top, right_w, panel_h)
+        draw_ui_panel(screen, options_rect)
+        draw_ui_panel(screen, preview_rect)
 
         items = [
             ("Démarrer", ""),
             ("Taille arène", classic_arena_display_map.get(pending_classic_arena, pending_classic_arena)),
-            ("Style bordures", wall_style_display_map.get(pending_wall_style, pending_wall_style)),
+            ("Style bordures", format_wall_style(pending_wall_style)),
             ("Style serpent", format_style(pending_snake_style_p1)),
             ("Retour", ""),
         ]
 
-        content_pad = 18
-        row_x = panel_rect.left + content_pad
-        row_w = panel_rect.width - (content_pad * 2)
-        row_y0 = panel_rect.top + 22
-
+        # --- Liste options (gauche) ---
+        pad = 16
+        list_rect = options_rect.inflate(-pad * 2, -pad * 2)
+        row_h = max(48, int(font_default.get_linesize() * 1.55))
         pulse = 0.55 + 0.45 * math.sin(current_time * 0.008)
         hl_alpha = int(40 + 60 * pulse)
 
         for i, (label, value) in enumerate(items):
-            y = row_y0 + (i * row_h)
-            row_rect = pygame.Rect(row_x, y, row_w, row_h - 8)
+            row_rect = pygame.Rect(list_rect.left, list_rect.top + i * row_h, list_rect.width, row_h - 10)
             is_selected = (i == selection_index)
-
             if is_selected:
                 hl = pygame.Surface(row_rect.size, pygame.SRCALPHA)
                 hl.fill((255, 255, 255, hl_alpha))
@@ -5099,13 +5349,14 @@ def run_classic_setup(events, dt, screen, game_state):
                     pass
 
             main_color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT_MENU
+            prefix = "> " if is_selected else "  "
             utils.draw_text_with_shadow(
                 screen,
-                label,
+                f"{prefix}{label}",
                 font_default,
                 main_color,
                 config.COLOR_UI_SHADOW,
-                (row_rect.left + 18, row_rect.centery),
+                (row_rect.left + 12, row_rect.centery),
                 "midleft",
             )
             if value:
@@ -5115,9 +5366,223 @@ def run_classic_setup(events, dt, screen, game_state):
                     font_default,
                     main_color,
                     config.COLOR_UI_SHADOW,
-                    (row_rect.right - 18, row_rect.centery),
+                    (row_rect.right - 12, row_rect.centery),
                     "midright",
                 )
+
+        # --- Aperçu (droite) ---
+        inner = preview_rect.inflate(-pad * 2, -pad * 2)
+        utils.draw_text_with_shadow(
+            screen,
+            "Aperçu",
+            font_default,
+            config.COLOR_TEXT_MENU,
+            config.COLOR_UI_SHADOW,
+            (inner.centerx, inner.top - 8),
+            "midbottom",
+        )
+
+        map_rect = pygame.Rect(inner.left, inner.top, inner.width, int(inner.height * 0.56))
+        snake_rect = pygame.Rect(inner.left, map_rect.bottom + 12, inner.width, inner.bottom - (map_rect.bottom + 12))
+
+        try:
+            pygame.draw.rect(screen, (10, 10, 18), map_rect, border_radius=10)
+            pygame.draw.rect(screen, config.COLOR_GRID, map_rect, 2, border_radius=10)
+        except Exception:
+            pass
+
+        # Mini-arène (aspect ratio grille)
+        try:
+            gw = max(1, int(getattr(config, "GRID_WIDTH", 40)))
+            gh = max(1, int(getattr(config, "GRID_HEIGHT", 30)))
+            aspect = gw / float(gh)
+            max_w = map_rect.width - 24
+            max_h = map_rect.height - 24
+            if max_h <= 0 or max_w <= 0:
+                arena_outer = map_rect.copy()
+            elif (max_w / float(max_h)) > aspect:
+                draw_h = max_h
+                draw_w = int(draw_h * aspect)
+                arena_outer = pygame.Rect(0, 0, draw_w, draw_h)
+                arena_outer.center = map_rect.center
+            else:
+                draw_w = max_w
+                draw_h = int(draw_w / aspect) if aspect > 0 else max_h
+                arena_outer = pygame.Rect(0, 0, draw_w, draw_h)
+                arena_outer.center = map_rect.center
+
+            pygame.draw.rect(screen, (0, 0, 0), arena_outer)
+            pygame.draw.rect(screen, config.COLOR_TEXT_MENU, arena_outer, 1)
+        except Exception:
+            arena_outer = map_rect.inflate(-24, -24)
+
+        # Limites arène Classique
+        try:
+            preset = str(pending_classic_arena or "full").strip().lower()
+            scale_map = {"full": 1.0, "large": 0.85, "medium": 0.7, "small": 0.55}
+            scale = float(scale_map.get(preset, 1.0))
+            if scale < 0.999:
+                inner_w = max(2, int(round(arena_outer.width * scale)))
+                inner_h = max(2, int(round(arena_outer.height * scale)))
+                arena_inner = pygame.Rect(0, 0, inner_w, inner_h)
+                arena_inner.center = arena_outer.center
+                pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT, arena_inner, 2)
+            else:
+                arena_inner = arena_outer
+        except Exception:
+            arena_inner = arena_outer
+
+        # Bordures (tuile mur) : échantillon
+        try:
+            tile_size = max(10, min(22, int(min(map_rect.width, map_rect.height) * 0.12)))
+            gap_px = max(2, tile_size // 6)
+            tile_count = 7
+            total_w = tile_count * tile_size + (tile_count - 1) * gap_px
+            start_x = map_rect.centerx - (total_w // 2)
+            y = map_rect.bottom - tile_size - 12
+            for j in range(tile_count):
+                r = pygame.Rect(start_x + j * (tile_size + gap_px), y, tile_size, tile_size)
+                draw_wall_tile(
+                    screen,
+                    r,
+                    grid_pos=(j, (j * 2 + 1)),
+                    current_time=current_time,
+                    style=(pending_wall_style_random_choice if pending_wall_style == "random" else pending_wall_style),
+                )
+                pygame.draw.rect(screen, (0, 0, 0), r, 1)
+        except Exception:
+            pass
+
+        # Serpent (style) : échantillon
+        try:
+            pygame.draw.rect(screen, (12, 12, 18), snake_rect, border_radius=10)
+            pygame.draw.rect(screen, config.COLOR_GRID, snake_rect, 2, border_radius=10)
+        except Exception:
+            pass
+
+        def _draw_snake_style_preview(area_rect, style_override, color, time_ms):
+            try:
+                eff_style = global_style_key if style_override is None else str(style_override).strip().lower()
+            except Exception:
+                eff_style = global_style_key
+
+            cell_px = max(10, min(26, int(min(area_rect.width, area_rect.height) * 0.22)))
+            pad_px = max(1, cell_px // 8)
+            radius = max(1, (cell_px - pad_px * 2) // 3)
+
+            segs = 8
+            gap_cells = 2
+            total_w = segs * cell_px + (segs - 1) * gap_cells
+            start_x = area_rect.centerx - total_w // 2
+            y = area_rect.centery - cell_px // 2
+
+            rects = [pygame.Rect(start_x + i * (cell_px + gap_cells), y, cell_px, cell_px) for i in range(segs)]
+            centers = [r.center for r in rects]
+
+            if eff_style == "wire":
+                try:
+                    lw = max(2, cell_px // 4)
+                    for i in range(segs - 1):
+                        pygame.draw.line(screen, color, centers[i], centers[i + 1], lw)
+                    for i, c in enumerate(centers):
+                        seg_color = tuple(min(255, int(ch) + 40) for ch in color[:3]) if i == 0 else color
+                        rr = max(2, cell_px // 3) if i == 0 else max(2, cell_px // 4)
+                        pygame.draw.circle(screen, seg_color, c, rr)
+                except Exception:
+                    pass
+                return
+
+            for i, r in enumerate(rects):
+                seg_color = tuple(min(255, int(ch) + 40) for ch in color[:3]) if i == 0 else color
+                draw_rect = r.inflate(-pad_px * 2, -pad_px * 2)
+                if draw_rect.width <= 0 or draw_rect.height <= 0:
+                    draw_rect = r
+
+                draw_radius = 0 if eff_style == "blocks" else radius
+                if eff_style == "rounded":
+                    draw_radius = max(draw_radius, radius + 2)
+
+                if eff_style == "pixel":
+                    pygame.draw.rect(screen, seg_color, draw_rect)
+                    pix = max(2, cell_px // 5)
+                    hi = tuple(min(255, int(c) + 55) for c in seg_color[:3])
+                    lo = tuple(max(0, int(c) - 35) for c in seg_color[:3])
+                    pygame.draw.rect(screen, hi, pygame.Rect(draw_rect.left + 2, draw_rect.top + 2, pix, pix))
+                    pygame.draw.rect(screen, lo, pygame.Rect(draw_rect.right - pix - 2, draw_rect.bottom - pix - 2, pix, pix))
+                    pygame.draw.rect(screen, (0, 0, 0), draw_rect, 1)
+                    continue
+
+                if eff_style == "neon":
+                    glow = pygame.Surface((cell_px, cell_px), pygame.SRCALPHA)
+                    glow_color = (seg_color[0], seg_color[1], seg_color[2], 90)
+                    local_rect = draw_rect.move(-r.left, -r.top).inflate(pad_px, pad_px)
+                    pygame.draw.rect(glow, glow_color, local_rect, border_radius=draw_radius + 2)
+                    screen.blit(glow, r.topleft)
+
+                pygame.draw.rect(screen, seg_color, draw_rect, border_radius=draw_radius)
+                pygame.draw.rect(screen, (0, 0, 0), draw_rect, 1, border_radius=draw_radius)
+
+                if eff_style == "glass":
+                    hi = tuple(min(255, int(c) + 60) for c in seg_color[:3])
+                    mid = tuple(min(255, int(c) + 25) for c in seg_color[:3])
+                    pygame.draw.line(screen, hi, (draw_rect.left + 2, draw_rect.top + 2), (draw_rect.right - 3, draw_rect.top + 2), 1)
+                    pygame.draw.line(screen, mid, (draw_rect.left + 2, draw_rect.top + 2), (draw_rect.left + 2, draw_rect.bottom - 3), 1)
+
+                if eff_style == "circuit":
+                    line_col = tuple(max(0, int(c) - 35) for c in seg_color[:3])
+                    node_col = tuple(min(255, int(c) + 35) for c in seg_color[:3])
+                    pygame.draw.line(screen, line_col, (draw_rect.left + 2, draw_rect.centery), (draw_rect.right - 3, draw_rect.centery), 1)
+                    pygame.draw.circle(screen, node_col, (draw_rect.left + 3, draw_rect.top + 3), max(1, cell_px // 10))
+                    pygame.draw.circle(screen, node_col, (draw_rect.right - 4, draw_rect.bottom - 4), max(1, cell_px // 10))
+
+                if eff_style == "striped":
+                    try:
+                        stripe_col = tuple(min(255, int(c) + 70) for c in seg_color[:3])
+                        stripe_w = max(1, cell_px // 10)
+                        step = max(6, cell_px // 2)
+                        phase = int((time_ms // 90 + i * 3) % step)
+                        x = draw_rect.left - draw_rect.height + phase
+                        while x < draw_rect.right:
+                            pygame.draw.line(
+                                screen,
+                                stripe_col,
+                                (x, draw_rect.bottom - 2),
+                                (x + draw_rect.height, draw_rect.top + 1),
+                                stripe_w,
+                            )
+                            x += step
+                    except Exception:
+                        pass
+
+                if eff_style == "scanline":
+                    try:
+                        line_col = tuple(min(255, int(c) + 55) for c in seg_color[:3])
+                        dim_col = tuple(max(0, int(c) - 35) for c in seg_color[:3])
+                        step = max(4, cell_px // 3)
+                        y2 = draw_rect.top + 2
+                        toggle = (i & 1) == 0
+                        while y2 < draw_rect.bottom - 2:
+                            pygame.draw.line(
+                                screen,
+                                dim_col if toggle else line_col,
+                                (draw_rect.left + 2, y2),
+                                (draw_rect.right - 3, y2),
+                                1,
+                            )
+                            toggle = not toggle
+                            y2 += step
+                        phase = int((time_ms // 45 + i * 7) % max(1, draw_rect.height - 4))
+                        y2 = draw_rect.top + 2 + phase
+                        pygame.draw.line(screen, line_col, (draw_rect.left + 2, y2), (draw_rect.right - 3, y2), 2)
+                    except Exception:
+                        pass
+
+        try:
+            snake_area = snake_rect.inflate(-18, -18)
+            color = getattr(config, "COLOR_SNAKE_P1", (0, 255, 150))
+            _draw_snake_style_preview(snake_area, pending_snake_style_p1, color, current_time)
+        except Exception:
+            pass
 
         hint = "Haut/Bas: choisir | Gauche/Droite: changer | Entrée/A: valider | Echap/B: retour"
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.92), "center")
@@ -5570,7 +6035,7 @@ def run_pvp_setup(events, dt, screen, game_state):
 
 def run_name_entry_pvp(events, dt, screen, game_state):
     """Gère l'écran de saisie des noms pour le mode PvP (deux étapes) avec support manette."""
-    player1_name_input = game_state.get('player1_name_input', "Thi")
+    player1_name_input = game_state.get('player1_name_input', "Thib")
     player2_name_input = game_state.get('player2_name_input', "Alex")
     stage = game_state.get('pvp_name_entry_stage', 1) # 1 pour J1, 2 pour J2
 
@@ -5764,7 +6229,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             if selected_char == "OK":  # Confirmation du nom
                 current_input_name = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
                 name_entered = current_input_name.strip()[:15]
-                default_name = "Thi" if stage == 1 else "Alex"
+                default_name = "Thib" if stage == 1 else "Alex"
                 name_entered = name_entered if name_entered else default_name
                 utils.play_sound("name_input_confirm")
 
@@ -5849,7 +6314,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                     try:
                         name_entered = current_input_value.strip()[:15] # Nettoie et limite
-                        default_name = "Thi" if stage == 1 else "Alex"
+                        default_name = "Thib" if stage == 1 else "Alex"
                         name_entered = name_entered if name_entered else default_name # Nom par défaut
                         utils.play_sound("name_input_confirm")
                         if stage == 1:

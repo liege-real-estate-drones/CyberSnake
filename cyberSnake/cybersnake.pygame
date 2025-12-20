@@ -158,7 +158,7 @@ def main():
             wall_key = str(opts.get("wall_style", getattr(config, "WALL_STYLE", "panel"))).strip().lower()
         except Exception:
             wall_key = str(getattr(config, "WALL_STYLE", "panel")).strip().lower()
-        if wall_key not in ("classic", "panel", "neon", "circuit"):
+        if wall_key not in ("classic", "panel", "neon", "circuit", "glass", "grid", "hazard"):
             wall_key = "panel"
         config.WALL_STYLE = wall_key
 
@@ -301,7 +301,7 @@ def main():
         'selected_map_key': config.DEFAULT_MAP_KEY,
         'map_selection_index': 0, 'menu_selection_index': 0, # Index commence à 0
         'pvp_setup_index': 0, 'hall_of_fame_index': 0,
-        'player1_name_input': "Thi", 'player2_name_input': "Alex",
+        'player1_name_input': "Thib", 'player2_name_input': "Alex",
         'pvp_name_entry_stage': 1,
         'pvp_condition_type': config.PVP_DEFAULT_CONDITION,
         'pvp_target_time': config.PVP_DEFAULT_TIME_SECONDS,

@@ -13,12 +13,12 @@ GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
 SHOW_GRID = True
 
 # --- Options (chargées depuis game_options.json) ---
-# Style de rendu du serpent: "sprites", "blocks", "rounded", "neon", "wire"
+# Style de rendu du serpent: "sprites", "blocks", "rounded", "neon", "wire", "glass", "circuit", "pixel", "striped", "scanline"
 SNAKE_STYLE = "sprites"
 # Styles par joueur (si None: utilise SNAKE_STYLE)
 SNAKE_STYLE_P1 = None
 SNAKE_STYLE_P2 = None
-# Style de rendu des murs: "classic", "panel", "neon", "circuit"
+# Style de rendu des murs: "classic", "panel", "neon", "circuit", "glass", "grid", "hazard"
 WALL_STYLE = "panel"
 # Taille de l'arène en mode Classique: "full", "large", "medium", "small"
 CLASSIC_ARENA = "full"
@@ -120,7 +120,7 @@ SOLO_SPAWN_RATE_SCORE_STEP = 40
 SOLO_SPAWN_RATE_FACTOR = 0.96
 SOLO_MIN_FOOD_INTERVAL = 2000  # ms
 SOLO_MIN_MINE_INTERVAL = 2500  # ms
-JOYSTICK_THRESHOLD = 0.6 # Seuil pour la détection des axes du joystick
+JOYSTICK_THRESHOLD = 0.45 # Seuil pour la détection des axes du joystick
 
 
 # --- IA: Profils de difficulté (Vs IA / Survie / Démo) ---
@@ -669,14 +669,14 @@ MODE_CLASSIC = GameMode(14, "Classique")
 # --- Constantes Contrôles & Inputs ---
 # Note: Ces numéros correspondent aux index des boutons de joystick Pygame (0-indexed)
 BUTTON_PRIMARY_ACTION = 1      # Tirer (en jeu), Confirmer (menus)
-BUTTON_SECONDARY_ACTION = 2    # Dash (en jeu), Annuler/Retour (menus)
+BUTTON_SECONDARY_ACTION = 0    # Dash (en jeu), Annuler/Retour (menus)
 BUTTON_TERTIARY_ACTION = 3     # Bouclier (en jeu)
-BUTTON_PAUSE = 7               # Pause / Reprendre (souvent le bouton Start)
+BUTTON_PAUSE = 2               # Pause / Reprendre
 BUTTON_BACK = 8                # Retour/Menu (souvent Select/Back)
 
 # Axes joystick (0-indexed) + inversion
-JOY_AXIS_H = 0
-JOY_AXIS_V = 1
-JOY_INVERT_H = False
+JOY_AXIS_H = 1
+JOY_AXIS_V = 0
+JOY_INVERT_H = True
 JOY_INVERT_V = False
 VERSION = '1.1.3'

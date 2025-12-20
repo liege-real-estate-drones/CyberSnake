@@ -1814,7 +1814,7 @@ class Snake:
                     style = str(p2_style).strip().lower()
         except Exception:
             pass
-        if style in ("blocks", "rounded", "neon", "wire", "glass", "circuit", "pixel"):
+        if style in ("blocks", "rounded", "neon", "wire", "glass", "circuit", "pixel", "striped", "scanline"):
             grid_px = int(getattr(config, "GRID_SIZE", 20))
 
             # Bordure (armure / charge bouclier) - commune à tous les styles
@@ -1987,6 +1987,48 @@ class Snake:
                             r_node = max(1, grid_px // 10)
                             pygame.draw.circle(surface, node_col, (draw_rect.left + 3, draw_rect.top + 3), r_node)
                             pygame.draw.circle(surface, node_col, (draw_rect.right - 4, draw_rect.bottom - 4), r_node)
+
+                        if style == "striped":
+                            try:
+                                stripe_col = tuple(min(255, int(c) + 70) for c in seg_color[:3])
+                                stripe_w = max(1, grid_px // 10)
+                                step = max(6, grid_px // 2)
+                                phase = int((current_time // 90 + i * 3) % step)
+                                x = draw_rect.left - draw_rect.height + phase
+                                while x < draw_rect.right:
+                                    pygame.draw.line(
+                                        surface,
+                                        stripe_col,
+                                        (x, draw_rect.bottom - 2),
+                                        (x + draw_rect.height, draw_rect.top + 1),
+                                        stripe_w,
+                                    )
+                                    x += step
+                            except Exception:
+                                pass
+
+                        if style == "scanline":
+                            try:
+                                line_col = tuple(min(255, int(c) + 55) for c in seg_color[:3])
+                                dim_col = tuple(max(0, int(c) - 35) for c in seg_color[:3])
+                                step = max(4, grid_px // 3)
+                                y = draw_rect.top + 2
+                                toggle = (i & 1) == 0
+                                while y < draw_rect.bottom - 2:
+                                    pygame.draw.line(
+                                        surface,
+                                        dim_col if toggle else line_col,
+                                        (draw_rect.left + 2, y),
+                                        (draw_rect.right - 3, y),
+                                        1,
+                                    )
+                                    toggle = not toggle
+                                    y += step
+                                phase = int((current_time // 45 + i * 7) % max(1, draw_rect.height - 4))
+                                y = draw_rect.top + 2 + phase
+                                pygame.draw.line(surface, line_col, (draw_rect.left + 2, y), (draw_rect.right - 3, y), 2)
+                            except Exception:
+                                pass
 
                     if border_thickness > 1:
                         pygame.draw.rect(surface, border_color, draw_rect, border_thickness, border_radius=draw_radius)

@@ -66,18 +66,18 @@ DEFAULT_GAME_OPTIONS = {
 
 DEFAULT_CONTROLS = {
     "buttons": {
-        "PRIMARY": 0,
-        "SECONDARY": 1,
-        "TERTIARY": 2,
-        "PAUSE": 7,
+        "PRIMARY": 1,
+        "SECONDARY": 0,
+        "TERTIARY": 3,
+        "PAUSE": 2,
         "BACK": 8,
     },
     "axes": {
-        "H": 0,
-        "V": 1,
+        "H": 1,
+        "V": 0,
     },
     "invert_axis": {
-        "H": 0,
+        "H": 1,
         "V": 0,
     },
     "threshold": 0.45,
