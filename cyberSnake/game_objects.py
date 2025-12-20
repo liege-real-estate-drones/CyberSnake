@@ -1618,7 +1618,7 @@ class Snake:
         if not self.alive or not self.positions: return
 
         def _draw_armor_pips(head_rect):
-            """Affiche des 'pips' d'armure directement sur la case de la tête (lisible d'un coup d'œil)."""
+            """Affiche l'armure restante (très lisible) près de la tête."""
             try:
                 if not bool(getattr(config, "SHOW_ARMOR_PIPS_ON_SNAKE", True)):
                     return
@@ -1628,27 +1628,83 @@ class Snake:
                 armor = int(getattr(self, "armor", 0) or 0)
                 armor = max(0, min(max_armor, armor))
 
-                # Layout (conçu pour GRID_SIZE=20 et MAX_ARMOR=5, mais robuste si ça change)
-                gap = max(1, head_rect.width // 18)
-                pad_x = 2
-                pip_size = max(2, (head_rect.width - pad_x * 2 - (max_armor - 1) * gap) // max_armor)
-                pip_size = min(pip_size, max(3, head_rect.height // 5))
+                # Ne rien dessiner si aucune armure et aucun état "défensif" actif
+                has_defense = (
+                    armor > 0
+                    or bool(getattr(self, "shield_active", False))
+                    or bool(getattr(self, "shield_charge_active", False))
+                )
+                if not has_defense:
+                    return
 
-                total_w = max_armor * pip_size + (max_armor - 1) * gap
+                # Pips plus gros (les anciens 2x2 étaient illisibles en 20px)
+                pip_size = max(6, int(round(head_rect.width * 0.28)))
+                pip_size = min(pip_size, max(7, int(round(head_rect.height * 0.40))))
+                gap = max(2, int(round(pip_size * 0.55)))
+
+                show_shield_badge = bool(getattr(self, "shield_active", False)) or bool(getattr(self, "shield_charge_active", False))
+                badge_size = pip_size + 2
+
+                pips_w = max_armor * pip_size + (max_armor - 1) * gap
+                total_w = pips_w + ((badge_size + gap) if show_shield_badge else 0)
                 start_x = head_rect.centerx - total_w // 2
-                y = head_rect.top + 2
-                if y + pip_size >= head_rect.bottom - 1:
-                    y = head_rect.bottom - pip_size - 1
+                try:
+                    surf_w, surf_h = surface.get_size()
+                except Exception:
+                    surf_w, surf_h = None, None
+                if isinstance(surf_w, int):
+                    start_x = max(2, min(start_x, surf_w - total_w - 2))
+
+                # Placement: au-dessus de la tête si possible, sinon en dessous (avec clamp écran)
+                y_above = head_rect.top - pip_size - 3
+                y_below = head_rect.bottom + 3
+                y = y_above if y_above >= 2 else y_below
+                if isinstance(surf_h, int) and y + pip_size + 6 > surf_h - 2:
+                    y = max(2, y_above)
 
                 on_col = getattr(config, "COLOR_ARMOR_HIGHLIGHT", (80, 200, 255))
                 off_col = (20, 20, 28)
                 border = (0, 0, 0)
 
+                # Fond pour améliorer la lisibilité (même sur sprites)
+                try:
+                    bg = pygame.Rect(start_x - 3, y - 3, total_w + 6, pip_size + 6)
+                    pygame.draw.rect(surface, (0, 0, 0), bg, border_radius=3)
+                    pygame.draw.rect(surface, (40, 40, 55), bg, 1, border_radius=3)
+                except Exception:
+                    pass
+
+                if show_shield_badge:
+                    try:
+                        by = y - 1
+                        if badge_size < pip_size:
+                            by = y + (pip_size - badge_size) // 2
+                        badge = pygame.Rect(start_x, by, badge_size, badge_size)
+                        pygame.draw.rect(surface, (0, 0, 0), badge, border_radius=3)
+                        pygame.draw.rect(surface, border, badge, 1, border_radius=3)
+
+                        col = getattr(config, "COLOR_SHIELD_POWERUP", (0, 200, 255))
+                        cx, cy = badge.centerx, badge.centery
+                        w, h = badge.width, badge.height
+                        pts = [
+                            (cx, badge.top + 1),
+                            (badge.right - 2, badge.top + max(2, int(h * 0.28))),
+                            (badge.right - max(2, int(w * 0.22)), badge.bottom - 2),
+                            (cx, badge.bottom - 1),
+                            (badge.left + max(2, int(w * 0.22)), badge.bottom - 2),
+                            (badge.left + 1, badge.top + max(2, int(h * 0.28))),
+                        ]
+                        pygame.draw.polygon(surface, col, pts)
+                        pygame.draw.polygon(surface, border, pts, 1)
+                    except Exception:
+                        pass
+                    start_x += badge_size + gap
+
                 for i in range(max_armor):
                     r = pygame.Rect(start_x + i * (pip_size + gap), y, pip_size, pip_size)
                     fill = on_col if i < armor else off_col
-                    pygame.draw.rect(surface, fill, r, border_radius=1)
-                    pygame.draw.rect(surface, border, r, 1, border_radius=1)
+                    pygame.draw.rect(surface, fill, r, border_radius=2)
+                    pygame.draw.rect(surface, border, r, 1, border_radius=2)
             except Exception:
                 pass
 

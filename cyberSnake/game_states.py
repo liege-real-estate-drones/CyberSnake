@@ -2175,7 +2175,7 @@ def run_options(events, dt, screen, game_state):
         ("Style murs", wall_style_display),
         ("Arène classique", classic_arena_display),
         ("Vitesse jeu", game_speed_display),
-        ("Difficulté IA", ai_difficulty_display),
+        ("Difficulté IA (défaut)", ai_difficulty_display),
         ("Particules", particle_density_display),
         ("Secousse écran", "Oui" if pending_screen_shake else "Non"),
         ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
@@ -2677,7 +2677,7 @@ def run_options(events, dt, screen, game_state):
             ("Style murs", wall_style_display),
             ("Arène classique", classic_arena_display),
             ("Vitesse jeu", game_speed_display),
-            ("Difficulté IA", ai_difficulty_display),
+            ("Difficulté IA (défaut)", ai_difficulty_display),
             ("Particules", particle_density_display),
             ("Secousse écran", "Oui" if pending_screen_shake else "Non"),
             ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
@@ -3929,15 +3929,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
         if cur not in keys:
             cur = "normal" if "normal" in keys else keys[0]
 
-        # Persist dans game_options.json
-        try:
-            opts = utils.load_game_options(base_path)
-            opts["ai_difficulty"] = str(cur)
-            utils.save_game_options(opts, base_path)
-        except Exception:
-            pass
-
-        # Applique immédiatement pour la session
+        # Applique immédiatement pour la session (sans modifier les options)
         try:
             config.AI_DIFFICULTY = str(cur)
         except Exception:
@@ -4022,7 +4014,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
         screen.blit(overlay, (0, 0))
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
-        title = "VS IA - DIFFICULTÉ"
+        title = "VS IA - DIFFICULTÉ (PARTIE)"
         utils.draw_text_with_shadow(screen, title, font_medium, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (sw / 2, sh * 0.14), "center")
 
         panel_w = int(sw * 0.72)
@@ -4054,7 +4046,9 @@ def run_vs_ai_setup(events, dt, screen, game_state):
             utils.draw_text(screen, desc, font_default, config.COLOR_TEXT, (panel_rect.centerx, panel_rect.centery + 10), "center")
 
         hint = "Gauche/Droite: changer | Entrée/A: confirmer | Echap/B: retour"
+        hint2 = "Astuce: Options = difficulté par défaut"
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.90), "center")
+        utils.draw_text(screen, hint2, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception:
         pass
 
@@ -6571,11 +6565,16 @@ def run_game(events, dt, screen, game_state):
                          if p.rect.colliderect(seg_rect_ai):
                             p1_rem_indices.add(i); hit_something = True
                             survived_ai = enemy_snake.handle_damage(current_time, player_snake, damage_source_pos=p.rect.center)
+                            # Objectif "toucher l'adversaire" : compte aussi si le coup est létal (sinon objectif parfois infaisable)
+                            if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
+                                obj_completed, bonus = utils.check_objective_completion('hit_opponent', current_objective, 1)
+                                if obj_completed:
+                                    if player_snake and player_snake.alive:
+                                        player_snake.add_score(bonus, is_objective_bonus=True)
+                                    game_state['current_objective'] = None
+                                    game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
                             if survived_ai:
                                 if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_HIT_SCORE); player_snake.increment_combo(1)
-                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
-                                    obj_completed, bonus = utils.check_objective_completion('hit_opponent', current_objective, 1)
-                                    if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
                             else: # AI died
                                 if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_KILL_SCORE); player_snake.add_armor(config.ENEMY_KILL_ARMOR); player_snake.increment_combo(3)
                                 if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
