@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "categories": {
+    "food": {
+      "normal": {
+        "usage": "FOOD_TYPES.normal image_file",
+        "key": "food_energy.png",
+        "variants": {
+          "1x": "food_energy.png"
+        }
+      },
+      "ammo": {
+        "usage": "FOOD_TYPES.ammo image_file",
+        "key": "food_ammo.png",
+        "variants": {
+          "1x": "food_ammo.png"
+        }
+      },
+      "poison": {
+        "usage": "FOOD_TYPES.poison image_file",
+        "key": "food_poison.png",
+        "variants": {
+          "1x": "food_poison.png"
+        }
+      },
+      "speed_boost": {
+        "usage": "FOOD_TYPES.speed_boost image_file",
+        "key": "food_speed.png",
+        "variants": {
+          "1x": "food_speed.png"
+        }
+      },
+      "score_multiplier": {
+        "usage": "FOOD_TYPES.score_multiplier image_file",
+        "key": "food_multiplier.png",
+        "variants": {
+          "1x": "food_multiplier.png"
+        }
+      },
+      "freeze_opponent": {
+        "usage": "FOOD_TYPES.freeze_opponent image_file",
+        "key": "food_freeze.png",
+        "variants": {
+          "1x": "food_freeze.png"
+        }
+      },
+      "ghost": {
+        "usage": "FOOD_TYPES.ghost image_file",
+        "key": "food_ghost.png",
+        "variants": {
+          "1x": "food_ghost.png"
+        }
+      },
+      "bonus_points": {
+        "usage": "FOOD_TYPES.bonus_points image_file",
+        "key": "food_bonus.png",
+        "variants": {
+          "1x": "food_bonus.png"
+        }
+      },
+      "armor_plate_food": {
+        "usage": "FOOD_TYPES.armor_plate_food image_file",
+        "key": "food_armor.png",
+        "variants": {
+          "1x": "food_armor.png"
+        }
+      }
+    },
+    "powerups": {
+      "shield": {
+        "usage": "POWERUP_TYPES.shield image_file",
+        "key": "icon_shield.png",
+        "variants": {
+          "1x": "icon_shield.png"
+        }
+      },
+      "rapid_fire": {
+        "usage": "POWERUP_TYPES.rapid_fire image_file",
+        "key": "icon_rapid.png",
+        "variants": {
+          "1x": "icon_rapid.png"
+        }
+      },
+      "emp": {
+        "usage": "POWERUP_TYPES.emp image_file",
+        "key": "icon_emp.png",
+        "variants": {
+          "1x": "icon_emp.png"
+        }
+      },
+      "invincibility": {
+        "usage": "POWERUP_TYPES.invincibility image_file",
+        "key": "icon_invincible.png",
+        "variants": {
+          "1x": "icon_invincible.png"
+        }
+      },
+      "multishot": {
+        "usage": "POWERUP_TYPES.multishot image_file",
+        "key": "icon_multishot.png",
+        "variants": {
+          "1x": "icon_multishot.png"
+        }
+      }
+    },
+    "snakes": {
+      "p1_head": {
+        "usage": "Sprite serpent joueur 1 (tête)",
+        "key": "snake_p1_head.png",
+        "variants": {
+          "1x": "snake_p1_head.png"
+        }
+      },
+      "p1_body": {
+        "usage": "Sprite serpent joueur 1 (corps)",
+        "key": "snake_p1_body.png",
+        "variants": {
+          "1x": "snake_p1_body.png"
+        }
+      },
+      "p1_tail": {
+        "usage": "Sprite serpent joueur 1 (queue)",
+        "key": "snake_p1_tail.png",
+        "variants": {
+          "1x": "snake_p1_tail.png"
+        }
+      },
+      "p2_head": {
+        "usage": "Sprite serpent joueur 2 (tête)",
+        "key": "snake_p2_head.png",
+        "variants": {
+          "1x": "snake_p2_head.png"
+        }
+      },
+      "p2_body": {
+        "usage": "Sprite serpent joueur 2 (corps)",
+        "key": "snake_p2_body.png",
+        "variants": {
+          "1x": "snake_p2_body.png"
+        }
+      },
+      "p2_tail": {
+        "usage": "Sprite serpent joueur 2 (queue)",
+        "key": "snake_p2_tail.png",
+        "variants": {
+          "1x": "snake_p2_tail.png"
+        }
+      },
+      "enemy_head": {
+        "usage": "Sprite serpent ennemi (tête)",
+        "key": "snake_enemy_head.png",
+        "variants": {
+          "1x": "snake_enemy_head.png"
+        }
+      },
+      "enemy_body": {
+        "usage": "Sprite serpent ennemi (corps)",
+        "key": "snake_enemy_body.png",
+        "variants": {
+          "1x": "snake_enemy_body.png"
+        }
+      },
+      "enemy_tail": {
+        "usage": "Sprite serpent ennemi (queue)",
+        "key": "snake_enemy_tail.png",
+        "variants": {
+          "1x": "snake_enemy_tail.png"
+        }
+      }
+    }
+  }
+}

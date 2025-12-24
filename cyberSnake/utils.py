@@ -9,6 +9,7 @@ import os
 import json
 import traceback
 import time
+import re
 from collections import defaultdict, deque
 import logging
 
@@ -257,24 +258,149 @@ def load_assets(base_path):
     images = {} # On reset le dictionnaire
     logger.info(f"Début chargement images depuis base_path: {base_path}")
 
-    # Liste de TOUS les fichiers à charger (Nourriture + Powerups + Serpents)
-    files_to_load = [
-        # Nourriture
-        "food_energy.png", "food_ammo.png", "food_poison.png", "food_speed.png",
-        "food_multiplier.png", "food_freeze.png", "food_ghost.png", "food_bonus.png", "food_armor.png",
-        # Powerups
-        "icon_shield.png", "icon_rapid.png", "icon_emp.png", "icon_invincible.png", "icon_multishot.png",
-        # Serpents (P1)
-        "snake_p1_head.png", "snake_p1_body.png", "snake_p1_tail.png",
-        # Serpents (P2)
-        "snake_p2_head.png", "snake_p2_body.png", "snake_p2_tail.png",
-        # Serpents (Ennemi)
-        "snake_enemy_head.png", "snake_enemy_body.png", "snake_enemy_tail.png"
-    ]
+    def _parse_variant_scale(key, filename):
+        if key:
+            try:
+                key_str = str(key).lower()
+            except Exception:
+                key_str = ""
+            if "x" in key_str:
+                try:
+                    return float(key_str.replace("x", "").strip())
+                except Exception:
+                    pass
+        if filename:
+            try:
+                match = re.search(r"@(\d+)x", str(filename))
+            except Exception:
+                match = None
+            if match:
+                try:
+                    return float(match.group(1))
+                except Exception:
+                    return 1.0
+        return 1.0
 
-    for filename in files_to_load:
-        full_path = os.path.join(base_path, filename)
-        if os.path.exists(full_path):
+    def _rank_variants(variants, grid_size):
+        base_size = float(getattr(config, "ASSET_BASE_GRID_SIZE", config.GRID_SIZE) or config.GRID_SIZE or 1)
+        target_scale = max(1.0, float(grid_size) / base_size)
+        parsed = []
+        for scale, fname in variants.items():
+            parsed.append((float(scale), fname))
+        higher = sorted([item for item in parsed if item[0] >= target_scale], key=lambda item: item[0])
+        lower = sorted([item for item in parsed if item[0] < target_scale], key=lambda item: item[0], reverse=True)
+        return [fname for _, fname in higher + lower if fname]
+
+    def _extract_variants(entry):
+        variants = {}
+        if isinstance(entry, str):
+            variants[1.0] = entry
+            return variants
+        if not isinstance(entry, dict):
+            return variants
+        if isinstance(entry.get("variants"), dict):
+            for key, filename in entry["variants"].items():
+                if filename:
+                    variants[_parse_variant_scale(key, filename)] = filename
+        files_value = entry.get("files")
+        if isinstance(files_value, dict):
+            for key, filename in files_value.items():
+                if filename:
+                    variants[_parse_variant_scale(key, filename)] = filename
+        elif isinstance(files_value, list):
+            for filename in files_value:
+                if filename:
+                    variants[_parse_variant_scale(None, filename)] = filename
+        if entry.get("file"):
+            variants[_parse_variant_scale(None, entry.get("file"))] = entry.get("file")
+        return variants
+
+    def _load_asset_manifest_data(path):
+        manifest_data = read_json_or_default(path, None)
+        if isinstance(manifest_data, dict):
+            return manifest_data
+        return None
+
+    def _collect_manifest_entries(manifest_data):
+        entries = []
+        if not isinstance(manifest_data, dict):
+            return entries
+        categories = manifest_data.get("categories", {})
+        if isinstance(categories, dict):
+            for category_name, category_entries in categories.items():
+                if isinstance(category_entries, dict):
+                    items = list(category_entries.items())
+                elif isinstance(category_entries, list):
+                    items = [(entry.get("id") if isinstance(entry, dict) else None, entry) for entry in category_entries]
+                else:
+                    continue
+                for entry_key, entry in items:
+                    entries.append((category_name, entry_key, entry))
+        return entries
+
+    def _get_fallback_image_files():
+        fallback = set()
+        for data in config.FOOD_TYPES.values():
+            image_file = data.get("image_file")
+            if image_file:
+                fallback.add(image_file)
+        for data in config.POWERUP_TYPES.values():
+            image_file = data.get("image_file")
+            if image_file:
+                fallback.add(image_file)
+        fallback.update([
+            "snake_p1_head.png", "snake_p1_body.png", "snake_p1_tail.png",
+            "snake_p2_head.png", "snake_p2_body.png", "snake_p2_tail.png",
+            "snake_enemy_head.png", "snake_enemy_body.png", "snake_enemy_tail.png",
+        ])
+        return sorted(fallback)
+
+    manifest_path = os.path.join(base_path, getattr(config, "IMAGE_ASSET_MANIFEST", "assets_manifest.json"))
+    manifest_data = _load_asset_manifest_data(manifest_path)
+    if not manifest_data:
+        log_once("assets_manifest_missing", logging.WARNING, "Manifest assets manquant ou invalide: %s", manifest_path)
+
+    asset_entries = []
+    manifest_keys = set()
+    for category, entry_key, entry in _collect_manifest_entries(manifest_data):
+        variants = _extract_variants(entry)
+        if not variants:
+            log_once(f"assets_manifest_empty_{category}_{entry_key}", logging.WARNING,
+                     "Entrée manifest assets invalide pour %s/%s", category, entry_key)
+            continue
+        key = entry.get("key") if isinstance(entry, dict) else None
+        if not key:
+            key = next(iter(variants.values()), None)
+        if not key:
+            continue
+        manifest_keys.add(key)
+        asset_entries.append({
+            "key": key,
+            "category": category,
+            "usage": entry.get("usage") if isinstance(entry, dict) else None,
+            "variants": variants,
+        })
+
+    fallback_files = _get_fallback_image_files()
+    missing_from_manifest = [f for f in fallback_files if f not in manifest_keys]
+    if missing_from_manifest:
+        log_once("assets_manifest_fallback", logging.WARNING,
+                 "Images absentes du manifest, chargement fallback: %s", ", ".join(missing_from_manifest))
+        for filename in missing_from_manifest:
+            asset_entries.append({
+                "key": filename,
+                "category": "fallback",
+                "usage": "fallback",
+                "variants": {1.0: filename},
+            })
+
+    for entry in asset_entries:
+        candidates = _rank_variants(entry["variants"], config.GRID_SIZE)
+        loaded = False
+        for filename in candidates:
+            full_path = os.path.join(base_path, filename)
+            if not os.path.exists(full_path):
+                continue
             try:
                 # 1. Charger l'image brute (1024x1024 ou autre)
                 raw_image = pygame.image.load(full_path).convert_alpha()
@@ -284,13 +410,14 @@ def load_assets(base_path):
                 scaled_image = pygame.transform.smoothscale(raw_image, (config.GRID_SIZE, config.GRID_SIZE))
 
                 # 3. Stocker l'image optimisée
-                images[filename] = scaled_image
-                logger.debug(f"Chargé et optimisé : {filename}")
+                images[entry["key"]] = scaled_image
+                logger.debug("Chargé et optimisé : %s (clé %s)", filename, entry["key"])
+                loaded = True
+                break
             except Exception as e:
-                logger.error(f"Erreur chargement image {filename}: {e}")
-        else:
-            # logger.warning(f"Image manquante : {filename}")
-            pass
+                logger.error("Erreur chargement image %s: %s", filename, e)
+        if not loaded:
+            logger.debug("Image manquante pour entrée manifest: %s", entry["key"])
 
     logger.info(f"Fin chargement images. {len(images)} images en mémoire.")
 

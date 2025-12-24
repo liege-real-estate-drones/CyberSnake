@@ -619,6 +619,18 @@ FAVORITE_MAP_FILE = "favorite_maps.json" # NOUVEAU
 CONTROLS_FILE = "controls.json"
 MAX_HIGH_SCORES = 10
 
+# --- Manifest des sprites (images) ---
+# Pour ajouter un nouveau sprite sans toucher au code :
+# 1) Dépose l'image dans le dossier du jeu (ex: food_new.png).
+# 2) Ajoute une entrée dans assets_manifest.json (clé "key" = nom du fichier).
+# 3) Référence cette clé dans FOOD_TYPES/POWERUP_TYPES (champ "image_file"),
+#    ou utilise-la pour un sprite de serpent.
+# 4) Optionnel : ajoute des variantes @2x/@4x et référence-les dans "variants".
+#    Le loader choisit automatiquement la meilleure variante selon GRID_SIZE.
+IMAGE_ASSET_MANIFEST = "assets_manifest.json"
+# Taille de base (en pixels) correspondant à la variante 1x.
+ASSET_BASE_GRID_SIZE = 20
+
 
 # --- États du Jeu & Game Modes ---
 # États (simples entiers)
