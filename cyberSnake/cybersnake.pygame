@@ -6,6 +6,20 @@ import traceback
 
 # --- Configuration du Logging (Early Setup) ---
 # Configuré avant les autres imports pour capturer les erreurs de chargement de modules
+def _logging_ready():
+    root_logger = logging.getLogger()
+    return bool(root_logger.handlers)
+
+
+def _critical_with_fallback(message, *args, **kwargs):
+    logging.critical(message, *args, **kwargs)
+    if not _logging_ready():
+        try:
+            print(message % args if args else message)
+        except Exception:
+            print(message)
+
+
 try:
     # Essaye de déterminer le chemin de base du jeu
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -17,14 +31,14 @@ try:
     log_filepath = os.path.join(base_path_log, log_filename)
 
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
         filename=log_filepath,
         filemode='w'
     )
     logging.info("--- Initialisation du Logging pour CyberSnake (Early) ---")
 except Exception as log_setup_error:
-    print(f"ERREUR CRITIQUE: Impossible de configurer le logging: {log_setup_error}")
+    _critical_with_fallback("ERREUR CRITIQUE: Impossible de configurer le logging: %s", log_setup_error)
 
 # --- Import de Pygame avec gestion d'erreur ---
 try:
@@ -32,7 +46,7 @@ try:
     logging.info("Module pygame importé avec succès.")
 except ImportError as e:
     logging.critical("FATAL: Impossible d'importer le module 'pygame'. Est-il installé ?", exc_info=True)
-    print("FATAL: Impossible d'importer le module 'pygame'. Vérifiez les logs.")
+    _critical_with_fallback("FATAL: Impossible d'importer le module 'pygame'. Vérifiez les logs.")
     sys.exit(1)
 
 # --- Import des modules personnalisés ---
@@ -41,10 +55,11 @@ try:
     import utils
     import game_objects
     import game_states
+    logging.getLogger().setLevel(logging.DEBUG if getattr(config, "DEBUG_LOGGING", False) else logging.INFO)
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
-    print(f"FATAL: Erreur import modules jeu: {e}")
+    _critical_with_fallback("FATAL: Erreur import modules jeu: %s", e)
     sys.exit(1)
 
 
@@ -60,7 +75,7 @@ def main():
 
     except pygame.error as e:
         logging.critical(f"FATAL: Erreur initialisation Pygame: {e}", exc_info=True) # Log critical
-        print(f"FATAL: Erreur initialisation Pygame: {e}") # Garder print pour visibilité si log échoue
+        _critical_with_fallback("FATAL: Erreur initialisation Pygame: %s", e)
         sys.exit(1)
 
     # --- Initialisation Joysticks ---

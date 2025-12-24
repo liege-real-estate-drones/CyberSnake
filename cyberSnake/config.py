@@ -32,6 +32,7 @@ PARTICLE_DENSITY = "normal"
 PARTICLE_FACTOR = 1.0
 SCREEN_SHAKE_ENABLED = True
 SHOW_FPS = False
+DEBUG_LOGGING = False
 
 # UI
 # Échelle UI (polices/menus): "small", "normal", "large"

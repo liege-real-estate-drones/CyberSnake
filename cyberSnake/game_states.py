@@ -7,6 +7,8 @@ import math
 import traceback
 import logging
 
+logger = logging.getLogger(__name__)
+
 # --- Helpers boutons (configurables) ---
 def is_confirm_button(button):
     try:
@@ -113,9 +115,12 @@ def draw_ui_panel(surface, rect):
         pygame.draw.rect(panel_surf, config.COLOR_GRID, panel_surf.get_rect(), border_thickness, border_radius=panel_radius)
         surface.blit(panel_surf, rect.topleft)
     except Exception as e:
-        if not getattr(draw_ui_panel, 'has_warned', False):
-             print(f"Warning: Error drawing UI panel (will warn only once): {e}")
-             draw_ui_panel.has_warned = True
+        utils.log_once(
+            "draw_ui_panel_error",
+            logging.WARNING,
+            "Warning: Error drawing UI panel (will warn only once): %s",
+            e,
+        )
 
 
 def _clamp_color_rgb(color):
@@ -510,15 +515,19 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     font_default = game_state.get('font_default')
     font_medium = game_state.get('font_medium')
     if not font_small or not font_default or not font_medium:
-        print("ERREUR: Polices (small/default/medium) non disponibles pour draw_game_elements")
+        logger.error("Polices (small/default/medium) non disponibles pour draw_game_elements")
         try:
            font_small = pygame.font.Font(None, 22); font_default = pygame.font.Font(None, 30); font_medium = pygame.font.Font(None, 40)
-        except Exception: print("ERREUR FATALE: Impossible de charger les polices de secours."); return
+        except Exception:
+            logger.critical("Impossible de charger les polices de secours.")
+            return
 
     # --- Dessin Fond & Grille ---
     try:
         target_surface.fill(config.COLOR_BACKGROUND)
-    except Exception as e: print(f"Erreur fill screen: {e}"); return
+    except Exception as e:
+        utils.log_throttled("draw_fill_screen", 5000, logging.WARNING, "Erreur fill screen: %s", e)
+        return
     if getattr(config, "SHOW_GRID", True):
         for x in range(0, config.SCREEN_WIDTH, config.GRID_SIZE):
             try: pygame.draw.line(target_surface, config.COLOR_GRID, (x, 0), (x, config.SCREEN_HEIGHT))
@@ -543,52 +552,83 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     # --- Dessin Objets du Jeu ---
     for f in foods_copy:
         try: f.draw(target_surface, current_time, font_default) # Changed font_small to font_default
-        except Exception as e: print(f"Erreur dessin nourriture: {e}")
+        except Exception as e:
+            utils.log_throttled("draw_food_error", 5000, logging.WARNING, "Erreur dessin nourriture: %s", e)
     for m in mines_copy:
         try: m.draw(target_surface)
-        except Exception as e: print(f"Erreur dessin mine fixe: {e}")
+        except Exception as e:
+            utils.log_throttled("draw_static_mine_error", 5000, logging.WARNING, "Erreur dessin mine fixe: %s", e)
     for mm in moving_mines_copy:
         try: mm.draw(target_surface)
-        except Exception as e: print(f"Erreur dessin mine mobile: {e}")
+        except Exception as e:
+            utils.log_throttled("draw_moving_mine_error", 5000, logging.WARNING, "Erreur dessin mine mobile: %s", e)
     for n in nests_copy:
-         try: n.draw(target_surface, font_small) # Passe font_small
-         except Exception as e: print(f"Erreur dessin nid: {e}")
+        try: n.draw(target_surface, font_small) # Passe font_small
+        except Exception as e:
+            utils.log_throttled("draw_nest_error", 5000, logging.WARNING, "Erreur dessin nid: %s", e)
     for pu in powerups_copy:
         try: pu.draw(target_surface, current_time, font_default)
-        except Exception as e: print(f"Erreur dessin powerup: {e}")
+        except Exception as e:
+            utils.log_throttled("draw_powerup_error", 5000, logging.WARNING, "Erreur dessin powerup: %s", e)
     for p in player_projectiles_copy:
         try: p.draw(target_surface)
-        except Exception as e: print(f"Erreur dessin projectile J1: {e}")
+        except Exception as e:
+            utils.log_throttled("draw_projectile_p1_error", 5000, logging.WARNING, "Erreur dessin projectile J1: %s", e)
     if current_game_mode == config.MODE_PVP:
         for p in player2_projectiles_copy:
             try: p.draw(target_surface)
-            except Exception as e: print(f"Erreur dessin projectile J2: {e}")
+            except Exception as e:
+                utils.log_throttled("draw_projectile_p2_error", 5000, logging.WARNING, "Erreur dessin projectile J2: %s", e)
     if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SURVIVAL:
         for p in enemy_projectiles_copy:
             try: p.draw(target_surface)
-            except Exception as e: print(f"Erreur dessin projectile IA/Ennemi: {e}")
+            except Exception as e:
+                utils.log_throttled(
+                    "draw_projectile_enemy_error",
+                    5000,
+                    logging.WARNING,
+                    "Erreur dessin projectile IA/Ennemi: %s",
+                    e,
+                )
 
     # --- Dessin Serpents ---
     if player_snake:
         try: player_snake.draw(target_surface, current_time, font_small, font_default)
-        except Exception as e: print(f"Erreur dessin serpent J1: {e}")
+        except Exception as e:
+            utils.log_throttled("draw_snake_p1_error", 5000, logging.WARNING, "Erreur dessin serpent J1: %s", e)
     if current_game_mode == config.MODE_PVP and player2_snake:
         try: player2_snake.draw(target_surface, current_time, font_small, font_default)
-        except Exception as e: print(f"Erreur dessin serpent J2: {e}")
+        except Exception as e:
+            utils.log_throttled("draw_snake_p2_error", 5000, logging.WARNING, "Erreur dessin serpent J2: %s", e)
     if current_game_mode == config.MODE_VS_AI and enemy_snake and enemy_snake.alive:
         try: enemy_snake.draw(target_surface, current_time, font_small, font_default)
-        except Exception as e: print(f"Erreur dessin serpent IA principale: {e}")
+        except Exception as e:
+            utils.log_throttled(
+                "draw_snake_enemy_main_error",
+                5000,
+                logging.WARNING,
+                "Erreur dessin serpent IA principale: %s",
+                e,
+            )
     if current_game_mode in [config.MODE_VS_AI, config.MODE_SURVIVAL]:
         for enemy in active_enemies_copy:
             if enemy.alive:
                 try: enemy.draw(target_surface, current_time, font_small, font_default)
-                except Exception as e: print(f"Erreur dessin ennemi actif (bébé IA): {e}")
+                except Exception as e:
+                    utils.log_throttled(
+                        "draw_enemy_active_error",
+                        5000,
+                        logging.WARNING,
+                        "Erreur dessin ennemi actif (bébé IA): %s",
+                        e,
+                    )
 
     # --- Dessin Particules ---
     particles_copy = list(utils.particles)
     for p in particles_copy:
         try: p.draw(target_surface)
-        except Exception as e: print(f"Erreur dessin particule: {e}")
+        except Exception as e:
+            utils.log_throttled("draw_particle_error", 5000, logging.WARNING, "Erreur dessin particule: %s", e)
 
     # --- Mise en valeur de l'arène (Classique) : assombrit l'extérieur ---
     if current_game_mode == config.MODE_CLASSIC:
@@ -963,8 +1003,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                         x += icon_size + icon_gap
 
     except Exception as e:
-        print(f"Erreur dessin UI Joueur 1: {e}")
-        traceback.print_exc()
+        utils.log_throttled("draw_ui_p1_error", 5000, logging.WARNING, "Erreur dessin UI Joueur 1: %s", e)
+        logger.debug("Traceback UI Joueur 1", exc_info=True)
 
     # --- ** Panneau UI Top-Right (Kill Feed, HS, Effects) ** ---
     
@@ -1002,7 +1042,15 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                         else:
                             break
                 except Exception as e:
-                    print(f"Erreur dessin message Kill Feed '{message}': {e}"); current_y_top_right += kf_line_height
+                    utils.log_throttled(
+                        "draw_kill_feed_error",
+                        5000,
+                        logging.WARNING,
+                        "Erreur dessin message Kill Feed '%s': %s",
+                        message,
+                        e,
+                    )
+                    current_y_top_right += kf_line_height
             current_y_top_right += 5
         mode_key_map = {config.MODE_SOLO: "solo", config.MODE_CLASSIC: "classic", config.MODE_VS_AI: "vs_ai",
                         config.MODE_PVP: "pvp", config.MODE_SURVIVAL: "survie"}
@@ -1109,8 +1157,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     except StopIteration:
         pass
     except Exception as e:
-        print(f"Erreur dessin UI Top-Right: {e}")
-        traceback.print_exc()
+        utils.log_throttled("draw_ui_top_right_error", 5000, logging.WARNING, "Erreur dessin UI Top-Right: %s", e)
+        logger.debug("Traceback UI Top-Right", exc_info=True)
 
     # --- ** Panneau UI Joueur 2 (Bottom-Right) ** ---
     
@@ -1361,8 +1409,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
                             utils.draw_text(target_surface, fallback_text, font_default, fallback_color, (x, p2_icon_y), "topleft")
                         x += icon_size + icon_gap
         except Exception as e:
-            print(f"Erreur dessin UI Joueur 2: {e}")
-            traceback.print_exc()
+            utils.log_throttled("draw_ui_p2_error", 5000, logging.WARNING, "Erreur dessin UI Joueur 2: %s", e)
+            logger.debug("Traceback UI Joueur 2", exc_info=True)
 
     # --- ** UI Bottom Center (Vague, Objectif, Timer) ** ---
     # === BLOC MODIFIÉ (Voir Point 1 pour détails) ===
@@ -1415,8 +1463,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             utils.draw_text_with_shadow(target_surface, bottom_text, font_default, bottom_color, config.COLOR_UI_SHADOW,
                                         bottom_panel_rect.center, "center")
     except Exception as e:
-        print(f"Erreur dessin UI Bas-Centre: {e}")
-        traceback.print_exc()
+        utils.log_throttled("draw_ui_bottom_center_error", 5000, logging.WARNING, "Erreur dessin UI Bas-Centre: %s", e)
+        logger.debug("Traceback UI Bas-Centre", exc_info=True)
 
     # --- FPS overlay (option) ---
     try:
@@ -1440,7 +1488,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
 def reset_game(game_state):
     """Réinitialise l'état du jeu dans game_state."""
 
-    print("Resetting game...")
+    logger.info("Resetting game...")
     current_time_reset = pygame.time.get_ticks()
     game_state['player_projectiles'] = []
     game_state['player2_projectiles'] = []
@@ -1478,7 +1526,7 @@ def reset_game(game_state):
     game_state.pop('spawn_bounds', None)
     current_game_mode = game_state.get('current_game_mode')
     if current_game_mode is None:
-        print("current_game_mode manquant, utilisation du mode Solo par défaut pour le redémarrage.")
+        logger.warning("current_game_mode manquant, utilisation du mode Solo par défaut pour le redémarrage.")
         current_game_mode = config.MODE_SOLO
         game_state['current_game_mode'] = current_game_mode
     selected_map_key = game_state.get('selected_map_key', config.DEFAULT_MAP_KEY)
@@ -1495,9 +1543,9 @@ def reset_game(game_state):
     dynamic_walls_raw = game_state.get('current_random_map_walls', None)
     if dynamic_walls_raw is not None and selected_map_key not in config.MAPS:
         if selected_map_key == "Aléatoire":
-            print("Resetting game with generated random map.")
+            logger.info("Resetting game with generated random map.")
         else:
-            print(f"Resetting game with favorite map: {selected_map_key}")
+            logger.info("Resetting game with favorite map: %s", selected_map_key)
 
         current_map_walls_list = []
         if isinstance(dynamic_walls_raw, list):
@@ -1519,7 +1567,7 @@ def reset_game(game_state):
         try:
             current_map_walls_list = list(walls_generator(config.GRID_WIDTH, config.GRID_HEIGHT))
         except Exception as e:
-            print(f"Erreur génération murs map '{selected_map_key}': {e}")
+            logger.error("Erreur génération murs map '%s': %s", selected_map_key, e)
             current_map_walls_list = [] # Fallback murs vides
 
         # Récupère les fonctions de démarrage spécifiques à la carte
@@ -1536,7 +1584,7 @@ def reset_game(game_state):
         p2_start = p2_start_func(config.GRID_WIDTH, config.GRID_HEIGHT)
         ai_start = ai_start_func(config.GRID_WIDTH, config.GRID_HEIGHT)
     except Exception as e:
-        print(f"Erreur calcul positions départ map '{selected_map_key}': {e}")
+        logger.error("Erreur calcul positions départ map '%s': %s", selected_map_key, e)
         # Garde les positions par défaut si erreur
     # --- Arène Classique (taille réglable via options) ---
     if current_game_mode == config.MODE_CLASSIC:
@@ -1583,7 +1631,11 @@ def reset_game(game_state):
     # --- NOUVEAU: Donne 10 munitions de départ au joueur en mode Vs AI ---
     if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SOLO:
         start_ammo_p1 = 10
-        print(f"Mode {current_game_mode.name} détecté, J1 commence avec {start_ammo_p1} munitions.")
+        logger.info(
+            "Mode %s détecté, J1 commence avec %s munitions.",
+            current_game_mode.name,
+            start_ammo_p1,
+        )
     # --- FIN NOUVEAU ---
     try:
         game_state['player_snake'] = game_objects.Snake(
@@ -1594,7 +1646,7 @@ def reset_game(game_state):
         if current_game_mode != config.MODE_CLASSIC:
             game_state['player_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
     except Exception as e:
-         print(f"ERREUR CRITIQUE création player_snake: {e}"); traceback.print_exc()
+        logger.exception("ERREUR CRITIQUE création player_snake: %s", e)
     if current_game_mode == config.MODE_VS_AI:
         try:
             default_ai_armor = getattr(config, 'ENEMY_START_ARMOR', 0)
@@ -1611,31 +1663,35 @@ def reset_game(game_state):
             game_state['vs_ai_start_time'] = current_time_reset
             game_state['last_difficulty_update_time'] = current_time_reset
             # --- FIN AJOUT ---
-        except Exception as e: print(f"ERREUR CRITIQUE création enemy_snake: {e}"); traceback.print_exc()
+        except Exception as e:
+            logger.exception("ERREUR CRITIQUE création enemy_snake: %s", e)
     elif current_game_mode == config.MODE_SURVIVAL:
         game_state['survival_wave'] = 1
         game_state['survival_wave_start_time'] = current_time_reset
         game_state['current_survival_interval_factor'] = config.SURVIVAL_INITIAL_INTERVAL_FACTOR
-        print("Survival Mode Started - Wave 1")
+        logger.info("Survival Mode Started - Wave 1")
         # === NOUVEAU: Spawn le premier nid pour la vague 1 ===
         num_initial_nests = min(1, config.MAX_NESTS_SURVIVAL) # Vague 1 = 1 nid
         # =======================================================
     elif current_game_mode == config.MODE_PVP:
         player2_name = game_state.get('player2_name_input', "Alex")
-        print(f"DEBUG PVP RESET: Tentative de création de player2_snake avec nom: {player2_name}, start_pos: {p2_start}")
+        logger.debug(
+            "PVP RESET: Tentative de création de player2_snake avec nom: %s, start_pos: %s",
+            player2_name,
+            p2_start,
+        )
         try:
             game_state['player2_snake'] = game_objects.Snake(
                 player_num=2, name=player2_name, start_pos=p2_start,
                 current_game_mode=current_game_mode, walls=current_map_walls_list,
                 start_armor=pvp_start_armor, start_ammo=pvp_start_ammo
             )
-            print(f"DEBUG PVP RESET: player2_snake créé avec succès: {game_state['player2_snake']}")
+            logger.debug("PVP RESET: player2_snake créé avec succès: %s", game_state['player2_snake'])
             game_state['player2_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
         except Exception as e:
-            print(f"ERREUR CRITIQUE création player2_snake (PvP): {e}")
-            traceback.print_exc()
+            logger.exception("ERREUR CRITIQUE création player2_snake (PvP): %s", e)
             game_state['player2_snake'] = None # Assurer que c'est None en cas d'erreur
-        print(f"DEBUG PVP RESET: player2_snake après try/except: {game_state.get('player2_snake')}")
+        logger.debug("PVP RESET: player2_snake après try/except: %s", game_state.get('player2_snake'))
         game_state['pvp_start_time'] = current_time_reset
         num_initial_nests = 0 # Pas de nids en PvP
     num_initial_nests = 0  # Initialisation par défaut à 0
@@ -1653,7 +1709,7 @@ def reset_game(game_state):
     # La logique de spawn des nids a été consolidée ci-dessus.
 
     if num_initial_nests > 0:
-        print(f"Initializing {num_initial_nests} nests for mode {current_game_mode.name}...")
+        logger.info("Initializing %s nests for mode %s...", num_initial_nests, current_game_mode.name)
         initial_occupied_for_nests = utils.get_all_occupied_positions(
             game_state.get('player_snake'), game_state.get('player2_snake'), game_state.get('enemy_snake'),
             [], [], [], current_map_walls_list, [], [], []
@@ -1664,10 +1720,11 @@ def reset_game(game_state):
                 try:
                     game_state['nests'].append(game_objects.Nest(nest_pos))
                     initial_occupied_for_nests.add(nest_pos)
-                    print(f"  Nest created at {nest_pos}")
-                except Exception as e: print(f"Erreur création nid initial à {nest_pos}: {e}")
+                    logger.debug("Nest created at %s", nest_pos)
+                except Exception as e:
+                    logger.error("Erreur création nid initial à %s: %s", nest_pos, e)
             else:
-                print("  Warning: Could not find empty position for initial nest.")
+                logger.warning("Could not find empty position for initial nest.")
     # === FIN MODIFICATION ===
 
     initial_occupied = utils.get_all_occupied_positions(
@@ -1691,7 +1748,7 @@ def reset_game(game_state):
                 game_state['foods'].append(game_objects.Food(pos, food_type))
                 initial_occupied.add(pos)
             except Exception as e:
-                print(f"Erreur création nourriture initiale à {pos}: {e}"); traceback.print_exc()
+                logger.exception("Erreur création nourriture initiale à %s: %s", pos, e)
     if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
         player_snake_obj = game_state.get('player_snake')
         player_score = player_snake_obj.score if player_snake_obj else 0
@@ -1699,13 +1756,18 @@ def reset_game(game_state):
         game_state['current_objective'] = new_objective
         if new_objective: game_state['objective_display_text'] = new_objective.get('display_text', "")
         else: game_state['objective_display_text'] = ""
-        print(f"Nouvel Objectif: {game_state.get('objective_display_text','N/A')} (Cible: {game_state.get('current_objective', {}).get('target_value','N/A')})")
+        logger.info(
+            "Nouvel Objectif: %s (Cible: %s)",
+            game_state.get('objective_display_text', 'N/A'),
+            game_state.get('current_objective', {}).get('target_value', 'N/A'),
+        )
     if utils.selected_music_file and pygame.mixer.get_init():
         try:
             pygame.mixer.music.stop()
             utils.play_selected_music(base_path)
-        except pygame.error as e: print(f"Erreur redémarrage musique pendant reset: {e}")
-    print("Game Reset Complete.")
+        except pygame.error as e:
+            logger.error("Erreur redémarrage musique pendant reset: %s", e)
+    logger.info("Game Reset Complete.")
 
 # --- START: REVISED run_menu function in game_states.py (with joystick input) ---
 def run_menu(events, dt, screen, game_state):
@@ -1726,7 +1788,7 @@ def run_menu(events, dt, screen, game_state):
 
     # Vérifie si les polices sont chargées
     if not all([font_small, font_medium, font_large, font_title]):
-        print("Erreur: Polices manquantes pour run_menu")
+        logger.error("Polices manquantes pour run_menu")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -1770,7 +1832,7 @@ def run_menu(events, dt, screen, game_state):
         try:
             utils.play_selected_music(base_path)
         except pygame.error as e:
-            print(f"Erreur lecture musique menu: {e}")
+            logger.error("Erreur lecture musique menu: %s", e)
 
     next_state = config.MENU # Par défaut, reste dans le menu
     current_time = pygame.time.get_ticks() # Temps actuel pour gérer le délai de l'axe
@@ -1943,7 +2005,7 @@ def run_menu(events, dt, screen, game_state):
                             else:
                                 next_state = config.NAME_ENTRY_SOLO # Autres modes vont à la saisie du nom
                         else:
-                            print(f"Option de menu joystick inconnue sélectionnée: {selected_option}")
+                            logger.warning("Option de menu joystick inconnue sélectionnée: %s", selected_option)
                             next_state = config.MENU
 
                         # Mise à jour explicite de l'état courant dans game_state
@@ -1951,16 +2013,17 @@ def run_menu(events, dt, screen, game_state):
                         game_state['menu_selection_index'] = menu_selection_index # Sauvegarde l'index
                         return next_state # Change d'état
                     except IndexError:
-                        print(f"Erreur joystick: Index de menu hors limites ({menu_selection_index})")
+                        logger.error("Erreur joystick: Index de menu hors limites (%s)", menu_selection_index)
                         next_state = config.MENU
                     except Exception as e:
-                        print(f"Erreur sélection menu joystick: {e}"); traceback.print_exc()
+                        logger.exception("Erreur sélection menu joystick: %s", e)
                         next_state = config.MENU
                 elif event.button == 4: # Bouton 4 pour changer musique
                     music_num = (utils.selected_music_index % 9) + 1 # Cycle 1-9
                     if utils.select_and_load_music(music_num, base_path):
                         try: utils.play_selected_music(base_path)
-                        except pygame.error as e: print(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
+                        except pygame.error as e:
+                            logger.error("Erreur lecture musique sélectionnée (%s): %s", music_num, e)
                     last_axis_move_time = current_time # Évite répétition immédiate
                 elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
@@ -2002,21 +2065,22 @@ def run_menu(events, dt, screen, game_state):
                         else:
                              next_state = config.NAME_ENTRY_SOLO
                     else:
-                         print(f"Option de menu clavier inconnue sélectionnée: {selected_option}")
+                        logger.warning("Option de menu clavier inconnue sélectionnée: %s", selected_option)
                          next_state = config.MENU
 
                     game_state['menu_selection_index'] = menu_selection_index
                     return next_state
                 except IndexError:
-                    print(f"Erreur clavier: Index de menu hors limites ({menu_selection_index})")
+                    logger.error("Erreur clavier: Index de menu hors limites (%s)", menu_selection_index)
                     next_state = config.MENU
                 except Exception as e:
-                    print(f"Erreur sélection menu clavier: {e}"); traceback.print_exc()
+                    logger.exception("Erreur sélection menu clavier: %s", e)
                     next_state = config.MENU
             elif music_num is not None:
                 if utils.select_and_load_music(music_num, base_path):
                     try: utils.play_selected_music(base_path)
-                    except pygame.error as e: print(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
+                    except pygame.error as e:
+                        logger.error("Erreur lecture musique sélectionnée (%s): %s", music_num, e)
             elif key == pygame.K_ESCAPE:
                 return False # Quitte le jeu depuis le menu
             # Contrôles volume
@@ -2029,7 +2093,15 @@ def run_menu(events, dt, screen, game_state):
     try:
         if menu_background_image:
             try: screen.blit(menu_background_image, (0, 0))
-            except Exception as e: print(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
+            except Exception as e:
+                utils.log_throttled(
+                    "menu_background_draw_error",
+                    5000,
+                    logging.WARNING,
+                    "Erreur affichage image fond menu: %s",
+                    e,
+                )
+                screen.fill(config.COLOR_BACKGROUND)
         else: screen.fill(config.COLOR_BACKGROUND)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
         
@@ -2172,7 +2244,7 @@ def run_menu(events, dt, screen, game_state):
             utils.draw_text_with_shadow(screen, "Appuyez sur Bouton 1 pour fermer", font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (center_x, center_y + 80), "center")
 
     except Exception as e:
-        print(f"Erreur majeure lors du dessin du menu: {e}")
+        utils.log_throttled("draw_menu_major_error", 5000, logging.ERROR, "Erreur majeure lors du dessin du menu: %s", e)
         try:
             screen.fill((0,0,0))
             error_font = pygame.font.Font(None, 30)
@@ -2198,7 +2270,7 @@ def run_options(events, dt, screen, game_state):
     return_state = game_state.get('options_return_state', config.MENU)
 
     if not all([font_small, font_default, font_medium]):
-        print("Erreur: Polices manquantes pour run_options")
+        logger.error("Polices manquantes pour run_options")
         return config.MENU
 
     current_time = pygame.time.get_ticks()
@@ -3569,7 +3641,7 @@ def run_options(events, dt, screen, game_state):
                 hint = "Entrée/A: CONFIRMER réinitialisation | Echap/B: retour"
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception as e:
-        print(f"Erreur dessin run_options: {e}")
+        utils.log_throttled("draw_run_options_error", 5000, logging.WARNING, "Erreur dessin run_options: %s", e)
 
     # Nettoyage simple si on quitte l'écran
     if next_state != config.OPTIONS:
@@ -3608,7 +3680,7 @@ def run_controls_remap(events, dt, screen, game_state):
     font_large = game_state.get('font_large') or font_medium
 
     if not all([font_small, font_default, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_controls_remap")
+        logger.error("Polices manquantes pour run_controls_remap")
         return return_state
 
     # Init pending config
@@ -4008,8 +4080,14 @@ def run_controls_remap(events, dt, screen, game_state):
         utils.draw_text(screen, help_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y), "center")
         utils.draw_text(screen, help_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y + line_gap), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_controls_remap: {e}")
-        traceback.print_exc()
+        utils.log_throttled(
+            "draw_run_controls_remap_error",
+            5000,
+            logging.ERROR,
+            "Erreur majeure lors du dessin de run_controls_remap: %s",
+            e,
+        )
+        logger.debug("Traceback run_controls_remap", exc_info=True)
         return return_state
 
     return config.CONTROLS
@@ -4047,8 +4125,8 @@ try:
         'delete': getattr(config, 'COLOR_MINE', DEFAULT_VK_COLORS['delete'])
     }
 except Exception as e:
-    print(f"Erreur chargement couleurs clavier virtuel depuis config: {e}")
-    print("Utilisation des couleurs par défaut")
+    logger.error("Erreur chargement couleurs clavier virtuel depuis config: %s", e)
+    logger.info("Utilisation des couleurs par défaut")
     VK_KEY_COLORS = DEFAULT_VK_COLORS
 
 # Constantes pour les animations du clavier
@@ -4102,7 +4180,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
         game_state['key_animations'] = key_animations
 
     if not all([font_small, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_name_entry_solo")
+        logger.error("Polices manquantes pour run_name_entry_solo")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -4270,7 +4348,10 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 name_entered = player1_name_input.strip()[:15] # Limite à 15 caractères
                 game_state['player1_name_input'] = name_entered if name_entered else "Thib" # Nom par défaut si vide
                 utils.play_sound("name_input_confirm")
-                print(f"Nom Joueur Solo/VsAI/Survie: '{game_state['player1_name_input']}'")
+                logger.info(
+                    "Nom Joueur Solo/VsAI/Survie: '%s'",
+                    game_state['player1_name_input'],
+                )
                 next_state = config.MAP_SELECTION # Après le nom, on choisit la carte
                 return next_state
             elif key == pygame.K_BACKSPACE:
@@ -4425,7 +4506,13 @@ def run_name_entry_solo(events, dt, screen, game_state):
         utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour", 
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
-        print(f"Erreur lors du dessin de run_name_entry_solo: {e}")
+        utils.log_throttled(
+            "draw_run_name_entry_solo_error",
+            5000,
+            logging.WARNING,
+            "Erreur lors du dessin de run_name_entry_solo: %s",
+            e,
+        )
         return config.MENU
 
     # Sauvegarder position clavier virtuel
@@ -4461,7 +4548,7 @@ def run_map_selection(events, dt, screen, game_state):
 
     # --- MODIFIÉ: Charge/Met à jour la liste des cartes si nécessaire ---
     if _map_selection_needs_update:
-        print("Mise à jour de la liste des cartes (incluant favoris)...")
+        logger.info("Mise à jour de la liste des cartes (incluant favoris)...")
         _favorite_maps = utils.load_favorite_maps(base_path)
         if current_game_mode == config.MODE_CLASSIC:
             # Mode classique: on reste sur une carte simple (pas de favoris/aléatoire)
@@ -4481,11 +4568,11 @@ def run_map_selection(events, dt, screen, game_state):
             try:
                 _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
             except Exception as e:
-                print(f"Erreur génération carte aléatoire initiale: {e}")
+                logger.error("Erreur génération carte aléatoire initiale: %s", e)
                 _current_random_map_walls = []
 
     if not all([font_small, font_medium]):
-        print("Erreur: Polices manquantes pour run_map_selection")
+        logger.error("Polices manquantes pour run_map_selection")
         _current_random_map_walls = None
         _map_selection_needs_update = True # Force rechargement au retour
         try:
@@ -4504,7 +4591,7 @@ def run_map_selection(events, dt, screen, game_state):
     next_state = config.MAP_SELECTION
 
     if num_maps_total == 0: # Ne devrait plus arriver
-        print("ERREUR CRITIQUE: Aucune carte à afficher !")
+        logger.critical("ERREUR CRITIQUE: Aucune carte à afficher !")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -4657,10 +4744,10 @@ def run_map_selection(events, dt, screen, game_state):
             elif is_random_selected and (key == pygame.K_LEFT or key == pygame.K_RIGHT):
                 try:
                     _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
-                    print("Nouvelle carte aléatoire générée.")
+                    logger.info("Nouvelle carte aléatoire générée.")
                     utils.play_sound("shoot_p1")
                 except Exception as e:
-                    print(f"Erreur regénération carte aléatoire: {e}")
+                    logger.error("Erreur regénération carte aléatoire: %s", e)
                     _current_random_map_walls = []
             # --- NOUVEAU: Touche 'F' pour sauvegarder la carte aléatoire actuelle ---
             elif is_random_selected and key == pygame.K_f:
@@ -4672,7 +4759,7 @@ def run_map_selection(events, dt, screen, game_state):
                     else:
                         utils.play_sound("combo_break") # Son d'échec
                 else:
-                    print("Impossible de sauvegarder une carte aléatoire vide.")
+                    logger.warning("Impossible de sauvegarder une carte aléatoire vide.")
                     utils.play_sound("combo_break")
             # --- FIN NOUVEAU ---
             elif key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
@@ -4682,22 +4769,28 @@ def run_map_selection(events, dt, screen, game_state):
 
                     if selected_key_or_label == "Aléatoire":
                         game_state['current_random_map_walls'] = list(_current_random_map_walls) if _current_random_map_walls else []
-                        print(f"Map selected: Aléatoire (avec {len(game_state['current_random_map_walls'])} murs)")
+                        logger.info(
+                            "Map selected: Aléatoire (avec %s murs)",
+                            len(game_state['current_random_map_walls']),
+                        )
                     elif selected_key_or_label in _favorite_maps:
                         # Carte favorite sélectionnée
                         game_state['current_random_map_walls'] = list(_favorite_maps[selected_key_or_label]) # Utilise les murs du favori
-                        print(f"Map selected: Favori '{selected_key_or_label}'")
+                        logger.info("Map selected: Favori '%s'", selected_key_or_label)
                     else:
                         # Carte prédéfinie sélectionnée
                         map_data = config.MAPS.get(selected_key_or_label)
                         if not map_data:
-                             print(f"Erreur: Données de carte introuvables pour la clé '{selected_key_or_label}'")
-                             _current_random_map_walls = None
-                             _map_selection_needs_update = True
-                             next_state = config.MENU
-                             return next_state
+                            logger.error(
+                                "Données de carte introuvables pour la clé '%s'",
+                                selected_key_or_label,
+                            )
+                            _current_random_map_walls = None
+                            _map_selection_needs_update = True
+                            next_state = config.MENU
+                            return next_state
                         game_state['current_random_map_walls'] = None # Pas une carte aléatoire
-                        print(f"Map selected: {map_data.get('name', selected_key_or_label)}")
+                        logger.info("Map selected: %s", map_data.get('name', selected_key_or_label))
 
                     utils.play_sound("powerup_pickup")
                     _current_random_map_walls = None # Nettoie la carte temporaire
@@ -4711,16 +4804,15 @@ def run_map_selection(events, dt, screen, game_state):
                         next_state = config.PLAYING
                     return next_state # Change d'état
                 except IndexError:
-                    print(f"Erreur: Index de carte hors limites ({map_selection_index})")
+                    logger.error("Index de carte hors limites (%s)", map_selection_index)
                     _current_random_map_walls = None
                     _map_selection_needs_update = True
                     next_state = config.MENU
                 except Exception as e:
-                    print(f"Erreur lors de la sélection/reset de la carte: {e}")
+                    logger.exception("Erreur lors de la sélection/reset de la carte: %s", e)
                     _current_random_map_walls = None
                     _map_selection_needs_update = True
                     next_state = config.MENU
-                    traceback.print_exc()
 
             elif key == pygame.K_ESCAPE:
                 _current_random_map_walls = None
@@ -4789,7 +4881,7 @@ def run_map_selection(events, dt, screen, game_state):
             try:
                 walls_to_preview = list(walls_generator_preview(config.GRID_WIDTH, config.GRID_HEIGHT))
             except Exception as e:
-                print(f"Erreur génération murs preview map '{selected_key_or_label_preview}': {e}")
+                logger.error("Erreur génération murs preview map '%s': %s", selected_key_or_label_preview, e)
 
         # Description contextuelle (1–2 lignes)
         try:
@@ -4950,8 +5042,14 @@ def run_map_selection(events, dt, screen, game_state):
             utils.draw_text(screen, instruction_text_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + line_gap), "center")
 
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_map_selection: {e}")
-        traceback.print_exc()
+        utils.log_throttled(
+            "draw_run_map_selection_error",
+            5000,
+            logging.ERROR,
+            "Erreur majeure lors du dessin de run_map_selection: %s",
+            e,
+        )
+        logger.debug("Traceback run_map_selection", exc_info=True)
         _current_random_map_walls = None
         _map_selection_needs_update = True
         return config.MENU
@@ -5792,7 +5890,7 @@ def run_pvp_setup(events, dt, screen, game_state):
     inputs_locked = (current_time - pvp_setup_start_time < input_lock_duration)
 
     if not all([font_small, font_medium]):
-        print("Erreur: Polices manquantes pour run_pvp_setup")
+        logger.error("Polices manquantes pour run_pvp_setup")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -5804,7 +5902,7 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     PvpCondition = getattr(config, 'PvpCondition', None)
     if PvpCondition is None:
-        print("ERREUR CRITIQUE: Enum PvpCondition non trouvée dans config.py!")
+        logger.critical("ERREUR CRITIQUE: Enum PvpCondition non trouvée dans config.py!")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -5975,13 +6073,15 @@ def run_pvp_setup(events, dt, screen, game_state):
                     change_func = options[pvp_setup_index][2]
                     if change_func:
                         try: change_func(-1); utils.play_sound("shoot_p1")
-                        except Exception as e: print(f"Erreur change_func(-1) option {pvp_setup_index}: {e}")
+                        except Exception as e:
+                            logger.error("Erreur change_func(-1) option %s: %s", pvp_setup_index, e)
             elif key in (pygame.K_RIGHT, pygame.K_PLUS, pygame.K_KP_PLUS):
                  if 0 <= pvp_setup_index < num_options:
                     change_func = options[pvp_setup_index][2]
                     if change_func:
-                         try: change_func(1); utils.play_sound("shoot_p1")
-                         except Exception as e: print(f"Erreur change_func(1) option {pvp_setup_index}: {e}")
+                        try: change_func(1); utils.play_sound("shoot_p1")
+                        except Exception as e:
+                            logger.error("Erreur change_func(1) option %s: %s", pvp_setup_index, e)
             elif key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                 utils.play_sound("powerup_pickup")
                 pvp_cond = game_state.get('pvp_condition_type'); pvp_time = game_state.get('pvp_target_time')
@@ -6016,14 +6116,22 @@ def run_pvp_setup(events, dt, screen, game_state):
             item_y = y_start + i * item_gap
             label_text = f"{prefix}{text} : "
             try: value_text = getter(game_state)
-            except Exception as e: print(f"Erreur getter PvP setup pour {text}: {e}"); value_text = "ERR"
+            except Exception as e:
+                logger.error("Erreur getter PvP setup pour %s: %s", text, e)
+                value_text = "ERR"
             utils.draw_text_with_shadow(screen, label_text, font_medium, label_color, config.COLOR_UI_SHADOW, (label_x, item_y), "midright")
             utils.draw_text_with_shadow(screen, value_text, font_medium, value_color, config.COLOR_UI_SHADOW, (value_x, item_y), "midleft")
         instruction_y = config.SCREEN_HEIGHT * 0.90
         utils.draw_text(screen, "HAUT/BAS: Sélection | GAUCHE/DROITE: Modifier | ENTRÉE: Noms Joueurs | ECHAP: Retour Carte", font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_pvp_setup: {e}")
-        traceback.print_exc()
+        utils.log_throttled(
+            "draw_run_pvp_setup_error",
+            5000,
+            logging.ERROR,
+            "Erreur majeure lors du dessin de run_pvp_setup: %s",
+            e,
+        )
+        logger.debug("Traceback run_pvp_setup", exc_info=True)
         logging.debug("Exiting run_pvp_setup (Exception in draw), next_state: config.MAP_SELECTION") # NOUVEAU LOG
         return config.MAP_SELECTION
 
@@ -6088,7 +6196,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     font_small=game_state.get('font_small'); font_medium=game_state.get('font_medium');
     font_large=game_state.get('font_large'); font_default=game_state.get('font_default');
     if not all([font_small, font_medium, font_large, font_default]):
-        print("Erreur: Polices manquantes pour run_name_entry_pvp")
+        logger.error("Polices manquantes pour run_name_entry_pvp")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -6322,7 +6430,11 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                             game_state['pvp_name_entry_stage'] = 2 # Change l'étape
                         elif stage == 2:
                             game_state['player2_name_input'] = name_entered
-                            print(f"Noms PvP: J1='{game_state['player1_name_input']}', J2='{game_state['player2_name_input']}'")
+                            logger.info(
+                                "Noms PvP: J1='%s', J2='%s'",
+                                game_state['player1_name_input'],
+                                game_state['player2_name_input'],
+                            )
                             game_state['pvp_name_entry_stage'] = 1 # Réinitialise pour la prochaine fois
                             
                             reset_game(game_state) # Initialise le jeu PvP
@@ -6343,8 +6455,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                             game_state['current_state'] = next_state # Important
                             return next_state # Lance le jeu ou retourne au menu
                     except Exception as e:
-                         print(f"Erreur lors de la validation du nom PvP (stage {stage}): {e}")
-                         traceback.print_exc() # Affiche la trace
+                        logger.exception("Erreur lors de la validation du nom PvP (stage %s): %s", stage, e)
                          next_state = config.PVP_SETUP # Retour config par sécurité
                          return next_state # Important de retourner ici
 
@@ -6516,7 +6627,13 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour", 
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
-        print(f"Erreur lors du dessin de run_name_entry_pvp: {e}")
+        utils.log_throttled(
+            "draw_run_name_entry_pvp_error",
+            5000,
+            logging.WARNING,
+            "Erreur lors du dessin de run_name_entry_pvp: %s",
+            e,
+        )
         return config.PVP_SETUP # Retour config PvP
 
     # Sauvegarder position clavier virtuel
@@ -6535,7 +6652,7 @@ def run_pause(events, dt, screen, game_state):
     font_large = game_state.get('font_large')
 
     if not all([font_small, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_pause")
+        logger.error("Polices manquantes pour run_pause")
         return config.PAUSED  # Reste en pause
 
     menu_items = [
@@ -6572,7 +6689,7 @@ def run_pause(events, dt, screen, game_state):
             elif pygame.mixer.get_init() and (not pygame.mixer.music.get_busy()) and utils.selected_music_file:
                 utils.play_selected_music(base_path)
         except pygame.error as music_e:
-            print(f"Erreur musique en quittant la pause: {music_e}")
+            logger.error("Erreur musique en quittant la pause: %s", music_e)
         previous_state = game_state.get('previous_state', config.PLAYING)
         return previous_state
 
@@ -6588,8 +6705,7 @@ def run_pause(events, dt, screen, game_state):
             game_state['pause_music_changed'] = False
             return config.PLAYING
         except Exception as e:
-            print(f"Erreur lors du reset depuis la pause: {e}")
-            traceback.print_exc()
+            logger.exception("Erreur lors du reset depuis la pause: %s", e)
             return config.MENU
 
     def _open_options():
@@ -6822,8 +6938,14 @@ def run_pause(events, dt, screen, game_state):
         utils.draw_text(screen, l1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
         utils.draw_text(screen, l2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + gap), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_pause: {e}")
-        traceback.print_exc()
+        utils.log_throttled(
+            "draw_run_pause_error",
+            5000,
+            logging.ERROR,
+            "Erreur majeure lors du dessin de run_pause: %s",
+            e,
+        )
+        logger.debug("Traceback run_pause", exc_info=True)
 
     return config.PAUSED  # Reste en pause sauf si une action change l'état
 
@@ -6864,7 +6986,7 @@ def run_game_over(events, dt, screen, game_state):
         gameover_menu_selection = 0
         game_state['gameover_menu_selection'] = 0
     if not all([font_default, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_game_over")
+        logger.error("Polices manquantes pour run_game_over")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -6902,8 +7024,14 @@ def run_game_over(events, dt, screen, game_state):
         try:
             utils.save_high_score(name_for_hs, score_to_check, mode_key, base_path)
             game_state['game_over_hs_saved'] = True
-            print(f"Nouveau High Score ({mode_key}) enregistré pour {name_for_hs}: {score_to_check}")
-        except Exception as e: print(f"Erreur lors de la sauvegarde du high score: {e}")
+            logger.info(
+                "Nouveau High Score (%s) enregistré pour %s: %s",
+                mode_key,
+                name_for_hs,
+                score_to_check,
+            )
+        except Exception as e:
+            logger.error("Erreur lors de la sauvegarde du high score: %s", e)
 
     winner_text = "Fin de partie"
     PvpCondition = getattr(config, 'PvpCondition', None)
@@ -7039,7 +7167,7 @@ def run_game_over(events, dt, screen, game_state):
                         logging.info("run_game_over: Returning to MENU.")
                         return next_state
                 except Exception as e:
-                    print(f"Erreur en tentant d'exécuter l'option via joystick: {e}"); traceback.print_exc()
+                    logger.exception("Erreur en tentant d'exécuter l'option via joystick: %s", e)
                     logging.error(f"run_game_over Exception: {e}", exc_info=True)
                     # Affiche l'erreur à l'écran pour le débogage utilisateur
                     try:
@@ -7075,7 +7203,7 @@ def run_game_over(events, dt, screen, game_state):
                         reset_game(game_state); next_state = config.PLAYING; game_state['current_state'] = next_state
                     return next_state
                 except Exception as e:
-                    print(f"Erreur en tentant de rejouer: {e}"); traceback.print_exc()
+                    logger.exception("Erreur en tentant de rejouer: %s", e)
                     next_state = config.MENU; return next_state # Sécurité: retour menu
             elif key == pygame.K_m or key == pygame.K_ESCAPE: # Menu
                 game_state['game_over_hs_saved'] = False
@@ -7138,7 +7266,15 @@ def run_game_over(events, dt, screen, game_state):
             utils.draw_text(screen, "HAUT/BAS: Naviguer | BOUTON: Confirmer | ECHAP: Menu", 
                           font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_menu + 20), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_game_over: {e}"); traceback.print_exc(); return config.MENU
+        utils.log_throttled(
+            "draw_run_game_over_error",
+            5000,
+            logging.ERROR,
+            "Erreur majeure lors du dessin de run_game_over: %s",
+            e,
+        )
+        logger.debug("Traceback run_game_over", exc_info=True)
+        return config.MENU
 
     return next_state
 
@@ -7147,7 +7283,7 @@ def run_hall_of_fame(events, dt, screen, game_state):
     """Affiche l'écran des meilleurs scores."""
     font_default=game_state.get('font_default'); font_medium=game_state.get('font_medium'); font_large=game_state.get('font_large')
     if not all([font_default, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_hall_of_fame")
+        logger.error("Polices manquantes pour run_hall_of_fame")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -7198,7 +7334,15 @@ def run_hall_of_fame(events, dt, screen, game_state):
                         if y_pos > config.SCREEN_HEIGHT * 0.85: break
         utils.draw_text(screen, "ECHAP: Retour Menu", font_default, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.92), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_hall_of_fame: {e}"); traceback.print_exc(); return config.MENU
+        utils.log_throttled(
+            "draw_run_hall_of_fame_error",
+            5000,
+            logging.ERROR,
+            "Erreur majeure lors du dessin de run_hall_of_fame: %s",
+            e,
+        )
+        logger.debug("Traceback run_hall_of_fame", exc_info=True)
+        return config.MENU
 
     return next_state
 
@@ -9435,7 +9579,6 @@ def run_update(events, dt, screen, game_state):
             python = sys.executable
             script_path = sys.argv[0]
             logging.info(f"Restarting process: {python} {script_path}")
-            print(f"Restarting process: {python} {script_path}")
             try:
                 os.execv(python, [python, script_path])
             except Exception as e:
