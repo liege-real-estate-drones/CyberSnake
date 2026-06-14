@@ -3007,6 +3007,7 @@ def run_options(events, dt, screen, game_state):
             axis_h = int(getattr(config, "JOY_AXIS_H", 0))
             inv_v = bool(getattr(config, "JOY_INVERT_V", False))
             inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+            logging.debug(f"[run_options] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
 
             if axis == axis_v:  # Vertical
                 if event.instance_id == p1_id and current_time - last_axis_move_time_v > axis_repeat_delay:
@@ -5197,14 +5198,15 @@ def run_classic_setup(events, dt, screen, game_state):
             return False
 
         elif event.type == pygame.JOYAXISMOTION:
+            axis = event.axis
+            value = event.value
+            threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+            axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+            axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+            inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+            inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+            logging.debug(f"[run_classic_setup] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
             if event.instance_id == p1_id:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
                 if axis == axis_v:  # Vertical
                     if current_time - last_axis_move_time_v > axis_repeat_delay:
                         value = (-value) if inv_v else value
@@ -5897,15 +5899,15 @@ def run_pvp_setup(events, dt, screen, game_state):
             
         # --- Gestion Joystick : Navigation (axes analogiques) ---
         elif event.type == pygame.JOYAXISMOTION:
+            axis = event.axis
+            value = event.value
+            threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+            axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+            axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+            inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+            inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+            logging.debug(f"[run_pvp_setup] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
             if event.instance_id == p1_id:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-
                 if axis == axis_v: # Axe vertical pour HAUT/BAS
                     if current_time - last_axis_move_time_v > axis_repeat_delay:
                         value = (-value) if inv_v else value
