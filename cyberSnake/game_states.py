@@ -2217,8 +2217,7 @@ def run_options(events, dt, screen, game_state):
 
     current_time = pygame.time.get_ticks()
     axis_repeat_delay = 200
-    last_axis_move_time_v = int(game_state.get('last_axis_move_time_options_v', 0) or 0)
-    last_axis_move_time_h = int(game_state.get('last_axis_move_time_options_h', 0) or 0)
+    last_axis_move_time = int(game_state.get('last_axis_move_time_options', 0) or 0)
     selection_index = game_state.get('options_selection_index', 0)
 
     # Initialise les valeurs "pending" à l'entrée
@@ -3000,52 +2999,58 @@ def run_options(events, dt, screen, game_state):
             return False
 
         elif event.type == pygame.JOYAXISMOTION:
-            axis = event.axis
-            value = event.value
-            threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-            axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-            axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-            inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-            inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-            logging.debug(f"[run_options] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
+                axis = event.axis
+                value = event.value
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+                logging.debug(f"[run_options] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
 
-            if axis == axis_v:  # Vertical
-                if event.instance_id == p1_id and current_time - last_axis_move_time_v > axis_repeat_delay:
+                moved = False
+                if axis == axis_v:  # Vertical
                     value = (-value) if inv_v else value
                     if value < -threshold:
                         selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
                         utils.play_sound("eat")
-                        last_axis_move_time_v = current_time
+                        moved = True
                     elif value > threshold:
                         selection_index = (selection_index + 1) % len(menu_items)
                         utils.play_sound("eat")
-                        last_axis_move_time_v = current_time
-            elif axis == axis_h:  # Horizontal
-                if event.instance_id == p1_id and current_time - last_axis_move_time_h > axis_repeat_delay:
+                        moved = True
+                elif axis == axis_h:  # Horizontal
                     value = (-value) if inv_h else value
                     if value < -threshold:
                         adjust_current(-1)
                         utils.play_sound("eat")
-                        last_axis_move_time_h = current_time
+                        moved = True
                     elif value > threshold:
                         adjust_current(1)
                         utils.play_sound("eat")
-                        last_axis_move_time_h = current_time
+                        moved = True
+
+                if moved:
+                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == p1_id and event.hat == 0:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
-                if hat_y != 0 and current_time - last_axis_move_time_v > axis_repeat_delay:
+                moved = False
+                if hat_y != 0:
                     if hat_y > 0:
                         selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
                     else:
                         selection_index = (selection_index + 1) % len(menu_items)
                     utils.play_sound("eat")
-                    last_axis_move_time_v = current_time
-                if hat_x != 0 and current_time - last_axis_move_time_h > axis_repeat_delay:
+                    moved = True
+                if hat_x != 0:
                     adjust_current(1 if hat_x > 0 else -1)
                     utils.play_sound("eat")
-                    last_axis_move_time_h = current_time
+                    moved = True
+                if moved:
+                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == p1_id:
@@ -3103,8 +3108,7 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_music_volume'] = pending_music_volume
     game_state['pending_sound_volume'] = pending_sound_volume
     game_state['options_selection_index'] = selection_index
-    game_state['last_axis_move_time_options_v'] = last_axis_move_time_v
-    game_state['last_axis_move_time_options_h'] = last_axis_move_time_h
+    game_state['last_axis_move_time_options'] = last_axis_move_time
 
     # Draw
     try:
@@ -3610,8 +3614,7 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_sound_volume', None)
         game_state.pop('options_reset_confirm_until', None)
         game_state.pop('options_preview_cache', None)
-        game_state.pop('last_axis_move_time_options_v', None)
-        game_state.pop('last_axis_move_time_options_h', None)
+        game_state.pop('last_axis_move_time_options', None)
 
     game_state['current_state'] = next_state
     return next_state
@@ -5067,8 +5070,8 @@ def run_classic_setup(events, dt, screen, game_state):
             return f"Auto ({snake_style_display_map.get(global_style_key, global_style_key)})"
         return snake_style_display_map.get(style_key, style_key)
 
-    last_axis_move_time_v = int(game_state.get('last_axis_move_time_classic_setup_v', 0) or 0)
-    last_axis_move_time_h = int(game_state.get('last_axis_move_time_classic_setup_h', 0) or 0)
+    selection_index = game_state.get('classic_setup_selection_index', 0)
+    last_axis_move_time = int(game_state.get('last_axis_move_time_classic_setup', 0) or 0)
 
     IDX_START = 0
     IDX_CLASSIC_ARENA = 1
@@ -5168,16 +5171,14 @@ def run_classic_setup(events, dt, screen, game_state):
             utils.play_sound("powerup_pickup")
             apply_choice()
             game_state['classic_setup_selection_index'] = 0
-            game_state['last_axis_move_time_classic_setup_v'] = 0
-            game_state['last_axis_move_time_classic_setup_h'] = 0
+            game_state['last_axis_move_time_classic_setup'] = 0
             game_state['current_state'] = config.NAME_ENTRY_SOLO
             return config.NAME_ENTRY_SOLO
 
         if selection_index == IDX_BACK:
             utils.play_sound("combo_break")
             game_state['classic_setup_selection_index'] = 0
-            game_state['last_axis_move_time_classic_setup_v'] = 0
-            game_state['last_axis_move_time_classic_setup_h'] = 0
+            game_state['last_axis_move_time_classic_setup'] = 0
             game_state['current_state'] = config.MENU
             return config.MENU
 
@@ -5198,52 +5199,58 @@ def run_classic_setup(events, dt, screen, game_state):
             return False
 
         elif event.type == pygame.JOYAXISMOTION:
-            axis = event.axis
-            value = event.value
-            threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-            axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-            axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-            inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-            inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-            logging.debug(f"[run_classic_setup] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
-            if event.instance_id == p1_id:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
+                axis = event.axis
+                value = event.value
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+                logging.debug(f"[run_classic_setup] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
+
+                moved = False
                 if axis == axis_v:  # Vertical
-                    if current_time - last_axis_move_time_v > axis_repeat_delay:
-                        value = (-value) if inv_v else value
-                        if value < -threshold:
-                            selection_index = (selection_index - 1 + menu_len) % menu_len
-                            utils.play_sound("eat")
-                            last_axis_move_time_v = current_time
-                        elif value > threshold:
-                            selection_index = (selection_index + 1) % menu_len
-                            utils.play_sound("eat")
-                            last_axis_move_time_v = current_time
+                    value = (-value) if inv_v else value
+                    if value < -threshold:
+                        selection_index = (selection_index - 1 + menu_len) % menu_len
+                        utils.play_sound("eat")
+                        moved = True
+                    elif value > threshold:
+                        selection_index = (selection_index + 1) % menu_len
+                        utils.play_sound("eat")
+                        moved = True
                 elif axis == axis_h:  # Horizontal
-                    if current_time - last_axis_move_time_h > axis_repeat_delay:
-                        value = (-value) if inv_h else value
-                        if value < -threshold:
-                            adjust_current(-1)
-                            utils.play_sound("eat")
-                            last_axis_move_time_h = current_time
-                        elif value > threshold:
-                            adjust_current(1)
-                            utils.play_sound("eat")
-                            last_axis_move_time_h = current_time
+                    value = (-value) if inv_h else value
+                    if value < -threshold:
+                        adjust_current(-1)
+                        utils.play_sound("eat")
+                        moved = True
+                    elif value > threshold:
+                        adjust_current(1)
+                        utils.play_sound("eat")
+                        moved = True
+
+                if moved:
+                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == p1_id and event.hat == 0:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
-                if hat_y != 0 and current_time - last_axis_move_time_v > axis_repeat_delay:
+                moved = False
+                if hat_y != 0:
                     if hat_y > 0:
                         selection_index = (selection_index - 1 + menu_len) % menu_len
                     else:
                         selection_index = (selection_index + 1) % menu_len
                     utils.play_sound("eat")
-                    last_axis_move_time_v = current_time
-                if hat_x != 0 and current_time - last_axis_move_time_h > axis_repeat_delay:
+                    moved = True
+                if hat_x != 0:
                     adjust_current(1 if hat_x > 0 else -1)
                     utils.play_sound("eat")
-                    last_axis_move_time_h = current_time
+                    moved = True
+                if moved:
+                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == p1_id:
@@ -5262,8 +5269,7 @@ def run_classic_setup(events, dt, screen, game_state):
             if key == pygame.K_ESCAPE:
                 utils.play_sound("combo_break")
                 game_state['classic_setup_selection_index'] = 0
-                game_state['last_axis_move_time_classic_setup_v'] = 0
-                game_state['last_axis_move_time_classic_setup_h'] = 0
+                game_state['last_axis_move_time_classic_setup'] = 0
                 game_state['current_state'] = config.MENU
                 return config.MENU
             if key in (pygame.K_UP, pygame.K_w):
@@ -5282,8 +5288,7 @@ def run_classic_setup(events, dt, screen, game_state):
                 return handle_confirm()
 
     # Persistance intra-session (navigation + choix) - sans impact sur game_options.json
-    game_state['last_axis_move_time_classic_setup_v'] = last_axis_move_time_v
-    game_state['last_axis_move_time_classic_setup_h'] = last_axis_move_time_h
+    game_state['last_axis_move_time_classic_setup'] = last_axis_move_time
     game_state['classic_setup_selection_index'] = selection_index
     game_state['classic_setup_arena'] = pending_classic_arena
     game_state['classic_setup_wall_style'] = pending_wall_style
@@ -5788,8 +5793,7 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     # ---- Variables pour gérer le délai de répétition de l'axe ----
     axis_repeat_delay = 200
-    last_axis_move_time_v = int(game_state.get('last_axis_move_time_pvp_v', 0) or 0)
-    last_axis_move_time_h = int(game_state.get('last_axis_move_time_pvp_h', 0) or 0)
+    last_axis_move_time = int(game_state.get('last_axis_move_time_pvp', 0) or 0)
     current_time = pygame.time.get_ticks()
     # -----------------------------------------------------------------
 
@@ -5899,55 +5903,60 @@ def run_pvp_setup(events, dt, screen, game_state):
             
         # --- Gestion Joystick : Navigation (axes analogiques) ---
         elif event.type == pygame.JOYAXISMOTION:
-            axis = event.axis
-            value = event.value
-            threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-            axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-            axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-            inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-            inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-            logging.debug(f"[run_pvp_setup] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
-            if event.instance_id == p1_id:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
+                axis = event.axis
+                value = event.value
+                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
+                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
+                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
+                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
+                logging.debug(f"[run_pvp_setup] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
+
+                moved = False
                 if axis == axis_v: # Axe vertical pour HAUT/BAS
-                    if current_time - last_axis_move_time_v > axis_repeat_delay:
-                        value = (-value) if inv_v else value
-                        if value < -threshold: # HAUT
-                            pvp_setup_index = (pvp_setup_index - 1 + num_options) % num_options
-                            game_state['pvp_setup_index'] = pvp_setup_index
-                            utils.play_sound("eat")
-                            last_axis_move_time_v = current_time
-                        elif value > threshold: # BAS
-                            pvp_setup_index = (pvp_setup_index + 1) % num_options
-                            game_state['pvp_setup_index'] = pvp_setup_index
-                            utils.play_sound("eat")
-                            last_axis_move_time_v = current_time
+                    value = (-value) if inv_v else value
+                    if value < -threshold: # HAUT
+                        pvp_setup_index = (pvp_setup_index - 1 + num_options) % num_options
+                        game_state['pvp_setup_index'] = pvp_setup_index
+                        utils.play_sound("eat")
+                        moved = True
+                    elif value > threshold: # BAS
+                        pvp_setup_index = (pvp_setup_index + 1) % num_options
+                        game_state['pvp_setup_index'] = pvp_setup_index
+                        utils.play_sound("eat")
+                        moved = True
                 elif axis == axis_h: # Axe horizontal pour GAUCHE/DROITE (modifier valeur)
-                    if current_time - last_axis_move_time_h > axis_repeat_delay:
-                        value = (-value) if inv_h else value
-                        if 0 <= pvp_setup_index < num_options:
-                            change_func = options[pvp_setup_index][2]
-                            if change_func:
-                                try:
-                                    if value < -threshold: # GAUCHE -> diminuer
-                                        change_func(-1); utils.play_sound("shoot_p1")
-                                    elif value > threshold: # DROITE -> augmenter
-                                        change_func(1); utils.play_sound("shoot_p1")
-                                    last_axis_move_time_h = current_time
-                                except Exception as e:
-                                    logging.error(f"Erreur change_func PvP setup via axis: {e}")
+                    value = (-value) if inv_h else value
+                    if 0 <= pvp_setup_index < num_options:
+                        change_func = options[pvp_setup_index][2]
+                        if change_func:
+                            try:
+                                if value < -threshold: # GAUCHE -> diminuer
+                                    change_func(-1); utils.play_sound("shoot_p1")
+                                    moved = True
+                                elif value > threshold: # DROITE -> augmenter
+                                    change_func(1); utils.play_sound("shoot_p1")
+                                    moved = True
+                            except Exception as e:
+                                logging.error(f"Erreur change_func PvP setup via axis: {e}")
+
+                if moved:
+                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == p1_id and event.hat == 0:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
-                if hat_y != 0 and current_time - last_axis_move_time_v > axis_repeat_delay:
+                moved = False
+                if hat_y != 0:
                     if hat_y > 0: # HAUT
                         pvp_setup_index = (pvp_setup_index - 1 + num_options) % num_options
                     else: # BAS
                         pvp_setup_index = (pvp_setup_index + 1) % num_options
                     game_state['pvp_setup_index'] = pvp_setup_index
                     utils.play_sound("eat")
-                    last_axis_move_time_v = current_time
-                if hat_x != 0 and current_time - last_axis_move_time_h > axis_repeat_delay:
+                    moved = True
+                if hat_x != 0:
                     if 0 <= pvp_setup_index < num_options:
                         change_func = options[pvp_setup_index][2]
                         if change_func:
@@ -5955,8 +5964,10 @@ def run_pvp_setup(events, dt, screen, game_state):
                                 if hat_x < 0: change_func(-1) # GAUCHE (diminuer)
                                 else: change_func(1) # DROITE (augmenter)
                                 utils.play_sound("shoot_p1")
-                                last_axis_move_time = current_time
+                                moved = True
                             except Exception as e: logging.error(f"Erreur change_func PvP setup via hat: {e}")
+                if moved:
+                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == p1_id:
@@ -5964,8 +5975,7 @@ def run_pvp_setup(events, dt, screen, game_state):
                     utils.play_sound("combo_break")
                     next_state = config.MAP_SELECTION
                     game_state['current_state'] = next_state
-                    game_state['last_axis_move_time_pvp_v'] = 0
-                    game_state['last_axis_move_time_pvp_h'] = 0
+                    game_state['last_axis_move_time_pvp'] = 0
                     return next_state
 
                 if is_confirm_button(event.button):  # Confirmer
@@ -6048,8 +6058,7 @@ def run_pvp_setup(events, dt, screen, game_state):
         return config.MAP_SELECTION
 
     game_state['pvp_setup_index'] = pvp_setup_index
-    game_state['last_axis_move_time_pvp_v'] = last_axis_move_time_v
-    game_state['last_axis_move_time_pvp_h'] = last_axis_move_time_h
+    game_state['last_axis_move_time_pvp'] = last_axis_move_time
     logging.debug(f"Exiting run_pvp_setup (end of function), next_state: {next_state}") # NOUVEAU LOG
     return next_state
 
