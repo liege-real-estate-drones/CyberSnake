@@ -3847,7 +3847,7 @@ def run_controls_remap(events, dt, screen, game_state):
             if event.type == pygame.JOYAXISMOTION and str(listening_for) in ("AXIS_H", "AXIS_V"):
                 try:
                     v = float(getattr(event, "value", 0.0))
-                    if abs(v) < 0.75:
+                    if abs(v) < 0.40:
                         continue
                 except Exception:
                     continue
