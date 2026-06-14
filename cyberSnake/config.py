@@ -120,7 +120,7 @@ SOLO_SPAWN_RATE_SCORE_STEP = 40
 SOLO_SPAWN_RATE_FACTOR = 0.96
 SOLO_MIN_FOOD_INTERVAL = 2000  # ms
 SOLO_MIN_MINE_INTERVAL = 2500  # ms
-JOYSTICK_THRESHOLD = 0.45 # Seuil pour la détection des axes du joystick
+JOYSTICK_THRESHOLD = 0.35 # Seuil pour la détection des axes du joystick
 
 
 # --- IA: Profils de difficulté (Vs IA / Survie / Démo) ---
@@ -675,8 +675,8 @@ BUTTON_PAUSE = 2               # Pause / Reprendre
 BUTTON_BACK = 8                # Retour/Menu (souvent Select/Back)
 
 # Axes joystick (0-indexed) + inversion
-JOY_AXIS_H = 0
-JOY_AXIS_V = 1
-JOY_INVERT_H = False
+JOY_AXIS_H = 1
+JOY_AXIS_V = 0
+JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '1.1.6'
+VERSION = '1.1.7'
