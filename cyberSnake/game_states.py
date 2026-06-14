@@ -24,6 +24,33 @@ def is_back_button(button):
         return button == 8
 # --- Fin helpers ---
 
+def get_joystick_ids(game_state):
+    """Retourne les identifiants d'instance réels des joysticks J1 et J2 de manière robuste."""
+    p1_joy = game_state.get('joystick_p1')
+    p2_joy = game_state.get('joystick_p2')
+    p1_id, p2_id = 0, 1  # Fallbacks par défaut
+
+    if p1_joy:
+        try:
+            p1_id = p1_joy.get_instance_id()
+        except AttributeError:
+            try:
+                p1_id = p1_joy.get_id()
+            except Exception:
+                p1_id = 0
+                
+    if p2_joy:
+        try:
+            p2_id = p2_joy.get_instance_id()
+        except AttributeError:
+            try:
+                p2_id = p2_joy.get_id()
+            except Exception:
+                p2_id = 1
+                
+    return p1_id, p2_id
+
+
 # --- Configuration Logging (Assurer que c'est fait, idéalement dans main.py mais ajout ici par sécurité) ---
 # Décommentez si besoin de configurer le logging ici, sinon supposez qu'il est configuré dans main.py
 # logging.basicConfig(level=logging.DEBUG, filename='cybersnake_debug.log', filemode='a', format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
@@ -1711,6 +1738,7 @@ def reset_game(game_state):
 def run_menu(events, dt, screen, game_state):
     """Gère l'écran du menu principal."""
     logging.debug("Entering run_menu")
+    p1_id, p2_id = get_joystick_ids(game_state)
     menu_selection_index = game_state.get('menu_selection_index', 0) # Commence à 0 maintenant
     base_path = game_state.get('base_path', "")
     font_small = game_state.get('font_small')
@@ -1782,13 +1810,9 @@ def run_menu(events, dt, screen, game_state):
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.JOYBUTTONDOWN:
-                # User specifically asked for "Button 1" to close.
-                # Button 1 is mapped to primary action/confirm.
-                if is_confirm_button(event.button):
+                if event.instance_id == p1_id and is_confirm_button(event.button):
                     game_state['show_version_popup'] = False
                     utils.play_sound("powerup_pickup")
-                    # Clear events or return to prevent fall-through processing in the same frame
-                    # Returning creates a 1-frame delay which is safe
                     return next_state
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER or event.key == pygame.K_ESCAPE:
@@ -1797,12 +1821,6 @@ def run_menu(events, dt, screen, game_state):
                     return next_state
 
         # If popup is still showing, we skip normal menu processing AND drawing (except the overlay part)
-        # But we need to draw the menu first so the overlay is ON TOP.
-        # So we skip the input processing block below, but we must fall through to the drawing code.
-        # Actually, if we return next_state above, we skip drawing for this frame. That's fine.
-        # If we didn't return (no input), we fall through.
-        # We need to ensure normal menu input processing is skipped.
-        # Clearing events ensures the normal loop below sees an empty list.
         events = []
 
     # --- Gestion des événements (Normal Menu) ---
@@ -1813,7 +1831,7 @@ def run_menu(events, dt, screen, game_state):
             # --- Gestion Joystick Menu ---
         elif event.type == pygame.JOYBUTTONDOWN:
             logging.debug(f"JOYBUTTONDOWN event: instance_id={event.instance_id}, button={event.button}")
-            if event.instance_id == 0: # Vérifie manette 0
+            if event.instance_id == p1_id: # Vérifie manette 1
                 # Utilise bouton 0 ou 1 pour confirmer
                 if is_confirm_button(event.button):
                     try:
@@ -1824,7 +1842,6 @@ def run_menu(events, dt, screen, game_state):
                         if not (0 <= menu_selection_index < num_options):
                             logging.error(f"run_menu: JOYBUTTONDOWN confirm - IndexError: L'index de sélection ({menu_selection_index}) est hors des limites pour menu_options (taille: {num_options}).")
                             next_state = config.MENU # Reste dans le menu si l'index est déjà mauvais
-                            # La fonction continuera et retournera 'next_state' (config.MENU) à la fin.
                         else:
                             selected_option_tuple = menu_options[menu_selection_index]
                             selected_option = selected_option_tuple[0]
@@ -1865,9 +1882,6 @@ def run_menu(events, dt, screen, game_state):
                     except Exception as e:
                         logging.error(f"run_menu: JOYBUTTONDOWN confirm - Exception inattendue: {e}", exc_info=True)
                         next_state = config.MENU
-                    # Si une exception a eu lieu, le 'return targeted_next_state' n'a pas été atteint.
-                    # 'next_state' (variable locale à run_menu) est maintenant config.MENU.
-                    # La fonction continuera jusqu'au 'return next_state' final.
 
                 elif event.button == 4: # Bouton 4 pour changer musique
                     music_num = (utils.selected_music_index % 9) + 1
@@ -1880,10 +1894,9 @@ def run_menu(events, dt, screen, game_state):
                 elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
                     return False # Quitte le jeu
-        # --- Fin de la gestion JOYBUTTONDOWN pour instance_id == 0 ---
         elif event.type == pygame.JOYAXISMOTION:
-            # Vérifie si l'événement vient du joystick 0 et si assez de temps s'est écoulé
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            # Vérifie si l'événement vient du joystick J1 et si assez de temps s'est écoulé
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = config.JOYSTICK_THRESHOLD # Utilise la valeur de config
@@ -1904,8 +1917,8 @@ def run_menu(events, dt, screen, game_state):
                         last_axis_move_time = current_time # Met à jour le temps
 
         elif event.type == pygame.JOYHATMOTION:
-            # Vérifie si l'événement vient du joystick 0, hat 0 et si assez de temps s'est écoulé
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            # Vérifie si l'événement vient du joystick J1, hat 0 et si assez de temps s'est écoulé
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 # Utilise hat_y pour HAUT/BAS
                 if hat_y > 0: # HAUT PHYSIQUE
@@ -1918,8 +1931,8 @@ def run_menu(events, dt, screen, game_state):
                     last_axis_move_time = current_time # Met à jour le temps
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0: # Vérifie manette 0
-                # Utilise bouton 0 ou 1 pour confirmer (A/B ou Croix/Rond) - Adapter si besoin
+            if event.instance_id == p1_id: # Vérifie manette J1
+                # Utilise bouton 0 ou 1 pour confirmer (A/B ou Croix/Rond)
                 if is_confirm_button(event.button):
                     try:
                         selected_option_tuple = menu_options[menu_selection_index]
@@ -2196,6 +2209,7 @@ def run_options(events, dt, screen, game_state):
     font_default = game_state.get('font_default')
     font_medium = game_state.get('font_medium')
     return_state = game_state.get('options_return_state', config.MENU)
+    p1_id, p2_id = get_joystick_ids(game_state)
 
     if not all([font_small, font_default, font_medium]):
         print("Erreur: Polices manquantes pour run_options")
@@ -2985,7 +2999,7 @@ def run_options(events, dt, screen, game_state):
             return False
 
         elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
@@ -3016,7 +3030,7 @@ def run_options(events, dt, screen, game_state):
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay and event.hat == 0:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay and event.hat == 0:
                 hat_x, hat_y = event.value
                 if hat_y > 0:
                     selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
@@ -3032,7 +3046,7 @@ def run_options(events, dt, screen, game_state):
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
+            if event.instance_id == p1_id:
                 if is_back_button(event.button):
                     next_state = return_state
                     game_state.pop('options_return_state', None)
@@ -3601,6 +3615,7 @@ def run_options(events, dt, screen, game_state):
 def run_controls_remap(events, dt, screen, game_state):
     """Écran de remapping des contrôles (joystick) basé sur controls.json."""
     base_path = game_state.get('base_path', "")
+    p1_id, p2_id = get_joystick_ids(game_state)
     return_state = game_state.get('controls_return_state', config.OPTIONS)
     font_small = game_state.get('font_small')
     font_default = game_state.get('font_default')
@@ -3852,7 +3867,7 @@ def run_controls_remap(events, dt, screen, game_state):
 
         # Navigation (joystick)
         if event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 if hat_y > 0:
                     selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
@@ -3867,7 +3882,7 @@ def run_controls_remap(events, dt, screen, game_state):
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis_v = int(getattr(config, "JOY_AXIS_V", 1))
                 inv_v = bool(getattr(config, "JOY_INVERT_V", False))
                 if int(getattr(event, "axis", -1)) == axis_v:
@@ -3884,7 +3899,7 @@ def run_controls_remap(events, dt, screen, game_state):
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
+            if event.instance_id == p1_id:
                 if is_back_button(event.button):
                     return return_state
                 if is_confirm_button(event.button):
@@ -4062,6 +4077,8 @@ def run_name_entry_solo(events, dt, screen, game_state):
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
+    p1_id, p2_id = get_joystick_ids(game_state)
+    allowed_joysticks = {p1_id}
     
     # Positions pour le clavier virtuel
     vk_row = game_state.get('vk_row', 0)
@@ -4086,11 +4103,9 @@ def run_name_entry_solo(events, dt, screen, game_state):
         # Reset le nom SEULEMENT S'IL N'EXISTE PAS. Sinon, on le garde.
         if 'player1_name_input' not in game_state:
             game_state['player1_name_input'] = ""
-        # --- AJOUTER LES LIGNES SUIVANTES ICI ---
         game_state['input_active_solo'] = True 
         input_active = True # Mettre à jour la variable locale aussi
         logging.debug("run_name_entry_solo: First entry, setting input_active_solo to True.")
-        # --- FIN DES LIGNES À AJOUTER ---
     
     # Période d'initialisation (1.5 secondes) - ignorer les entrées initiales
     entry_delay = 1500 # ms
@@ -4116,10 +4131,6 @@ def run_name_entry_solo(events, dt, screen, game_state):
     cursor_char = "_" if (pygame.time.get_ticks() // 500) % 2 == 0 else " "
     next_state = config.NAME_ENTRY_SOLO
 
-    # Période d'initialisation (1.5 secondes) - ignorer les entrées initiales
-    entry_delay = 1500
-    init_period = current_time - game_state.get('name_entry_start_time_solo', 0) < entry_delay
-    
     for event in events:
         if event.type == pygame.QUIT:
             return False
@@ -4130,7 +4141,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
 
         # --- Gestion Joystick pour Navigation Clavier Virtuel ---
         elif event.type == pygame.JOYAXISMOTION:
-            target_player_joystick_id = 0  # En mode solo, c'est toujours le joystick 0
+            target_player_joystick_id = p1_id  # En mode solo, c'est le joystick J1
             if event.instance_id == target_player_joystick_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
@@ -4209,7 +4220,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 game_state['input_active_solo'] = input_active
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
+            if event.instance_id == p1_id:
                 if is_back_button(event.button):  # Retour menu
                     logging.info("Joystick back pressed in name entry solo, returning to MENU.")
                     next_state = config.MENU
@@ -4274,28 +4285,19 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 next_state = config.MAP_SELECTION # Après le nom, on choisit la carte
                 return next_state
             elif key == pygame.K_BACKSPACE:
-                if current_input_value: # S'assurer qu'il y a quelque chose à effacer
-                    new_value = current_input_value[:-1]
-                    if stage == 1:
-                        game_state['player1_name_input'] = new_value
-                        player1_name_input = new_value # Mettre à jour la copie locale
-                    else: # stage == 2
-                        game_state['player2_name_input'] = new_value
-                        player2_name_input = new_value # Mettre à jour la copie locale
-                    current_input_value = new_value # <--- MISE À JOUR ICI
+                if player1_name_input: # S'assurer qu'il y a quelque chose à effacer
+                    player1_name_input = player1_name_input[:-1]
+                    game_state['player1_name_input'] = player1_name_input
                     utils.play_sound("combo_break")
             elif key == pygame.K_ESCAPE:
                 next_state = config.MENU
                 utils.play_sound("combo_break")
                 return next_state
-            elif not game_state.get('input_active_pvp', False) and hasattr(event, 'unicode') and event.unicode.isprintable():
-                # Le reste du bloc reste identique
-                if len(current_input_value) < 15: # current_input_value est soit player1_name_input soit player2_name_input
-                    new_value = current_input_value + event.unicode
-                    if stage == 1: game_state['player1_name_input'] = new_value
-                    else: game_state['player2_name_input'] = new_value
+            elif game_state.get('input_active_solo', False) and hasattr(event, 'unicode') and event.unicode.isprintable():
+                if len(player1_name_input) < 15:
+                    player1_name_input += event.unicode
+                    game_state['player1_name_input'] = player1_name_input
                     utils.play_sound("name_input_char")
-                    current_input_value = new_value
 
 
     # Dessin de l'écran
@@ -4446,6 +4448,7 @@ def run_map_selection(events, dt, screen, game_state):
     """Gère l'écran de sélection de la carte, incluant aléatoire et favoris."""
     global _current_random_map_walls, _favorite_maps, _map_keys_display, _map_selection_needs_update
 
+    p1_id, p2_id = get_joystick_ids(game_state)
     map_selection_index = game_state.get('map_selection_index', 0)
     current_game_mode = game_state.get('current_game_mode')
     font_small = game_state.get('font_small')
@@ -4525,7 +4528,7 @@ def run_map_selection(events, dt, screen, game_state):
 
         # --- AJOUT: Gestion Joystick Navigation (Map Selection) ---
         elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
@@ -4545,7 +4548,7 @@ def run_map_selection(events, dt, screen, game_state):
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 if hat_y > 0: # HAUT
                     map_selection_index = (map_selection_index - 1 + num_maps_total) % num_maps_total
@@ -4559,7 +4562,7 @@ def run_map_selection(events, dt, screen, game_state):
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0 and is_confirm_button(event.button): # Confirmer
+            if event.instance_id == p1_id and is_confirm_button(event.button): # Confirmer
                 try:
                     selected_key_or_label = _map_keys_display[map_selection_index]
                     game_state['selected_map_key'] = selected_key_or_label
@@ -4606,7 +4609,7 @@ def run_map_selection(events, dt, screen, game_state):
                     next_state = config.MENU
                     game_state['last_axis_move_time_map'] = 0
                     return next_state
-            elif event.instance_id == 0 and _map_keys_display[map_selection_index] == "Aléatoire" and (event.button == 2 or event.button == 3): # Boutons Gauche/Droite (ex: X/Y ou Carré/Triangle) pour regénérer
+            elif event.instance_id == p1_id and _map_keys_display[map_selection_index] == "Aléatoire" and (event.button == 2 or event.button == 3): # Boutons Gauche/Droite (ex: X/Y ou Carré/Triangle) pour regénérer
                  try:
                      _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
                      logging.info("Nouvelle carte aléatoire générée via joystick.")
@@ -4614,14 +4617,14 @@ def run_map_selection(events, dt, screen, game_state):
                  except Exception as e:
                      logging.error(f"Erreur regénération carte aléatoire via joystick: {e}")
                      _current_random_map_walls = []
-            elif event.instance_id == 0 and _map_keys_display[map_selection_index] == "Aléatoire" and event.button == 6: # Bouton 6 pour Sauvegarder Favori
+            elif event.instance_id == p1_id and _map_keys_display[map_selection_index] == "Aléatoire" and event.button == 6: # Bouton 6 pour Sauvegarder Favori
                 if _current_random_map_walls:
                     success, saved_name = utils.save_favorite_map(_current_random_map_walls, base_path)
                     if success:
                         utils.play_sound("objective_complete"); _map_selection_needs_update = True
                     else: utils.play_sound("combo_break")
                 else: utils.play_sound("combo_break")
-            elif event.instance_id == 0 and event.button == 7: # Bouton 7 pour Supprimer Favori
+            elif event.instance_id == p1_id and event.button == 7: # Bouton 7 pour Supprimer Favori
                 selected_key_or_label = _map_keys_display[map_selection_index]
                 if selected_key_or_label in _favorite_maps:
                     # Appelle la fonction de suppression
@@ -4632,7 +4635,7 @@ def run_map_selection(events, dt, screen, game_state):
                         utils.play_sound("combo_break") # Son d'échec
                 else:
                     utils.play_sound("combo_break") # Pas un favori, ne peut pas supprimer
-            elif event.instance_id == 0 and is_back_button(event.button): # Retour
+            elif event.instance_id == p1_id and is_back_button(event.button): # Retour
                 _current_random_map_walls = None; _map_selection_needs_update = True
                 if current_game_mode == config.MODE_PVP: next_state = config.MENU
                 else: next_state = config.NAME_ENTRY_SOLO
@@ -4964,6 +4967,7 @@ def run_map_selection(events, dt, screen, game_state):
 
 def run_classic_setup(events, dt, screen, game_state):
     """Écran rapide de setup Classique (taille, bordures, style serpent)."""
+    p1_id, p2_id = get_joystick_ids(game_state)
     font_small = game_state.get('font_small')
     font_default = game_state.get('font_default')
     font_medium = game_state.get('font_medium')
@@ -5188,7 +5192,7 @@ def run_classic_setup(events, dt, screen, game_state):
             return False
 
         elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
@@ -5218,7 +5222,7 @@ def run_classic_setup(events, dt, screen, game_state):
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 if hat_y > 0:
                     selection_index = (selection_index - 1 + menu_len) % menu_len
@@ -5234,7 +5238,7 @@ def run_classic_setup(events, dt, screen, game_state):
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
+            if event.instance_id == p1_id:
                 if is_back_button(event.button):
                     utils.play_sound("combo_break")
                     game_state['classic_setup_selection_index'] = 0
@@ -5595,6 +5599,7 @@ def run_classic_setup(events, dt, screen, game_state):
 
 def run_vs_ai_setup(events, dt, screen, game_state):
     """Écran simple de setup Vs IA (choix de difficulté avant de lancer la partie)."""
+    p1_id, p2_id = get_joystick_ids(game_state)
     font_small = game_state.get('font_small')
     font_default = game_state.get('font_default')
     font_medium = game_state.get('font_medium')
@@ -5665,7 +5670,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
                 return config.NAME_ENTRY_SOLO
 
         elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
@@ -5685,7 +5690,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 if hat_x < 0:
                     idx = (idx - 1) % len(keys)
@@ -5699,7 +5704,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
+            if event.instance_id == p1_id:
                 if is_back_button(event.button):
                     utils.play_sound("combo_break")
                     game_state['current_state'] = config.MENU
@@ -5765,6 +5770,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
 def run_pvp_setup(events, dt, screen, game_state):
     """Gère l'écran de configuration des règles PvP."""
     logging.debug("Entering run_pvp_setup") # NOUVEAU LOG
+    p1_id, p2_id = get_joystick_ids(game_state)
     pvp_setup_index = game_state.get('pvp_setup_index', 0)
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
@@ -5881,7 +5887,7 @@ def run_pvp_setup(events, dt, screen, game_state):
             
         # --- Gestion Joystick : Navigation (axes analogiques) ---
         elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis = event.axis
                 value = event.value
                 threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
@@ -5917,7 +5923,7 @@ def run_pvp_setup(events, dt, screen, game_state):
                                 logging.error(f"Erreur change_func PvP setup via axis: {e}")
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 if hat_y > 0: # HAUT
                     pvp_setup_index = (pvp_setup_index - 1 + num_options) % num_options
@@ -5941,7 +5947,7 @@ def run_pvp_setup(events, dt, screen, game_state):
                             except Exception as e: logging.error(f"Erreur change_func PvP setup via hat: {e}")
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
+            if event.instance_id == p1_id:
                 if is_back_button(event.button):  # Retour carte
                     utils.play_sound("combo_break")
                     next_state = config.MAP_SELECTION
@@ -6039,13 +6045,14 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     player2_name_input = game_state.get('player2_name_input', "Alex")
     stage = game_state.get('pvp_name_entry_stage', 1) # 1 pour J1, 2 pour J2
 
+    p1_id, p2_id = get_joystick_ids(game_state)
     # Joysticks autorisés pour cette étape (J1 puis J2). On garde J1 en secours si J2 est absent.
-    allowed_joysticks = {0} if stage == 1 else {1}
+    allowed_joysticks = {p1_id} if stage == 1 else {p2_id}
     try:
         if stage == 2 and pygame.joystick.get_count() < 2:
-            allowed_joysticks.add(0)
+            allowed_joysticks.add(p1_id)
     except Exception:
-        allowed_joysticks.add(0)
+        allowed_joysticks.add(p1_id)
     
     # Positions pour le clavier virtuel
     vk_row = game_state.get('vk_row_pvp', 0)
@@ -6159,7 +6166,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 game_state['input_active_pvp'] = input_active
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id in allowed_joysticks and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 
                 if hat_y > 0: # HAUT
@@ -6353,7 +6360,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     if stage == 1: game_state['player1_name_input'] = new_value
                     else: game_state['player2_name_input'] = new_value
                     utils.play_sound("combo_break")
-                elif not game_state.get('input_active_pvp', False) and hasattr(event, 'unicode') and event.unicode.isprintable():
+                elif game_state.get('input_active_pvp', False) and hasattr(event, 'unicode') and event.unicode.isprintable():
                  # current_input_value est ici la valeur avant cette modification
                  if len(current_input_value) < 15:
                     new_value = current_input_value + event.unicode
@@ -6530,6 +6537,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
 def run_pause(events, dt, screen, game_state):
     """Gère l'écran de pause (menu)."""
     base_path = game_state.get('base_path', '')
+    p1_id, p2_id = get_joystick_ids(game_state)
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
@@ -6649,7 +6657,7 @@ def run_pause(events, dt, screen, game_state):
             return False
 
         elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
                 axis_v = int(getattr(config, "JOY_AXIS_V", 1))
                 inv_v = bool(getattr(config, "JOY_INVERT_V", False))
                 if int(getattr(event, "axis", -1)) == axis_v:  # Vertical
@@ -6665,7 +6673,7 @@ def run_pause(events, dt, screen, game_state):
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == 0 and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 if hat_y > 0:
                     selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
@@ -6680,7 +6688,7 @@ def run_pause(events, dt, screen, game_state):
                     pass
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0:
+            if event.instance_id == p1_id:
                 button = event.button
 
                 # Raccourcis rapides
@@ -6830,6 +6838,7 @@ def run_pause(events, dt, screen, game_state):
 
 def run_game_over(events, dt, screen, game_state):
     """Gère l'écran de fin de partie avec un menu détaillé des résultats."""
+    p1_id, p2_id = get_joystick_ids(game_state)
     player_snake = game_state.get('player_snake'); player2_snake = game_state.get('player2_snake')
     current_game_mode = game_state.get('current_game_mode'); survival_wave = game_state.get('survival_wave', 0)
     pvp_reason = game_state.get('pvp_game_over_reason'); pvp_kills_target = game_state.get('pvp_target_kills', config.PVP_DEFAULT_KILLS)
@@ -6937,7 +6946,7 @@ def run_game_over(events, dt, screen, game_state):
             allow_input = False
             if current_game_mode == config.MODE_PVP:
                 allow_input = True # En PvP, J1 et J2 peuvent naviguer
-            elif event.instance_id == 0:
+            elif event.instance_id == p1_id:
                 allow_input = True # En Solo/VsAI/Survie, seul J1 peut naviguer
 
             if allow_input and current_time - last_axis_move_time > axis_repeat_delay:
@@ -6981,7 +6990,7 @@ def run_game_over(events, dt, screen, game_state):
             allow_confirm = False
             if current_game_mode == config.MODE_PVP:
                 allow_confirm = True
-            elif event.instance_id == 0:
+            elif event.instance_id == p1_id:
                 allow_confirm = True
 
             # FIX: Force support for Button 1 (Shoot) as confirm button, even if config varies
@@ -7145,6 +7154,7 @@ def run_game_over(events, dt, screen, game_state):
 
 def run_hall_of_fame(events, dt, screen, game_state):
     """Affiche l'écran des meilleurs scores."""
+    p1_id, p2_id = get_joystick_ids(game_state)
     font_default=game_state.get('font_default'); font_medium=game_state.get('font_medium'); font_large=game_state.get('font_large')
     if not all([font_default, font_medium, font_large]):
         print("Erreur: Polices manquantes pour run_hall_of_fame")
@@ -7165,7 +7175,7 @@ def run_hall_of_fame(events, dt, screen, game_state):
         if event.type == pygame.QUIT: return False
         # --- AJOUT: Gestion Joystick Hall of Fame ---
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == 0 and is_back_button(event.button): # Retour menu
+            if event.instance_id == p1_id and is_back_button(event.button): # Retour menu
                 logging.info("Joystick button 8 pressed in Hall of Fame, returning to MENU.")
                 next_state = config.MENU; utils.play_sound("combo_break"); return next_state
         # --- FIN AJOUT ---
@@ -7692,6 +7702,7 @@ def run_demo(events, dt, screen, game_state):
 def run_game(events, dt, screen, game_state):
     """Gère la logique principale du jeu (état PLAYING)."""
     next_state = config.PLAYING
+    p1_id, p2_id = get_joystick_ids(game_state)
 
     # --- Accès aux variables d'état ---
     player_snake = game_state.get('player_snake')
@@ -7888,9 +7899,9 @@ def run_game(events, dt, screen, game_state):
         # --- Gestion Joystick Mouvement (AVEC LOGGING) ---
         elif event.type == pygame.JOYAXISMOTION:
             target_snake = None
-            if event.instance_id == 0 and player_snake and player_snake.alive:
+            if event.instance_id == p1_id and player_snake and player_snake.alive:
                 target_snake = player_snake
-            elif event.instance_id == 1 and current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
+            elif event.instance_id == p2_id and current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
                 target_snake = player2_snake
 
             if target_snake:
@@ -7921,9 +7932,9 @@ def run_game(events, dt, screen, game_state):
 
         elif event.type == pygame.JOYHATMOTION:
             target_snake_hat = None
-            if event.instance_id == 0 and player_snake and player_snake.alive:
+            if event.instance_id == p1_id and player_snake and player_snake.alive:
                 target_snake_hat = player_snake
-            elif event.instance_id == 1 and current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
+            elif event.instance_id == p2_id and current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
                 target_snake_hat = player2_snake
 
             if target_snake_hat and event.hat == 0:
@@ -7947,7 +7958,7 @@ def run_game(events, dt, screen, game_state):
         # --- Gestion Boutons Joystick J1 (AVEC LOGGING) ---
         elif event.type == pygame.JOYBUTTONDOWN:
              # --- Gestion Boutons Joystick J1 ---
-            if player_snake and player_snake.alive and event.instance_id == 0:
+            if player_snake and player_snake.alive and event.instance_id == p1_id:
                 button = event.button
                 dash_button = int(getattr(config, 'BUTTON_SECONDARY_ACTION', 2))
                 shoot_button = int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1))
@@ -8012,7 +8023,7 @@ def run_game(events, dt, screen, game_state):
                  # --- END NEW BUTTON MAPPING ---
 
              # --- START: Player 2 Joystick Button Handling (PvP) ---
-            elif current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and event.instance_id == 1:
+            elif current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and event.instance_id == p2_id:
                 button = event.button
                 dash_button = int(getattr(config, 'BUTTON_SECONDARY_ACTION', 2))
                 shoot_button = int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1))
