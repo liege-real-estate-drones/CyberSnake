@@ -73,11 +73,11 @@ DEFAULT_CONTROLS = {
         "BACK": 8,
     },
     "axes": {
-        "H": 1,
-        "V": 0,
+        "H": 0,
+        "V": 1,
     },
     "invert_axis": {
-        "H": 1,
+        "H": 0,
         "V": 0,
     },
     "threshold": 0.45,
@@ -134,6 +134,23 @@ def load_controls(base_path=""):
     filename = getattr(config, "CONTROLS_FILE", "controls.json")
     file_path = os.path.join(base_path, filename)
     loaded = read_json_or_default(file_path, DEFAULT_CONTROLS)
+    
+    # Auto-migration des anciens axes par défaut obsolètes (H=1, V=0) vers le standard (H=0, V=1)
+    if isinstance(loaded, dict) and "axes" in loaded:
+        axes = loaded["axes"]
+        if isinstance(axes, dict) and axes.get("H") == 1 and axes.get("V") == 0:
+            inv = loaded.get("invert_axis", {})
+            if isinstance(inv, dict) and inv.get("H") == 1 and inv.get("V") == 0:
+                logging.info("Auto-migration des axes manette obsolètes (H:1, V:0) vers le standard (H:0, V:1)")
+                loaded["axes"] = {"H": 0, "V": 1}
+                loaded["invert_axis"] = {"H": 0, "V": 0}
+                try:
+                    # Enregistre immédiatement la version migrée
+                    to_save = _deep_merge_dict(DEFAULT_CONTROLS, loaded)
+                    safe_write_json(file_path, to_save)
+                except Exception as e:
+                    logging.error(f"Erreur lors de la sauvegarde après migration des contrôles: {e}")
+                    
     return _deep_merge_dict(DEFAULT_CONTROLS, loaded)
 
 

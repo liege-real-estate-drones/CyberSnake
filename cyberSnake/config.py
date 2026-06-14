@@ -675,8 +675,8 @@ BUTTON_PAUSE = 2               # Pause / Reprendre
 BUTTON_BACK = 8                # Retour/Menu (souvent Select/Back)
 
 # Axes joystick (0-indexed) + inversion
-JOY_AXIS_H = 1
-JOY_AXIS_V = 0
-JOY_INVERT_H = True
+JOY_AXIS_H = 0
+JOY_AXIS_V = 1
+JOY_INVERT_H = False
 JOY_INVERT_V = False
-VERSION = '1.1.4'
+VERSION = '1.1.5'
