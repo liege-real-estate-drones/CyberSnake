@@ -16,6 +16,12 @@ reconfigurer.
 lancé avant de cacher les encodeurs d'origine : hotkeygen plante s'il démarre après.
 Ne pas lancer le service plus tôt que Batocera (S99).
 
+**Boutons câblés différemment d'un joueur à l'autre** (ex. Player et Coin inversés sur J1) :
+dans `/userdata/system/borne-manettes.json`, ajouter au joueur concerné
+`"boutons": {"296": 297, "297": 296}` (code physique -> code envoyé aux jeux), puis
+redémarrer le service. Les deux joueurs partagent ainsi le même réglage de boutons dans
+EmulationStation.
+
 ## Pistolets Sinden J1 / J2
 
 **Le problème :** Batocera crée un « Sinden lightgun » par pistolet dans l'ordre où ils

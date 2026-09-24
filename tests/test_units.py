@@ -219,6 +219,28 @@ class TestBorneManettes(unittest.TestCase):
         self.assertFalse(borne_manettes.in_sysfs_order([99, 100]))  # « input100 » < « input99 »
         self.assertTrue(borne_manettes.in_sysfs_order([100, 101]))
 
+    def test_swapped_buttons_are_fixed_on_the_copy(self):
+        class Ev:
+            def __init__(self, t, c, v):
+                self.type, self.code, self.value = t, c, v
+
+        class Dev:
+            def read(self):
+                return [Ev(1, 296, 1), Ev(1, 290, 1), Ev(3, 0, 12)]
+
+        class UI:
+            def __init__(self):
+                self.out = []
+
+            def write(self, t, c, v):
+                self.out.append((t, c, v))
+
+        s = borne_manettes.Slot({"player": 1, "phys": "x", "boutons": {"296": 297, "297": 296}})
+        s.dev, s.ui = Dev(), UI()
+        s.forward()
+        self.assertEqual(s.ui.out, [(1, 297, 1), (1, 290, 1), (3, 0, 12)])  # Axes jamais touchés
+        self.assertIn(296, s.pressed)  # L'urgence Select + Start suit les boutons physiques
+
     def test_panic_combo(self):
         s = borne_manettes.Slot({"player": 1, "phys": "x"})
         s.pressed = {296: 100.0, 297: 101.0}
