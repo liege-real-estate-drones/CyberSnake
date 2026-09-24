@@ -60,6 +60,7 @@ DEFAULT_GAME_OPTIONS = {
     "sound_volume": 0.6,
     # UI
     "show_fps": False,
+    "visual_fx": "standard",
     "ui_scale": "normal",
     "hud_mode": "normal",
 }
@@ -107,6 +108,49 @@ def _deep_merge_dict(defaults, loaded):
             merged[key] = loaded_value
 
     return merged
+
+
+# --- Polices du jeu (fichiers inclus dans fonts/, licence OFL) ---
+FONT_FILES = {
+    "display": "Orbitron.ttf",               # Titres
+    "text": "ShareTechMono-Regular.ttf",     # Menus / textes
+}
+# (police, taille) par rôle : hauteurs de ligne identiques à l'ancienne police
+# pour conserver toutes les mises en page existantes.
+FONT_ROLES = {
+    "small": ("text", 15),
+    "default": ("text", 21),
+    "medium": ("text", 31),
+    "large": ("display", 57),
+    "title": ("display", 71),
+}
+LEGACY_FONT_SIZES = {"small": 18, "default": 24, "medium": 36, "large": 72, "title": 90}
+
+
+def load_fonts(base_path="", scale_factor=1.0):
+    """Charge les polices du jeu. Repli sur la police système si les fichiers manquent."""
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    def _size(base):
+        return max(12, int(round(float(base) * float(scale_factor or 1.0))))
+
+    fonts = {}
+    for role, (family, base_size) in FONT_ROLES.items():
+        font = None
+        path = os.path.join(base_path, "fonts", FONT_FILES[family])
+        try:
+            if os.path.exists(path):
+                font = pygame.font.Font(path, _size(base_size))
+        except Exception as e:
+            logging.warning(f"Police {path} illisible: {e}")
+        if font is None:
+            try:
+                font = pygame.font.SysFont("Consolas", _size(LEGACY_FONT_SIZES[role]))
+            except Exception:
+                font = pygame.font.Font(None, _size(LEGACY_FONT_SIZES[role]))
+        fonts[role] = font
+    return fonts
 
 
 def load_game_options(base_path=""):

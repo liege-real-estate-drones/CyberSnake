@@ -44,6 +44,10 @@ try:
     import utils
     import game_objects
     import game_states
+    import menu_input
+    import fx
+    import screens
+    import progress
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -87,6 +91,32 @@ def _handle_joystick_removed(game_state, instance_id):
             game_state[f'joystick_{slot}'] = None
             game_state[f'joystick_{slot}_name'] = f"Aucun joystick {slot.upper()} détecté"
             game_state[f'num_buttons_{slot}'] = 0
+
+
+def _log_hardware_info():
+    """Écrit un résumé matériel dans le journal (utile pour le diagnostic à distance)."""
+    try:
+        import platform
+        cpu = platform.processor() or ""
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if line.lower().startswith("model name"):
+                        cpu = line.split(":", 1)[1].strip()
+                        break
+        except Exception:
+            pass
+        mem = ""
+        try:
+            with open("/proc/meminfo", "r") as f:
+                mem = f.readline().split(":", 1)[1].strip()
+        except Exception:
+            pass
+        logging.info(f"[MATERIEL] OS: {platform.platform()} | Python {platform.python_version()} | pygame {pygame.version.ver} (SDL {'.'.join(map(str, pygame.get_sdl_version()))})")
+        logging.info(f"[MATERIEL] CPU: {cpu} x{os.cpu_count()} | RAM: {mem}")
+        logging.info(f"[MATERIEL] Vidéo: driver={pygame.display.get_driver()} écran={config.SCREEN_WIDTH}x{config.SCREEN_HEIGHT} grille={config.GRID_SIZE}px")
+    except Exception as e:
+        logging.warning(f"Infos matériel indisponibles: {e}")
 
 
 def main():
@@ -162,6 +192,11 @@ def main():
     # --- Chargement Options (vidéo) ---
     grid_size_override = None
     try:
+        progress.load(base_path_assets)
+        progress.register_colors_in_config()
+    except Exception as e:
+        logging.warning(f"Progression (progress.json) non chargée: {e}", exc_info=True)
+    try:
         opts = utils.load_game_options(base_path_assets)
         config.SHOW_GRID = bool(opts.get("show_grid", getattr(config, "SHOW_GRID", True)))
         config.SNAKE_STYLE = str(opts.get("snake_style", getattr(config, "SNAKE_STYLE", "sprites")))
@@ -210,6 +245,7 @@ def main():
 
         config.SCREEN_SHAKE_ENABLED = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         config.SHOW_FPS = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
+        config.apply_visual_fx(opts.get("visual_fx", "standard"))
 
         ui_scale_key = str(opts.get("ui_scale", getattr(config, "UI_SCALE", "normal"))).strip().lower()
         ui_scale_map = {"small": 0.9, "normal": 1.0, "large": 1.15}
@@ -283,6 +319,7 @@ def main():
         pygame.display.set_caption("Cyber Snake Duel - Fusion") # Titre simplifié
         clock = pygame.time.Clock()
         logging.info("Fenêtre et horloge créées.")
+        _log_hardware_info()
     except pygame.error as e:
         logging.critical(f"FATAL: Erreur création fenêtre/horloge: {e}", exc_info=True)
         pygame.quit()
@@ -295,29 +332,13 @@ def main():
     except Exception:
         ui_scale_factor = 1.0
 
-    def _scaled_font_size(base_size):
-        return max(12, int(round(float(base_size) * ui_scale_factor)))
-
     try:
-        fonts['small'] = pygame.font.SysFont("Consolas", _scaled_font_size(18))
-        fonts['default'] = pygame.font.SysFont("Consolas", _scaled_font_size(24))
-        fonts['medium'] = pygame.font.SysFont("Consolas", _scaled_font_size(36))
-        fonts['large'] = pygame.font.SysFont("Consolas", _scaled_font_size(72))
-        fonts['title'] = pygame.font.SysFont("Consolas", _scaled_font_size(90))
-        logging.info("Police Consolas chargée.")
-    except pygame.error:
-        logging.warning("Erreur SysFont Consolas. Utilisation police défaut.", exc_info=False) # Log léger
-        try:
-            fonts['small'] = pygame.font.Font(None, _scaled_font_size(22))
-            fonts['default'] = pygame.font.Font(None, _scaled_font_size(30))
-            fonts['medium'] = pygame.font.Font(None, _scaled_font_size(40))
-            fonts['large'] = pygame.font.Font(None, _scaled_font_size(72))
-            fonts['title'] = pygame.font.Font(None, _scaled_font_size(100))
-            logging.info("Police défaut chargée.")
-        except Exception as font_e:
-            logging.critical(f"FATAL: Erreur chargement police défaut: {font_e}", exc_info=True)
-            pygame.quit()
-            sys.exit(1)
+        fonts = utils.load_fonts(base_path_assets, ui_scale_factor)
+        logging.info("Polices chargées.")
+    except Exception as font_e:
+        logging.critical(f"FATAL: Erreur chargement polices: {font_e}", exc_info=True)
+        pygame.quit()
+        sys.exit(1)
     # --- Fin Chargement Polices ---
 
     # --- Chargement Assets & High Scores ---
@@ -332,7 +353,7 @@ def main():
 
     # --- Initialisation de l'État du Jeu ---
     game_state = {
-        'current_state': config.MENU,
+        'current_state': config.TITLE,  # Écran titre façon borne d'arcade
         'current_game_mode': config.MODE_VS_AI, # Mode par défaut
         'player_snake': None, 'player2_snake': None, 'enemy_snake': None,
         'foods': [], 'mines': [], 'powerups': [],
@@ -396,17 +417,35 @@ def main():
         config.PLAYING: game_states.run_game,
         config.PAUSED: game_states.run_pause,
         config.GAME_OVER: game_states.run_game_over,
-        config.HALL_OF_FAME: game_states.run_hall_of_fame,
+        config.HALL_OF_FAME: screens.run_hall_of_fame,
+        config.TITLE: screens.run_title,
         config.UPDATE: game_states.run_update,
         config.DEMO: game_states.run_demo,
     }
     # --- Fin Mappage États ---
 
+    # États où le stick est converti en croix directionnelle (navigation unifiée + répétition)
+    menu_translator = menu_input.MenuInputTranslator()
+    raw_axis_states = {config.PLAYING, config.DEMO, config.CONTROLS}
+
     # --- Boucle Principale ---
     running = True
     logging.info("Entrée dans la boucle principale du jeu.")
+    fps_log_next = pygame.time.get_ticks() + 30000
+    fps_samples = []
     while running:
         dt = clock.tick(60)
+        # FPS moyen/minimum toutes les 30 s (diagnostic performances)
+        try:
+            fps_samples.append(clock.get_fps())
+            if pygame.time.get_ticks() >= fps_log_next:
+                valid = [f for f in fps_samples if f > 0]
+                if valid:
+                    logging.info(f"[PERF] état={game_state.get('current_state')} FPS moyen={sum(valid)/len(valid):.1f} min={min(valid):.1f}")
+                fps_samples = []
+                fps_log_next = pygame.time.get_ticks() + 30000
+        except Exception:
+            pass
         events = pygame.event.get()
         now_ticks = pygame.time.get_ticks()
 
@@ -434,6 +473,11 @@ def main():
                     return False
             return False
 
+        # Fermeture demandée (fenêtre, Batocera...) : on quitte quel que soit l'écran en cours
+        if any(ev.type == pygame.QUIT for ev in events):
+            logging.info("Événement QUIT reçu : fermeture du jeu.")
+            break
+
         # --- Manettes branchées / débranchées pendant le jeu (hotplug) ---
         for ev in events:
             try:
@@ -447,6 +491,13 @@ def main():
         if any(_is_user_input_event(ev) for ev in events):
             game_state['last_input_time'] = now_ticks
             last_input_time = now_ticks
+
+        # Traduction stick -> croix pour les menus (suivi continu, même pendant les fondus)
+        if game_state.get('current_state', config.MENU) in raw_axis_states:
+            menu_translator.reset()
+            state_events = events
+        else:
+            state_events = menu_translator.process(events, now_ticks)
 
         # --- Transitions (fondu) ---
         fade_ms = int(getattr(config, "TRANSITION_FADE_MS", 260))
@@ -538,11 +589,14 @@ def main():
                     if (
                         current_state_key in idle_demo_states
                         and current_state_key != config.DEMO
+                        and not game_state.get('attract_mode')
                         and (now_ticks - last_input_time) >= int(getattr(config, "DEMO_IDLE_TIMEOUT_MS", 180000))
                     ):
-                        force_next_state = config.DEMO
+                        # Inactivité : boucle d'attente (titre -> démo -> scores -> titre...)
+                        force_next_state = config.TITLE
+                        game_state.pop('_attract_state_key', None)
 
-                    next_state_val = run_current_state(events, dt, screen, game_state)
+                    next_state_val = run_current_state(state_events, dt, screen, game_state)
 
                     # Permet à un état (ex: Options) de recréer la surface écran
                     screen = game_state.get('screen', screen)
@@ -580,6 +634,7 @@ def main():
         screen = game_state.get('screen', screen)
 
         if running:
+            fx.apply_crt(screen)  # Effet écran d'arcade (option)
             try:
                 pygame.display.flip()
             except pygame.error as flip_e:

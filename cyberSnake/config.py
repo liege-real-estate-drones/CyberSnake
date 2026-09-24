@@ -33,6 +33,34 @@ PARTICLE_FACTOR = 1.0
 SCREEN_SHAKE_ENABLED = True
 SHOW_FPS = False
 
+# --- Effets visuels (Options > Effets visuels) ---
+SMOOTH_MOVEMENT = True   # Mouvement fluide (interpolation entre cases)
+NEON_GLOW = True         # Halo lumineux autour des serpents / tirs / bonus
+CRT_EFFECT = False       # Effet écran d'arcade (scanlines + vignettage)
+VISUAL_FX = "standard"
+VISUAL_FX_PRESETS = {
+    # clé: (mouvement fluide, halo néon, effet CRT)
+    "complet": (True, True, True),
+    "standard": (True, True, False),
+    "leger": (True, False, False),
+    "off": (False, False, False),
+}
+VISUAL_FX_LABELS = {
+    "complet": "Complet (néon + CRT)",
+    "standard": "Standard (néon)",
+    "leger": "Léger (fluide)",
+    "off": "Aucun",
+}
+
+
+def apply_visual_fx(key):
+    global VISUAL_FX, SMOOTH_MOVEMENT, NEON_GLOW, CRT_EFFECT
+    key = str(key or "standard").strip().lower()
+    if key not in VISUAL_FX_PRESETS:
+        key = "standard"
+    VISUAL_FX = key
+    SMOOTH_MOVEMENT, NEON_GLOW, CRT_EFFECT = VISUAL_FX_PRESETS[key]
+
 # UI
 # Échelle UI (polices/menus): "small", "normal", "large"
 UI_SCALE = "normal"
@@ -636,6 +664,8 @@ DEMO = 101 # Mode démo / attract (inactivité)
 VS_AI_SETUP = 102 # Choix difficulté avant Vs IA
 CLASSIC_SETUP = 103 # Options rapides avant Classique
 CONTROLS = 104 # Remapping contrôles
+TITLE = 105 # Écran titre (borne d'arcade)
+DAILY_CHALLENGE = 106 # Entrée de menu : Défi du jour (partie Solo imposée)
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)

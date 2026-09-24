@@ -62,6 +62,9 @@ import itertools # Added for PvP collision logic
 import config
 import utils
 import game_objects
+import fx
+import boss as boss_mod
+import progress
 import subprocess
 import os
 import sys
@@ -71,6 +74,30 @@ import urllib.error
 import zipfile
 import io
 import threading
+
+_screen_bg_overlay_cache = {}
+
+
+def draw_screen_background(screen, game_state, darken=0):
+    """Fond commun des écrans de menu : image du menu (ou fond d'arène), voile optionnel."""
+    bg = game_state.get('menu_background_image') if isinstance(game_state, dict) else None
+    try:
+        if bg is not None:
+            screen.blit(bg, (0, 0))
+        else:
+            screen.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, True), (0, 0))
+    except Exception:
+        screen.fill(config.COLOR_BACKGROUND)
+    if darken > 0:
+        key = (screen.get_size(), darken)
+        overlay = _screen_bg_overlay_cache.get(key)
+        if overlay is None:
+            _screen_bg_overlay_cache.clear()
+            overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, darken))
+            _screen_bg_overlay_cache[key] = overlay
+        screen.blit(overlay, (0, 0))
+
 
 # --- Fonction Helper pour Dessiner les Panneaux UI (avec correction alpha) ---
 def draw_ui_panel(surface, rect):
@@ -542,17 +569,15 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
            font_small = pygame.font.Font(None, 22); font_default = pygame.font.Font(None, 30); font_medium = pygame.font.Font(None, 40)
         except Exception: print("ERREUR FATALE: Impossible de charger les polices de secours."); return
 
-    # --- Dessin Fond & Grille ---
+    # --- Dessin Fond & Grille (pré-calculé : dégradé + grille + vignettage) ---
     try:
-        target_surface.fill(config.COLOR_BACKGROUND)
-    except Exception as e: print(f"Erreur fill screen: {e}"); return
-    if getattr(config, "SHOW_GRID", True):
-        for x in range(0, config.SCREEN_WIDTH, config.GRID_SIZE):
-            try: pygame.draw.line(target_surface, config.COLOR_GRID, (x, 0), (x, config.SCREEN_HEIGHT))
-            except Exception: pass
-        for y in range(0, config.SCREEN_HEIGHT, config.GRID_SIZE):
-            try: pygame.draw.line(target_surface, config.COLOR_GRID, (0, y), (config.SCREEN_WIDTH, y))
-            except Exception: pass
+        target_surface.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, getattr(config, "SHOW_GRID", True)), (0, 0))
+    except Exception as e:
+        logging.warning(f"Erreur fond d'arène: {e}")
+        try:
+            target_surface.fill(config.COLOR_BACKGROUND)
+        except Exception:
+            return
 
     # --- Dessin Murs ---
     for wall_pos in current_map_walls:
@@ -566,6 +591,29 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     player_projectiles_copy = list(player_projectiles); player2_projectiles_copy = list(player2_projectiles)
     enemy_projectiles_copy = list(enemy_projectiles); nests_copy = list(nests)
     moving_mines_copy = list(moving_mines); active_enemies_copy = list(active_enemies)
+
+    # --- Halos néon sous la nourriture et les bonus (pulsation douce) ---
+    _g = config.GRID_SIZE
+    _pulse = 0.85 + 0.15 * math.sin(current_time * 0.006)
+    for f in foods_copy:
+        try:
+            if f.position:
+                col = (f.type_data or {}).get('color', config.COLOR_FOOD_NORMAL)
+                fx.draw_glow(target_surface, (f.position[0] * _g + _g // 2, f.position[1] * _g + _g // 2), col, _g * 1.5 * _pulse, 6)
+        except Exception:
+            pass
+    for pu in powerups_copy:
+        try:
+            if pu.position:
+                col = (pu.data or {}).get('color', config.COLOR_WHITE)
+                fx.draw_glow(target_surface, (pu.position[0] * _g + _g // 2, pu.position[1] * _g + _g // 2), col, _g * 1.8 * _pulse, 7)
+        except Exception:
+            pass
+    for m in mines_copy:
+        try:
+            fx.draw_glow(target_surface, (m.position[0] * _g + _g // 2, m.position[1] * _g + _g // 2), config.COLOR_MINE, _g * 1.3, 5)
+        except Exception:
+            pass
 
     # --- Dessin Objets du Jeu ---
     for f in foods_copy:
@@ -595,6 +643,13 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             try: p.draw(target_surface)
             except Exception as e: print(f"Erreur dessin projectile IA/Ennemi: {e}")
 
+    # --- Halos des projectiles ---
+    for p in player_projectiles_copy + player2_projectiles_copy + enemy_projectiles_copy:
+        try:
+            fx.draw_glow(target_surface, (p.x, p.y), p.color, max(8, p.size * 3), 7)
+        except Exception:
+            pass
+
     # --- Dessin Serpents ---
     if player_snake:
         try: player_snake.draw(target_surface, current_time, font_small, font_default)
@@ -616,6 +671,15 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     for p in particles_copy:
         try: p.draw(target_surface)
         except Exception as e: print(f"Erreur dessin particule: {e}")
+
+    # --- Textes flottants (+points) et flash d'impact ---
+    try:
+        fx.draw_popups(target_surface, current_time, font_small, font_default)
+        fx.draw_flash(target_surface, current_time)
+        # Barre de vie du boss (Survie) + bannières d'annonce (boss, défi du jour)
+        boss_mod.draw_boss_ui(target_surface, game_state, current_time, font_default, font_medium)
+    except Exception:
+        pass
 
     # --- Mise en valeur de l'arène (Classique) : assombrit l'extérieur ---
     if current_game_mode == config.MODE_CLASSIC:
@@ -1469,6 +1533,14 @@ def reset_game(game_state):
 
     print("Resetting game...")
     current_time_reset = pygame.time.get_ticks()
+    fx.clear_popups()
+    game_state['boss'] = None
+    game_state['boss_banner_until'] = 0
+    game_state['progress_recorded'] = False
+    game_state['new_unlocks'] = []
+    game_state['daily_rank'] = None
+    if game_state.get('daily_challenge'):
+        random.seed(progress.daily_seed())  # Même départ pour tout le monde aujourd'hui
     game_state['player_projectiles'] = []
     game_state['player2_projectiles'] = []
     game_state['enemy_projectiles'] = []
@@ -1732,7 +1804,39 @@ def reset_game(game_state):
             pygame.mixer.music.stop()
             utils.play_selected_music(base_path)
         except pygame.error as e: print(f"Erreur redémarrage musique pendant reset: {e}")
+
+    # --- Défi du jour : modificateur appliqué au départ ---
+    if game_state.get('daily_challenge'):
+        try:
+            _apply_daily_modifier(game_state, initial_occupied)
+        except Exception as e:
+            logging.error(f"Erreur modificateur défi du jour: {e}", exc_info=True)
     print("Game Reset Complete.")
+
+
+def _apply_daily_modifier(game_state, occupied):
+    name, desc = progress.daily_modifier()
+    player = game_state.get('player_snake')
+    if name == "Champ de mines":
+        for _ in range(10):
+            pos = utils.get_random_empty_position(occupied)
+            if pos:
+                game_state.setdefault('mines', []).append(game_objects.Mine(pos))
+                occupied.add(pos)
+    elif name == "Festin":
+        for _ in range(6):
+            pos = utils.get_random_empty_position(occupied)
+            if pos:
+                game_state.setdefault('foods', []).append(game_objects.Food(pos, utils.choose_food_type(game_state.get('current_game_mode'), None)))
+                occupied.add(pos)
+    elif name == "Blindé" and player:
+        player.add_armor(2)
+        player.ammo = 0
+    elif name == "Arsenal" and player:
+        player.add_ammo(30)
+    game_state['boss_banner_text'] = f"DÉFI DU JOUR : {name} - {desc}"
+    game_state['boss_banner_until'] = pygame.time.get_ticks() + 4000
+    logging.info(f"Défi du jour ({progress.today_key()}) : {name}")
 
 # --- START: REVISED run_menu function in game_states.py (with joystick input) ---
 def run_menu(events, dt, screen, game_state):
@@ -1781,8 +1885,16 @@ def run_menu(events, dt, screen, game_state):
     top_surv_hs = f"Vague Max: {survie_scores[0]['name']} {survie_scores[0]['score']}" if survie_scores else "Vague Max: ---"
 
     # Options du menu
+    try:
+        _dm_name, _dm_desc = progress.daily_modifier()
+        _daily_board = progress.daily_scores()
+        _daily_best = f"{_daily_board[0]['name']} {_daily_board[0]['score']}" if _daily_board else "---"
+        daily_info = f"Aujourd'hui : {_dm_name} | Meilleur du jour : {_daily_best}"
+    except Exception:
+        daily_info = "Une partie Solo imposée, la même pour tous aujourd'hui"
     menu_options = [
         (config.MODE_SOLO, "Joueur Seul", top_solo_hs),
+        (config.DAILY_CHALLENGE, "Défi du jour", daily_info),
         (config.MODE_CLASSIC, "Snake Classique", top_classic_hs),
         (config.MODE_VS_AI, "Joueur vs IA", top_vsai_hs),
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),
@@ -1851,6 +1963,10 @@ def run_menu(events, dt, screen, game_state):
 
                             targeted_next_state = config.MENU # Par défaut
 
+                            # Défi du jour = partie Solo avec carte/départ imposés
+                            game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
+                            if selected_option == config.DAILY_CHALLENGE:
+                                selected_option = config.MODE_SOLO
                             if selected_option == config.HALL_OF_FAME:
                                 targeted_next_state = config.HALL_OF_FAME
                             elif selected_option == config.UPDATE:
@@ -1939,6 +2055,10 @@ def run_menu(events, dt, screen, game_state):
                         selected_option = selected_option_tuple[0]
                         utils.play_sound("powerup_pickup") # Son de confirmation
 
+                        # Défi du jour = partie Solo avec carte/départ imposés
+                        game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
+                        if selected_option == config.DAILY_CHALLENGE:
+                            selected_option = config.MODE_SOLO
                         if selected_option == config.HALL_OF_FAME:
                             next_state = config.HALL_OF_FAME
                         elif selected_option == config.UPDATE:
@@ -1998,6 +2118,10 @@ def run_menu(events, dt, screen, game_state):
                     selected_option = selected_option_tuple[0]
                     utils.play_sound("powerup_pickup")
 
+                    # Défi du jour = partie Solo avec carte/départ imposés
+                    game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
+                    if selected_option == config.DAILY_CHALLENGE:
+                        selected_option = config.MODE_SOLO
                     if selected_option == config.HALL_OF_FAME:
                         next_state = config.HALL_OF_FAME
                     elif selected_option == config.UPDATE:
@@ -2079,8 +2203,9 @@ def run_menu(events, dt, screen, game_state):
         panel_w = min(680, int(config.SCREEN_WIDTH * 0.72))
         panel_top_min = int(config.SCREEN_HEIGHT * 0.22)
         available_h = max(220, legend_y - panel_top_min - 12)
-        row_h = max(48, min(64, int((available_h - 40) / max(1, len(menu_options)))))
-        panel_h = max(220, (len(menu_options) * row_h) + 40)
+        info_h = font_small.get_height() + 6  # Ligne d'info (meilleur score) sous les options
+        row_h = max(44, min(64, int((available_h - 40 - info_h) / max(1, len(menu_options)))))
+        panel_h = max(220, (len(menu_options) * row_h) + 40 + info_h)
         panel_x = (config.SCREEN_WIDTH - panel_w) // 2
         panel_y = max(12, min(panel_top_min, legend_y - panel_h - 12))
         menu_panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
@@ -2235,6 +2360,7 @@ def run_options(events, dt, screen, game_state):
          or 'pending_particle_density' not in game_state
          or 'pending_screen_shake' not in game_state
          or 'pending_show_fps' not in game_state
+         or 'pending_visual_fx' not in game_state
          or 'pending_hud_mode' not in game_state
          or 'pending_ui_scale' not in game_state
          or 'pending_music_volume' not in game_state
@@ -2268,6 +2394,7 @@ def run_options(events, dt, screen, game_state):
         pending_particle_density = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal")))
         pending_screen_shake = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         pending_show_fps = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
+        pending_visual_fx = str(opts.get("visual_fx", getattr(config, "VISUAL_FX", "standard"))).strip().lower()
         pending_hud_mode = str(opts.get("hud_mode", getattr(config, "HUD_MODE", "normal"))).strip().lower()
         if pending_hud_mode not in ("normal", "minimal"):
             pending_hud_mode = "normal"
@@ -2297,6 +2424,7 @@ def run_options(events, dt, screen, game_state):
         game_state['pending_particle_density'] = pending_particle_density
         game_state['pending_screen_shake'] = pending_screen_shake
         game_state['pending_show_fps'] = pending_show_fps
+        game_state['pending_visual_fx'] = pending_visual_fx
         game_state['pending_hud_mode'] = pending_hud_mode
         game_state['pending_ui_scale'] = pending_ui_scale
         game_state['pending_music_volume'] = pending_music_volume
@@ -2328,6 +2456,11 @@ def run_options(events, dt, screen, game_state):
     pending_particle_density = str(game_state.get('pending_particle_density', getattr(config, "PARTICLE_DENSITY", "normal")))
     pending_screen_shake = bool(game_state.get('pending_screen_shake', getattr(config, "SCREEN_SHAKE_ENABLED", True)))
     pending_show_fps = bool(game_state.get('pending_show_fps', getattr(config, "SHOW_FPS", False)))
+    pending_visual_fx = str(game_state.get('pending_visual_fx', getattr(config, "VISUAL_FX", "standard"))).strip().lower()
+    if pending_visual_fx not in config.VISUAL_FX_PRESETS:
+        pending_visual_fx = "standard"
+    visual_fx_keys = list(config.VISUAL_FX_PRESETS.keys())
+    visual_fx_display = config.VISUAL_FX_LABELS.get(pending_visual_fx, pending_visual_fx)
     pending_hud_mode = str(game_state.get('pending_hud_mode', getattr(config, "HUD_MODE", "normal"))).strip().lower()
     if pending_hud_mode not in ("normal", "minimal"):
         pending_hud_mode = "normal"
@@ -2400,6 +2533,10 @@ def run_options(events, dt, screen, game_state):
         ("white", "Blanc"),
         ("yellow", "Jaune"),
     ]
+    # Couleurs exclusives débloquées par des exploits
+    for _ck, (_cname, _crgb, _cgoal) in progress.UNLOCKABLE_COLORS.items():
+        if progress.is_unlocked(_ck):
+            snake_colors.append((_ck, _cname + " *"))
     snake_color_keys = [k for k, _ in snake_colors]
     if pending_snake_color_p1 not in snake_color_keys:
         pending_snake_color_p1 = snake_color_keys[0]
@@ -2532,6 +2669,7 @@ def run_options(events, dt, screen, game_state):
         ("Échelle UI", ui_scale_display),
         ("HUD", hud_mode_display),
         ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
+        ("Effets visuels", visual_fx_display),
         ("Volume musique", music_volume_display),
         ("Volume effets", sound_volume_display),
         ("Contrôles", ""),
@@ -2555,12 +2693,21 @@ def run_options(events, dt, screen, game_state):
     IDX_UI_SCALE = 12
     IDX_HUD_MODE = 13
     IDX_SHOW_FPS = 14
-    IDX_MUSIC_VOL = 15
-    IDX_SOUND_VOL = 16
-    IDX_CONTROLS = 17
-    IDX_RESET = 18
-    IDX_APPLY = 19
-    IDX_BACK = 20
+    IDX_VISUAL_FX = 15
+    IDX_MUSIC_VOL = 16
+    IDX_SOUND_VOL = 17
+    IDX_CONTROLS = 18
+    IDX_RESET = 19
+    IDX_APPLY = 20
+    IDX_BACK = 21
+
+    def cycle_visual_fx(delta):
+        nonlocal pending_visual_fx
+        try:
+            idx = visual_fx_keys.index(pending_visual_fx)
+        except ValueError:
+            idx = 0
+        pending_visual_fx = visual_fx_keys[(idx + delta) % len(visual_fx_keys)]
 
     selection_index = max(0, min(selection_index, len(menu_items) - 1))
 
@@ -2724,6 +2871,7 @@ def run_options(events, dt, screen, game_state):
         opts["particle_density"] = str(pending_particle_density)
         opts["screen_shake"] = bool(pending_screen_shake)
         opts["show_fps"] = bool(pending_show_fps)
+        opts["visual_fx"] = str(pending_visual_fx)
         opts["hud_mode"] = str(pending_hud_mode)
         opts["ui_scale"] = str(pending_ui_scale)
         try:
@@ -2765,6 +2913,7 @@ def run_options(events, dt, screen, game_state):
 
         config.SCREEN_SHAKE_ENABLED = bool(pending_screen_shake)
         config.SHOW_FPS = bool(pending_show_fps)
+        config.apply_visual_fx(pending_visual_fx)
         try:
             hud_mode_key = str(pending_hud_mode).strip().lower()
         except Exception:
@@ -2808,23 +2957,8 @@ def run_options(events, dt, screen, game_state):
         except Exception:
             scale_factor = 1.0
 
-        def _scaled_font_size(base_size):
-            return max(12, int(round(float(base_size) * scale_factor)))
-
         try:
-            fonts = {}
-            try:
-                fonts['small'] = pygame.font.SysFont("Consolas", _scaled_font_size(18))
-                fonts['default'] = pygame.font.SysFont("Consolas", _scaled_font_size(24))
-                fonts['medium'] = pygame.font.SysFont("Consolas", _scaled_font_size(36))
-                fonts['large'] = pygame.font.SysFont("Consolas", _scaled_font_size(72))
-                fonts['title'] = pygame.font.SysFont("Consolas", _scaled_font_size(90))
-            except pygame.error:
-                fonts['small'] = pygame.font.Font(None, _scaled_font_size(22))
-                fonts['default'] = pygame.font.Font(None, _scaled_font_size(30))
-                fonts['medium'] = pygame.font.Font(None, _scaled_font_size(40))
-                fonts['large'] = pygame.font.Font(None, _scaled_font_size(72))
-                fonts['title'] = pygame.font.Font(None, _scaled_font_size(100))
+            fonts = utils.load_fonts(base_path, scale_factor)
 
             game_state['font_small'] = fonts['small']
             game_state['font_default'] = fonts['default']
@@ -2855,7 +2989,7 @@ def run_options(events, dt, screen, game_state):
         nonlocal pending_show_grid, pending_grid_size
         nonlocal pending_snake_style_p1, pending_snake_style_p2, pending_snake_color_p1, pending_snake_color_p2
         nonlocal pending_wall_style, pending_wall_style_random_choice, pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
-        nonlocal pending_screen_shake, pending_show_fps, pending_hud_mode, pending_ui_scale, pending_music_volume, pending_sound_volume
+        nonlocal pending_screen_shake, pending_show_fps, pending_visual_fx, pending_hud_mode, pending_ui_scale, pending_music_volume, pending_sound_volume
 
         defaults = getattr(utils, "DEFAULT_GAME_OPTIONS", {}) if hasattr(utils, "DEFAULT_GAME_OPTIONS") else {}
 
@@ -2893,6 +3027,7 @@ def run_options(events, dt, screen, game_state):
 
         pending_screen_shake = bool(defaults.get("screen_shake", True))
         pending_show_fps = bool(defaults.get("show_fps", False))
+        pending_visual_fx = str(defaults.get("visual_fx", "standard"))
         pending_hud_mode = str(defaults.get("hud_mode", "normal")).strip().lower()
         if pending_hud_mode not in ("normal", "minimal"):
             pending_hud_mode = "normal"
@@ -2913,7 +3048,7 @@ def run_options(events, dt, screen, game_state):
         pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
 
     def adjust_current(delta):
-        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_ai_difficulty, pending_wall_style
+        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_visual_fx, pending_ai_difficulty, pending_wall_style
 
         if selection_index == IDX_SHOW_GRID:
             pending_show_grid = not pending_show_grid
@@ -2945,6 +3080,8 @@ def run_options(events, dt, screen, game_state):
             cycle_hud_mode(delta)
         elif selection_index == IDX_SHOW_FPS:
             pending_show_fps = not pending_show_fps
+        elif selection_index == IDX_VISUAL_FX:
+            cycle_visual_fx(delta)
         elif selection_index == IDX_MUSIC_VOL:
             adjust_music_volume(delta)
         elif selection_index == IDX_SOUND_VOL:
@@ -3103,6 +3240,7 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_particle_density'] = pending_particle_density
     game_state['pending_screen_shake'] = pending_screen_shake
     game_state['pending_show_fps'] = pending_show_fps
+    game_state['pending_visual_fx'] = pending_visual_fx
     game_state['pending_hud_mode'] = pending_hud_mode
     game_state['pending_ui_scale'] = pending_ui_scale
     game_state['pending_music_volume'] = pending_music_volume
@@ -3183,6 +3321,7 @@ def run_options(events, dt, screen, game_state):
             ("Échelle UI", ui_scale_display),
             ("HUD", hud_mode_display),
             ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
+            ("Effets visuels", config.VISUAL_FX_LABELS.get(pending_visual_fx, pending_visual_fx)),
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
             ("Contrôles", ""),
@@ -3400,8 +3539,9 @@ def run_options(events, dt, screen, game_state):
             except Exception:
                 cell_px = 12
 
-            rel = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (4, 1)]
-            start_x = area_rect.centerx - int(4.5 * cell_px)
+            # Serpent en ligne droite vers la droite : tête à droite, queue à gauche
+            rel = [(5, 0), (4, 0), (3, 0), (2, 0), (1, 0), (0, 0)]
+            start_x = area_rect.centerx - int(3.0 * cell_px)
             start_y = area_rect.centery - int(0.5 * cell_px)
             seg_rects = [pygame.Rect(start_x + rx * cell_px, start_y + ry * cell_px, cell_px, cell_px) for rx, ry in rel]
 
@@ -3608,6 +3748,7 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_particle_density', None)
         game_state.pop('pending_screen_shake', None)
         game_state.pop('pending_show_fps', None)
+        game_state.pop('pending_visual_fx', None)
         game_state.pop('pending_hud_mode', None)
         game_state.pop('pending_ui_scale', None)
         game_state.pop('pending_music_volume', None)
@@ -3936,7 +4077,7 @@ def run_controls_remap(events, dt, screen, game_state):
 
     # Draw
     try:
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
         screen.blit(overlay, (0, 0))
@@ -4310,7 +4451,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
 
     # Dessin de l'écran
     try: # Bloc try autour du dessin
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 190)) # Overlay plus sombre
         screen.blit(overlay, (0, 0))
@@ -4351,18 +4492,20 @@ def run_name_entry_solo(events, dt, screen, game_state):
             
         # Dessin du clavier virtuel avec animations
         keyboard_y_start = config.SCREEN_HEIGHT * 0.5
-        key_height = 40
-        key_spacing = 5
+        key_height = max(40, int(config.SCREEN_HEIGHT * 0.055))
+        key_spacing = max(5, key_height // 8)
         
         for row_idx, row in enumerate(VIRTUAL_KEYBOARD_CHARS):
             key_y = keyboard_y_start + row_idx * (key_height + key_spacing)
-            total_row_width = len(row) * (key_height + key_spacing)
+            # Largeurs réelles (touches larges pour <-, OK et espace) : pas de chevauchement
+            key_widths = [key_height * 2 if c in ["<-", "OK", " "] else key_height for c in row]
+            total_row_width = sum(key_widths) + key_spacing * (len(row) - 1)
             row_start_x = (config.SCREEN_WIDTH - total_row_width) / 2
             
             for col_idx, char in enumerate(row):
                 # Dimensions et position de base de la touche
-                key_x = row_start_x + col_idx * (key_height + key_spacing)
-                key_width = key_height * 2 if char in ["<-", "OK", " "] else key_height
+                key_x = row_start_x + sum(key_widths[:col_idx]) + col_idx * key_spacing
+                key_width = key_widths[col_idx]
                 
                 # Animation: Effet de pulsation pour la touche sélectionnée
                 scale_factor = 1.0
@@ -4469,6 +4612,20 @@ def run_map_selection(events, dt, screen, game_state):
     last_axis_move_time = game_state.get('last_axis_move_time_map', 0) # Utilise une clé unique
     current_time = pygame.time.get_ticks()
     # -----------------------------------------------------------------
+
+    # --- Défi du jour : carte imposée (la même pour tout le monde aujourd'hui) ---
+    if game_state.get('daily_challenge'):
+        try:
+            day_rng = random.Random(progress.daily_seed())
+            map_keys = sorted(config.MAPS.keys())
+            game_state['selected_map_key'] = day_rng.choice(map_keys) if map_keys else config.DEFAULT_MAP_KEY
+            game_state['current_random_map_walls'] = None
+            reset_game(game_state)
+            game_state['current_state'] = config.PLAYING
+            return config.PLAYING
+        except Exception as e:
+            logging.error(f"Défi du jour: impossible de lancer la partie: {e}", exc_info=True)
+            game_state['daily_challenge'] = False
 
     # --- MODIFIÉ: Charge/Met à jour la liste des cartes si nécessaire ---
     if _map_selection_needs_update:
@@ -4747,7 +4904,7 @@ def run_map_selection(events, dt, screen, game_state):
 
     # --- MODIFIÉ: Dessin de l'écran ---
     try: # Bloc try autour du dessin
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
         screen.blit(overlay, (0, 0))
@@ -4908,6 +5065,7 @@ def run_map_selection(events, dt, screen, game_state):
             cfg_y += font_small.get_linesize()
 
         # Dessine le cadre de l'aperçu
+        pygame.draw.rect(screen, (4, 6, 16), preview_rect)  # Fond sombre de l'aperçu
         pygame.draw.rect(screen, config.COLOR_GRID, preview_rect, 2)
 
         # Calcule l'échelle pour dessiner les murs dans la zone d'aperçu
@@ -4943,7 +5101,22 @@ def run_map_selection(events, dt, screen, game_state):
             if desc_rect.height > 0 and desc_rect.bottom > desc_rect.top:
                 draw_ui_panel(screen, desc_rect)
                 dy = desc_rect.top + panel_pad
-                for line in (desc_lines or [])[:2]:
+                # Retour à la ligne automatique pour rester dans le panneau
+                max_w = desc_rect.width - panel_pad * 2
+                wrapped = []
+                for raw_line in (desc_lines or [])[:2]:
+                    words, cur = str(raw_line).split(" "), ""
+                    for w in words:
+                        test = (cur + " " + w).strip()
+                        if font_small.size(test)[0] <= max_w or not cur:
+                            cur = test
+                        else:
+                            wrapped.append(cur)
+                            cur = w
+                    if cur:
+                        wrapped.append(cur)
+                max_lines = max(1, (desc_rect.height - panel_pad) // max(1, font_small.get_height() + 2))
+                for line in wrapped[:max_lines]:
                     utils.draw_text(screen, line, font_small, config.COLOR_TEXT_MENU, (desc_rect.left + panel_pad, dy), "topleft")
                     dy += font_small.get_linesize()
         except Exception:
@@ -5736,7 +5909,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
 
     # --- Dessin ---
     try:
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         screen.blit(overlay, (0, 0))
@@ -6033,7 +6206,7 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     # Dessin de l'écran
     try:
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
         utils.draw_text_with_shadow(screen, "Configuration PvP", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
         y_start, item_gap = config.SCREEN_HEIGHT * 0.30, 60
@@ -6399,7 +6572,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
 
     # Dessin de l'écran
     try: # Bloc try autour du dessin
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 190)); screen.blit(overlay, (0, 0))
 
         # Message d'attente pendant l'initialisation
@@ -6463,18 +6636,20 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         
         # Dessin du clavier virtuel avec animations
         keyboard_y_start = config.SCREEN_HEIGHT * 0.5
-        key_height = 40
-        key_spacing = 5
+        key_height = max(40, int(config.SCREEN_HEIGHT * 0.055))
+        key_spacing = max(5, key_height // 8)
         
         for row_idx, row in enumerate(VIRTUAL_KEYBOARD_CHARS):
             key_y = keyboard_y_start + row_idx * (key_height + key_spacing)
-            total_row_width = len(row) * (key_height + key_spacing)
+            # Largeurs réelles (touches larges pour <-, OK et espace) : pas de chevauchement
+            key_widths = [key_height * 2 if c in ["<-", "OK", " "] else key_height for c in row]
+            total_row_width = sum(key_widths) + key_spacing * (len(row) - 1)
             row_start_x = (config.SCREEN_WIDTH - total_row_width) / 2
             
             for col_idx, char in enumerate(row):
                 # Dimensions et position de base de la touche
-                key_x = row_start_x + col_idx * (key_height + key_spacing)
-                key_width = key_height * 2 if char in ["<-", "OK", " "] else key_height
+                key_x = row_start_x + sum(key_widths[:col_idx]) + col_idx * key_spacing
+                key_width = key_widths[col_idx]
                 
                 # Animation: Effet de pulsation pour la touche sélectionnée
                 scale_factor = 1.0
@@ -6931,6 +7106,10 @@ def run_game_over(events, dt, screen, game_state):
                              (len(hs_list) >= config.MAX_HIGH_SCORES and score_to_check > hs_list[-1]['score']))
         except (IndexError, KeyError, TypeError): is_high_score = False # Erreur si hs_list[-1] n'existe pas ou format incorrect
 
+    is_daily = bool(game_state.get('daily_challenge', False))
+    if is_daily:
+        is_high_score = False  # Le Défi du jour a son propre classement
+
     if is_high_score and not hs_saved:
         try:
             utils.save_high_score(name_for_hs, score_to_check, mode_key, base_path)
@@ -6955,6 +7134,20 @@ def run_game_over(events, dt, screen, game_state):
                  if p1_score >= p2_score: winner_text = f"{p1_name} Gagne (Score)!"
                  else: winner_text = f"{p2_name} Gagne (Score)!"
             else: winner_text = "Objectif Kills Atteint?" # Devrait pas arriver si la logique est bonne
+
+    # --- Progression (couleurs à débloquer) + Défi du jour : enregistré une seule fois ---
+    if not game_state.get('progress_recorded'):
+        game_state['progress_recorded'] = True
+        try:
+            pvp_won = current_game_mode == config.MODE_PVP and "Gagne" in str(winner_text)
+            career_score = max(p1_score, p2_score) if current_game_mode == config.MODE_PVP else p1_score
+            unlocked_now = progress.record_game(current_game_mode, career_score, kills=p1_kills,
+                                                wave=survival_wave, pvp_won=pvp_won)
+            game_state['new_unlocks'] = list(game_state.get('new_unlocks') or []) + list(unlocked_now)
+            if is_daily:
+                game_state['daily_rank'] = progress.record_daily(p1_name, p1_score)
+        except Exception as e:
+            logging.error(f"Erreur enregistrement progression: {e}", exc_info=True)
 
     next_state = config.GAME_OVER
     for event in events:
@@ -7117,7 +7310,7 @@ def run_game_over(events, dt, screen, game_state):
 
     # Dessin
     try:
-        screen.fill(config.COLOR_BACKGROUND); overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 180)); screen.blit(overlay, (0, 0))
+        draw_screen_background(screen, game_state); overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 180)); screen.blit(overlay, (0, 0))
         utils.draw_text_with_shadow(screen, "GAME OVER", font_large, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.20), "center")
         
         # Afficher le décompte si les entrées sont verrouillées
@@ -7150,6 +7343,17 @@ def run_game_over(events, dt, screen, game_state):
         if is_high_score: 
             utils.draw_text(screen, "High Score Enregistré!", font_default, config.COLOR_TEXT_HIGHLIGHT, 
                           (config.SCREEN_WIDTH / 2, y_menu - 40), "center")
+        if is_daily:
+            rank = game_state.get('daily_rank')
+            board = progress.daily_scores()
+            best = f"{board[0]['name']} {board[0]['score']}" if board else "---"
+            daily_txt = f"Défi du jour : {'#' + str(rank) if rank else 'hors classement'}  (meilleur du jour : {best})"
+            utils.draw_text(screen, daily_txt, font_default, (120, 230, 255), (config.SCREEN_WIDTH / 2, y_menu - 40), "center")
+        new_unlocks = game_state.get('new_unlocks') or []
+        if new_unlocks and (current_time // 400) % 4 != 0:
+            utils.draw_text_with_shadow(screen, "NOUVELLE COULEUR DÉBLOQUÉE : " + ", ".join(new_unlocks) + " (Options)",
+                                        font_default, (255, 210, 60), config.COLOR_UI_SHADOW,
+                                        (config.SCREEN_WIDTH / 2, y_menu - 80), "center")
         
         # Menu options de fin de partie
         menu_spacing = 40
@@ -7258,8 +7462,10 @@ def run_demo(events, dt, screen, game_state):
                 return False
         return False
 
-    if any(_is_demo_input(ev) for ev in events):
-        # Sortie immédiate vers le menu
+    if any(ev.type == pygame.QUIT for ev in events):
+        return False  # Fermeture du jeu (fenêtre / Batocera) : ne pas repasser par le menu
+
+    def _exit_demo():
         saved = game_state.pop('_demo_saved', None)
         if isinstance(saved, dict):
             for key, value in saved.items():
@@ -7269,7 +7475,27 @@ def run_demo(events, dt, screen, game_state):
                     pass
         game_state.pop('demo_mode', None)
         game_state.pop('_demo_initialized', None)
+        game_state.pop('_demo_start_time', None)
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+    if any(_is_demo_input(ev) for ev in events):
+        # Sortie immédiate vers le menu
+        _exit_demo()
+        game_state['attract_mode'] = False
+        game_state.pop('_attract_state_key', None)
+        game_state.pop('_attract_state_start', None)
         return config.MENU
+
+    # Boucle d'attente (borne) : après un moment, la démo laisse place au Hall of Fame
+    _now_demo = pygame.time.get_ticks()
+    if not game_state.get('_demo_start_time'):
+        game_state['_demo_start_time'] = _now_demo
+    if game_state.get('attract_mode') and _now_demo - int(game_state.get('_demo_start_time') or _now_demo) >= 45000:
+        _exit_demo()
+        return config.HALL_OF_FAME
 
     if not bool(game_state.get('_demo_initialized', False)):
         # Sauvegarde un minimum de contexte pour ne pas "polluer" la session
@@ -7869,6 +8095,11 @@ def run_game(events, dt, screen, game_state):
             if survival_wave > 0 and current_time >= survival_wave_start_time + config.SURVIVAL_WAVE_DURATION:
                 survival_wave += 1; game_state['survival_wave'] = survival_wave
                 game_state['survival_wave_start_time'] = current_time
+                try:
+                    boss_mod.maybe_spawn_boss(game_state, current_time, survival_wave)
+                    active_enemies = game_state.get('active_enemies', active_enemies)
+                except Exception as e:
+                    logging.error(f"Erreur apparition boss: {e}", exc_info=True)
                 factor = config.SURVIVAL_INITIAL_INTERVAL_FACTOR - (survival_wave - 1) * config.SURVIVAL_INTERVAL_REDUCTION_PER_WAVE
                 current_survival_interval_factor = max(config.SURVIVAL_MIN_INTERVAL_FACTOR, factor)
                 game_state['current_survival_interval_factor'] = current_survival_interval_factor
@@ -8179,6 +8410,7 @@ def run_game(events, dt, screen, game_state):
             if respawn_pos:
                 enemy_snake.reset(current_game_mode, walls_for_respawn)
                 enemy_snake.positions = [respawn_pos]
+                enemy_snake._prev_positions = None
                 if safe_dir is None:
                     safe_dir = enemy_snake._find_safe_initial_direction(respawn_pos, walls_for_respawn, config.LEFT)
                 enemy_snake.current_direction = safe_dir
@@ -9148,6 +9380,12 @@ def run_game(events, dt, screen, game_state):
          game_state['active_enemies'] = new_active_enemies
          enemies_died_this_frame.clear()
 
+    # --- Boss (Survie) : récompense à sa défaite ---
+    try:
+        boss_mod.update_boss(game_state, current_time)
+    except Exception as e:
+        logging.error(f"Erreur mise à jour boss: {e}", exc_info=True)
+
     # --- Nettoyage final Nids (Proj + Tête IA) ---
     all_nests_to_remove_final = nests_hit_indices_proj | nests_collided_indices_head
     if all_nests_to_remove_final:
@@ -9298,6 +9536,7 @@ USER_DATA_FILES = {
     config.GAME_OPTIONS_FILE,
     config.FAVORITE_MAP_FILE,
     config.CONTROLS_FILE,
+    "progress.json",
 }
 
 def update_worker(game_state):
@@ -9464,7 +9703,7 @@ def run_update(events, dt, screen, game_state):
         t.start()
 
     # Dessin
-    screen.fill(config.COLOR_BACKGROUND)
+    draw_screen_background(screen, game_state, darken=170)
 
     # Animation simple (points qui bougent)
     msg = game_state.get('update_message', "")

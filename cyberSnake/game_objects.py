@@ -4,12 +4,14 @@
 import pygame
 import random
 import math
+import colorsys
 from collections import defaultdict, OrderedDict, deque
 
 # Importe toutes les constantes depuis config.py
 import config
 # Importe le module utils pour accéder aux fonctions utilitaires
 import utils
+import fx
 import logging # Added for detailed score logging
 
 
@@ -96,6 +98,31 @@ class Particle:
                     pygame.draw.circle(surface, self.color, pos, radius)
                 except (TypeError, ValueError) as draw_err:
                     logger.warning("Échec du dessin de la particule à %s avec la couleur %s : %s", pos, self.color, draw_err)
+
+_tinted_sprite_cache = {}
+
+
+def _tinted_sprite(sprite, color, strength):
+    """Copie teintée d'un sprite : seules les zones dessinées sont colorées (pas de carré)."""
+    key = (id(sprite), tuple(color[:3]), int(strength))
+    tinted = _tinted_sprite_cache.get(key)
+    if tinted is None:
+        if len(_tinted_sprite_cache) > 300:
+            _tinted_sprite_cache.clear()
+        tinted = sprite.copy()
+        k = max(0.0, min(1.0, strength / 255.0))
+        tinted.fill(tuple(int(c * k) for c in color[:3]) + (0,), special_flags=pygame.BLEND_RGBA_ADD)
+        _tinted_sprite_cache[key] = tinted
+    return tinted
+
+
+def cx_skill_ok(snake):
+    """True si la tête du serpent a une position valide (pour placer un texte flottant)."""
+    try:
+        return snake.get_head_center_px()[0] is not None
+    except Exception:
+        return False
+
 
 class Projectile:
     """Représente un projectile tiré par un serpent."""
@@ -522,6 +549,7 @@ class Snake:
         self.direction_queue = []
 
         self.positions = [self.start_pos]
+        self._prev_positions = None
         desired_length = 1
         if self.is_player:
             try:
@@ -937,6 +965,8 @@ class Snake:
                      death_cause_detail = 'wall' # Cause: collision mur
 
             if not died_in_move:
+                self._prev_positions = list(self.positions)
+                self._prev_move_interval = move_interval
                 self.positions.insert(0, new_head)
                 tail_pos_to_emit = None
 
@@ -983,6 +1013,7 @@ class Snake:
         if actual_shrink > 0:
             removed_segments_pos = self.positions[-actual_shrink:]
             self.positions = self.positions[:-actual_shrink]
+            self._prev_positions = None
             self.length = len(self.positions)
             for pos in removed_segments_pos:
                 px = pos[0] * config.GRID_SIZE + config.GRID_SIZE // 2
@@ -1017,6 +1048,21 @@ class Snake:
             score_added = -1
 
         self.score += score_added
+
+        # Texte flottant au-dessus de la tête
+        try:
+            if score_added != 0:
+                hx, hy = getattr(self, '_render_head_center_px', None) or self.get_head_center_px()
+                if hx is not None:
+                    if is_objective_bonus:
+                        fx.add_popup(hx, hy - 24, f"OBJECTIF +{score_added}", config.COLOR_OBJECTIVE_COMPLETE, big=True)
+                    elif is_combo_bonus:
+                        fx.add_popup(hx, hy + 14, f"COMBO +{score_added}", config.COLOR_COMBO_TEXT)
+                    else:
+                        col = config.COLOR_FOOD_MULTIPLIER if final_multiplier > 1.0 else config.COLOR_TEXT_HIGHLIGHT
+                        fx.add_popup(hx, hy - 6, f"{score_added:+d}", col if score_added > 0 else config.COLOR_MINE)
+        except Exception:
+            pass
 
         # --- START: Added Logging ---
         logging.info(f"ADD_SCORE: Snake='{self.name}', ScoreAfter={self.score}")
@@ -1094,6 +1140,9 @@ class Snake:
                 self.shield_charge_expiry_time = 0 # Annule l'expiration
                 # Jouer un son différent si le bouclier de compétence absorbe
                 utils.play_sound("shield_absorb")  # Ou "skill_shield_absorb"
+                self._hit_flash_until = current_time + 150
+                if self.is_player and cx_skill_ok(self):
+                    fx.add_popup(*self.get_head_center_px(), "BLOQUÉ", config.COLOR_SHIELD_POWERUP)
                 # Effet visuel spécifique
                 cx_skill, cy_skill = self.get_head_center_px()
                 if cx_skill is not None: utils.emit_particles(cx_skill, cy_skill, 20, config.COLOR_SHIELD_POWERUP, (3, 7),
@@ -1105,6 +1154,9 @@ class Snake:
                 # Vérification Bouclier POWERUP (logique existante)
             if self.shield_active:
                 utils.play_sound("shield_absorb")
+                self._hit_flash_until = current_time + 150
+                if self.is_player and cx_skill_ok(self):
+                    fx.add_popup(*self.get_head_center_px(), "BLOQUÉ", config.COLOR_SHIELD_POWERUP)
                 self.shield_active = False  # Le powerup est consommé
                 self.powerup_end_time = 0
                 cx, cy = self.get_head_center_px()
@@ -1117,6 +1169,11 @@ class Snake:
             if self.armor > 0:
                 self.armor -= 1
                 self.invincible_timer = current_time + config.ARMOR_ABSORB_INVINCIBILITY
+                self._hit_flash_until = current_time + 150
+                if self.is_player:
+                    fx.trigger_flash((255, 60, 60), 160, 55, now=current_time)
+                    if cx_skill_ok(self):
+                        fx.add_popup(*self.get_head_center_px(), "ARMURE -1", config.COLOR_LOW_ARMOR_WARN)
                 cx, cy = self.get_head_center_px()
                 if cx is not None: utils.emit_particles(cx, cy, 10, config.COLOR_ARMOR_HIT, (1, 4), (300, 600), (1, 3), 0, 0.05)
 
@@ -1155,6 +1212,16 @@ class Snake:
 
         if px != -1: utils.emit_particles(px, py, 50, self.death_colors, (2, 9), (800, 1800), (3, 8), 0.03, 0.05)
 
+        # Retour visuel : flash rouge à la mort d'un joueur, "KILL!" quand un joueur élimine un serpent
+        try:
+            if self.is_player:
+                fx.trigger_flash((255, 40, 40), 380, 120, now=current_time)
+            elif killer_snake is not None and getattr(killer_snake, 'is_player', False) and px != -1:
+                fx.add_popup(px, py, "KILL !", config.COLOR_TEXT_HIGHLIGHT, big=True)
+                fx.trigger_flash((255, 255, 255), 120, 45, now=current_time)
+        except Exception:
+            pass
+
         shake_intensity, shake_duration = 4, 300
         if self.player_num == 1: shake_intensity, shake_duration = 8, 400
         elif self.player_num == 2: shake_intensity, shake_duration = 6, 350
@@ -1184,6 +1251,9 @@ class Snake:
         if self.is_player:
             utils.play_sound("powerup_pickup")
             self.increment_combo(points=2)
+            if cx is not None:
+                labels = {"shield": "BOUCLIER", "rapid_fire": "TIR RAPIDE", "emp": "EMP", "invincibility": "INVINCIBLE", "multishot": "MULTI-TIR"}
+                fx.add_popup(cx, cy - 20, labels.get(type_key, type_key.upper()), data['color'], big=True)
 
         duration = data.get("duration", config.POWERUP_BASE_DURATION)
         if duration > 0:
@@ -1410,6 +1480,7 @@ class Snake:
 
         # Le dash part dans la direction demandée (virage en attente inclus)
         self._apply_direction_change()
+        self._prev_positions = None  # Déplacement instantané : pas d'interpolation
 
         for i in range(config.DASH_STEPS):
             dx, dy = self.current_direction
@@ -1517,7 +1588,7 @@ class Snake:
         """Dessine les effets de statut actifs près de la tête du serpent."""
         if not self.alive: return
 
-        head_px = self.get_head_center_px()
+        head_px = getattr(self, '_render_head_center_px', None) or self.get_head_center_px()
         if not head_px or head_px[0] is None: return
 
         hx, hy = head_px
@@ -1586,6 +1657,15 @@ class Snake:
         bar_height = 4
         spacing = 2
         current_y = hy - (config.GRID_SIZE // 2) - 10 # Start above head
+        try:
+            screen_rect = surface.get_rect()
+        except Exception:
+            screen_rect = None
+        # Pas assez de place au-dessus de la tête (bord haut) : on empile sous la tête
+        line_h = bar_height + spacing + int(font_small.get_height() * 0.7) + spacing
+        stack_down = current_y - line_h * len(effects_to_draw) < 0
+        if stack_down:
+            current_y = hy + (config.GRID_SIZE // 2) + 6
 
         for label, color, time_left, total_duration in effects_to_draw:
             if time_left <= 0: continue
@@ -1594,8 +1674,13 @@ class Snake:
             pct = max(0.0, min(1.0, time_left / max(1, total_duration)))
             bar_rect_bg = pygame.Rect(0, 0, bar_width, bar_height)
             bar_rect_bg.centerx = hx
-            bar_rect_bg.bottom = current_y
+            if stack_down:
+                bar_rect_bg.top = current_y
+            else:
+                bar_rect_bg.bottom = current_y
 
+            if screen_rect is not None:
+                bar_rect_bg.clamp_ip(screen_rect)  # Reste visible près des bords
             bar_rect_fill = pygame.Rect(bar_rect_bg.left, bar_rect_bg.top, int(bar_width * pct), bar_height)
 
             try:
@@ -1604,7 +1689,7 @@ class Snake:
                 pygame.draw.rect(surface, (0, 0, 0), bar_rect_bg, 1)
             except Exception: pass
 
-            current_y -= (bar_height + spacing)
+            current_y += (bar_height + spacing) * (1 if stack_down else -1)
 
             # Draw Text
             try:
@@ -1616,7 +1701,12 @@ class Snake:
                 h = int(text_surf.get_height() * 0.7)
                 text_surf = pygame.transform.smoothscale(text_surf, (w, h))
 
-                text_rect = text_surf.get_rect(centerx=hx, bottom=current_y)
+                if stack_down:
+                    text_rect = text_surf.get_rect(centerx=hx, top=current_y)
+                else:
+                    text_rect = text_surf.get_rect(centerx=hx, bottom=current_y)
+                if screen_rect is not None:
+                    text_rect.clamp_ip(screen_rect)
 
                 # Shadow
                 shadow_surf = font_small.render(text_str, True, (0, 0, 0))
@@ -1628,14 +1718,65 @@ class Snake:
 
                 surface.blit(text_surf, text_rect)
 
-                current_y -= (h + spacing)
+                current_y += (h + spacing) * (1 if stack_down else -1)
             except Exception: pass
 
+    def get_render_positions_px(self, current_time, grid_px=None):
+        """Coin haut-gauche (en pixels) de chaque segment, interpolé entre deux cases
+        pour un mouvement fluide. La logique du jeu reste case par case."""
+        if grid_px is None:
+            grid_px = int(getattr(config, "GRID_SIZE", 20))
+        positions = self.positions
+        plain = [(p[0] * grid_px, p[1] * grid_px) for p in positions]
+        prev = getattr(self, '_prev_positions', None)
+        if not prev or not bool(getattr(config, "SMOOTH_MOVEMENT", True)):
+            return plain
+        try:
+            interval = float(getattr(self, '_prev_move_interval', 0) or 0)
+            if interval <= 0 or interval == float('inf'):
+                return plain
+            t = (float(current_time) - float(self.last_move_time)) / interval
+        except Exception:
+            return plain
+        if t >= 1.0:
+            return plain
+        t = max(0.0, t)
+        out = []
+        for i, p in enumerate(positions):
+            if i < len(prev):
+                q = prev[i]
+                dx = p[0] - q[0]
+                dy = p[1] - q[1]
+                if abs(dx) + abs(dy) == 1:  # Case voisine (pas de wrap, pas de téléport)
+                    out.append(((q[0] + dx * t) * grid_px, (q[1] + dy * t) * grid_px))
+                    continue
+            out.append(plain[i])
+        return out
+
     def draw(self, surface, current_time, font_small, font_default):
-        if self.is_player: # Log only for players to reduce noise
-            logging.debug(f"DRAW CHECK: Snake {self.name}. alive={self.alive}, positions_empty={not self.positions}, current_time={current_time}")
-        # Le reste de la fonction draw...
         if not self.alive or not self.positions: return
+        # Couleur « Arc-en-ciel » (débloquable) : teinte animée
+        if self.is_player and self.player_num in (1, 2):
+            preset = getattr(config, "SNAKE_COLOR_PRESET_P1" if self.player_num == 1 else "SNAKE_COLOR_PRESET_P2", "")
+            if preset == "rainbow":
+                r, g, b = colorsys.hsv_to_rgb((current_time * 0.00025) % 1.0, 0.85, 1.0)
+                self.color = (int(r * 255), int(g * 255), int(b * 255))
+        render_px = [(int(round(x)), int(round(y))) for (x, y) in self.get_render_positions_px(current_time)]
+        _g = int(getattr(config, "GRID_SIZE", 20))
+        self._render_head_center_px = (render_px[0][0] + _g // 2, render_px[0][1] + _g // 2)
+
+        # Halo néon sous le serpent (tête plus lumineuse)
+        if getattr(config, "NEON_GLOW", True):
+            try:
+                glow_col = self.color
+                boss_k = 1.5 if getattr(self, 'is_boss', False) else 1.0
+                for i, (gx, gy) in enumerate(render_px):
+                    if i == 0:
+                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.7 * boss_k, 8)
+                    elif i % 2 == 0 or len(render_px) < 12 or boss_k > 1.0:
+                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.3 * boss_k, 5)
+            except Exception:
+                pass
 
         def _draw_armor_pips(head_rect):
             """Affiche l'armure restante (très lisible) près de la tête."""
@@ -1783,7 +1924,9 @@ class Snake:
 
         # --- Détermination Couleur de Base ---
         base_color = self.color
-        if draw_color_override: # Priorité au flash critique
+        if current_time < getattr(self, '_hit_flash_until', 0): # Flash d'impact
+             base_color = config.COLOR_WHITE
+        elif draw_color_override: # Priorité au flash critique
              base_color = draw_color_override
         # Appliquer couleur des powerups si aucun override n'est actif
         elif self.invincible_powerup_active: base_color = config.COLOR_INVINCIBILITY_POWERUP
@@ -1801,8 +1944,15 @@ class Snake:
         tint_color_to_use = None
         tint_alpha = 0
 
+        # 0. Flash blanc bref quand le serpent encaisse un coup
+        if current_time < getattr(self, '_hit_flash_until', 0):
+             tint_color_to_use = config.COLOR_WHITE
+             tint_alpha = 170
+        elif getattr(self, 'is_boss', False):
+             tint_color_to_use = self.color  # Boss : teinte violette permanente
+             tint_alpha = 130
         # 1. Effect Tint (Si une couleur d'effet est active et différente de la couleur de base)
-        if base_color != self.color:
+        elif base_color != self.color:
              tint_color_to_use = base_color
              tint_alpha = 120
              if is_flashing_critically: tint_alpha = 180
@@ -1862,7 +2012,7 @@ class Snake:
             # --- Style "wire" : ligne + nœuds, sans traits à travers le wrap ---
             if style == "wire":
                 try:
-                    centers = [(p[0] * grid_px + grid_px // 2, p[1] * grid_px + grid_px // 2) for p in self.positions]
+                    centers = [(x + grid_px // 2, y + grid_px // 2) for (x, y) in render_px]
                     line_width = max(2, grid_px // 4)
 
                     for idx in range(len(self.positions) - 1):
@@ -1887,8 +2037,7 @@ class Snake:
                     pass
 
                 try:
-                    hp = self.positions[0]
-                    _draw_armor_pips(pygame.Rect(int(hp[0] * grid_px), int(hp[1] * grid_px), int(grid_px), int(grid_px)))
+                    _draw_armor_pips(pygame.Rect(render_px[0][0], render_px[0][1], int(grid_px), int(grid_px)))
                 except Exception:
                     pass
 
@@ -1906,8 +2055,7 @@ class Snake:
 
             # --- Styles "blocks" / "rounded" / "neon" / "glass" / "circuit" / "pixel" ---
             for i, p in enumerate(self.positions):
-                px = p[0] * grid_px
-                py = p[1] * grid_px
+                px, py = render_px[i]
                 r = pygame.Rect(px, py, grid_px, grid_px)
 
                 seg_color = base_color
@@ -2059,15 +2207,14 @@ class Snake:
                     pass
 
             try:
-                hp = self.positions[0]
-                _draw_armor_pips(pygame.Rect(int(hp[0] * grid_px), int(hp[1] * grid_px), int(grid_px), int(grid_px)))
+                _draw_armor_pips(pygame.Rect(render_px[0][0], render_px[0][1], int(grid_px), int(grid_px)))
             except Exception:
                 pass
 
             if self.is_player and self.reversed_controls_active:
                 try:
-                    hx = self.positions[0][0] * grid_px + grid_px // 2
-                    hy = self.positions[0][1] * grid_px + grid_px // 2
+                    hx = render_px[0][0] + grid_px // 2
+                    hy = render_px[0][1] + grid_px // 2
                     q_surf = font_default.render("?", True, config.COLOR_WHITE)
                     q_rect = q_surf.get_rect(center=(hx, hy))
                     surface.blit(q_surf, q_rect)
@@ -2087,10 +2234,27 @@ class Snake:
         body_img = utils.images.get(f"snake_{prefix}_body.png")
         tail_img = utils.images.get(f"snake_{prefix}_tail.png")
 
+        # Teinte (effets, armure, flash) appliquée au dessin lui-même plutôt qu'en carré par-dessus
+        if tint_color_to_use:
+            try:
+                head_img = _tinted_sprite(head_img, tint_color_to_use, tint_alpha) if head_img else None
+                body_img = _tinted_sprite(body_img, tint_color_to_use, tint_alpha) if body_img else None
+                tail_img = _tinted_sprite(tail_img, tint_color_to_use, tint_alpha) if tail_img else None
+            except Exception:
+                pass
+            tint_surface = None
+
+        # Bouclier (compétence) : halo pulsant autour de la tête au lieu d'un cadre carré
+        if self.shield_charge_active and render_px:
+            try:
+                pulse = 0.8 + 0.2 * math.sin(current_time * 0.02)
+                fx.draw_glow(surface, (render_px[0][0] + _g // 2, render_px[0][1] + _g // 2), config.COLOR_SHIELD_POWERUP, _g * 2.0 * pulse, 9)
+            except Exception:
+                pass
+
         for i, p in enumerate(self.positions):
-            # Calcul position pixel (Coin haut-gauche)
-            px = p[0] * config.GRID_SIZE
-            py = p[1] * config.GRID_SIZE
+            # Calcul position pixel (Coin haut-gauche), interpolée pour la fluidité
+            px, py = render_px[i]
 
             # Centre de la case (CRUCIAL pour la rotation)
             center = (px + config.GRID_SIZE // 2, py + config.GRID_SIZE // 2)
@@ -2215,17 +2379,17 @@ class Snake:
             # On la dessine seulement si pas d'image OU si c'est une indication critique (armure/bouclier).
             # Si image présente, on peut dessiner un rect 'outline' simple autour.
 
-            if border_thickness > 1: # Si armure ou bouclier actif (épaisseur > 1)
+            # Sprites : pas de cadre carré (armure = pastilles au-dessus de la tête, bouclier = halo)
+            if border_thickness > 1 and not (head_img or body_img or tail_img):
                 try:
                      pygame.draw.rect(surface, border_color, r, border_thickness)
                 except (TypeError, ValueError): pass
 
         try:
-            hp = self.positions[0]
             _draw_armor_pips(
                 pygame.Rect(
-                    int(hp[0] * config.GRID_SIZE),
-                    int(hp[1] * config.GRID_SIZE),
+                    render_px[0][0],
+                    render_px[0][1],
                     int(config.GRID_SIZE),
                     int(config.GRID_SIZE),
                 )
@@ -2737,6 +2901,7 @@ class EnemySnake(Snake):
             self.start_pos = (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
 
         self.positions = [self.start_pos]
+        self._prev_positions = None
         current_dir = self.current_direction # Direction sûre déjà trouvée par super().reset
         grow_dir = (-current_dir[0], -current_dir[1]) # Direction opposée pour faire grandir vers l'arrière
         current_walls_set = set(self.current_walls)
@@ -3278,6 +3443,8 @@ class EnemySnake(Snake):
                      died_in_move = True
 
             if not died_in_move:
+                self._prev_positions = list(self.positions)
+                self._prev_move_interval = move_interval
                 self.positions.insert(0, new_head)
                 if self.growing:
                     self.growing = False
