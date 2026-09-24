@@ -74,6 +74,30 @@ import zipfile
 import io
 import threading
 
+_screen_bg_overlay_cache = {}
+
+
+def draw_screen_background(screen, game_state, darken=0):
+    """Fond commun des écrans de menu : image du menu (ou fond d'arène), voile optionnel."""
+    bg = game_state.get('menu_background_image') if isinstance(game_state, dict) else None
+    try:
+        if bg is not None:
+            screen.blit(bg, (0, 0))
+        else:
+            screen.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, True), (0, 0))
+    except Exception:
+        screen.fill(config.COLOR_BACKGROUND)
+    if darken > 0:
+        key = (screen.get_size(), darken)
+        overlay = _screen_bg_overlay_cache.get(key)
+        if overlay is None:
+            _screen_bg_overlay_cache.clear()
+            overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, darken))
+            _screen_bg_overlay_cache[key] = overlay
+        screen.blit(overlay, (0, 0))
+
+
 # --- Fonction Helper pour Dessiner les Panneaux UI (avec correction alpha) ---
 def draw_ui_panel(surface, rect):
     """Dessine un panneau UI semi-transparent avec bordure."""
@@ -3991,7 +4015,7 @@ def run_controls_remap(events, dt, screen, game_state):
 
     # Draw
     try:
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
         screen.blit(overlay, (0, 0))
@@ -4365,7 +4389,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
 
     # Dessin de l'écran
     try: # Bloc try autour du dessin
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 190)) # Overlay plus sombre
         screen.blit(overlay, (0, 0))
@@ -4406,18 +4430,20 @@ def run_name_entry_solo(events, dt, screen, game_state):
             
         # Dessin du clavier virtuel avec animations
         keyboard_y_start = config.SCREEN_HEIGHT * 0.5
-        key_height = 40
-        key_spacing = 5
+        key_height = max(40, int(config.SCREEN_HEIGHT * 0.055))
+        key_spacing = max(5, key_height // 8)
         
         for row_idx, row in enumerate(VIRTUAL_KEYBOARD_CHARS):
             key_y = keyboard_y_start + row_idx * (key_height + key_spacing)
-            total_row_width = len(row) * (key_height + key_spacing)
+            # Largeurs réelles (touches larges pour <-, OK et espace) : pas de chevauchement
+            key_widths = [key_height * 2 if c in ["<-", "OK", " "] else key_height for c in row]
+            total_row_width = sum(key_widths) + key_spacing * (len(row) - 1)
             row_start_x = (config.SCREEN_WIDTH - total_row_width) / 2
             
             for col_idx, char in enumerate(row):
                 # Dimensions et position de base de la touche
-                key_x = row_start_x + col_idx * (key_height + key_spacing)
-                key_width = key_height * 2 if char in ["<-", "OK", " "] else key_height
+                key_x = row_start_x + sum(key_widths[:col_idx]) + col_idx * key_spacing
+                key_width = key_widths[col_idx]
                 
                 # Animation: Effet de pulsation pour la touche sélectionnée
                 scale_factor = 1.0
@@ -4802,7 +4828,7 @@ def run_map_selection(events, dt, screen, game_state):
 
     # --- MODIFIÉ: Dessin de l'écran ---
     try: # Bloc try autour du dessin
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
         screen.blit(overlay, (0, 0))
@@ -4963,6 +4989,7 @@ def run_map_selection(events, dt, screen, game_state):
             cfg_y += font_small.get_linesize()
 
         # Dessine le cadre de l'aperçu
+        pygame.draw.rect(screen, (4, 6, 16), preview_rect)  # Fond sombre de l'aperçu
         pygame.draw.rect(screen, config.COLOR_GRID, preview_rect, 2)
 
         # Calcule l'échelle pour dessiner les murs dans la zone d'aperçu
@@ -4998,7 +5025,22 @@ def run_map_selection(events, dt, screen, game_state):
             if desc_rect.height > 0 and desc_rect.bottom > desc_rect.top:
                 draw_ui_panel(screen, desc_rect)
                 dy = desc_rect.top + panel_pad
-                for line in (desc_lines or [])[:2]:
+                # Retour à la ligne automatique pour rester dans le panneau
+                max_w = desc_rect.width - panel_pad * 2
+                wrapped = []
+                for raw_line in (desc_lines or [])[:2]:
+                    words, cur = str(raw_line).split(" "), ""
+                    for w in words:
+                        test = (cur + " " + w).strip()
+                        if font_small.size(test)[0] <= max_w or not cur:
+                            cur = test
+                        else:
+                            wrapped.append(cur)
+                            cur = w
+                    if cur:
+                        wrapped.append(cur)
+                max_lines = max(1, (desc_rect.height - panel_pad) // max(1, font_small.get_height() + 2))
+                for line in wrapped[:max_lines]:
                     utils.draw_text(screen, line, font_small, config.COLOR_TEXT_MENU, (desc_rect.left + panel_pad, dy), "topleft")
                     dy += font_small.get_linesize()
         except Exception:
@@ -5791,7 +5833,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
 
     # --- Dessin ---
     try:
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         screen.blit(overlay, (0, 0))
@@ -6088,7 +6130,7 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     # Dessin de l'écran
     try:
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
         utils.draw_text_with_shadow(screen, "Configuration PvP", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
         y_start, item_gap = config.SCREEN_HEIGHT * 0.30, 60
@@ -6454,7 +6496,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
 
     # Dessin de l'écran
     try: # Bloc try autour du dessin
-        screen.fill(config.COLOR_BACKGROUND)
+        draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 190)); screen.blit(overlay, (0, 0))
 
         # Message d'attente pendant l'initialisation
@@ -6518,18 +6560,20 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         
         # Dessin du clavier virtuel avec animations
         keyboard_y_start = config.SCREEN_HEIGHT * 0.5
-        key_height = 40
-        key_spacing = 5
+        key_height = max(40, int(config.SCREEN_HEIGHT * 0.055))
+        key_spacing = max(5, key_height // 8)
         
         for row_idx, row in enumerate(VIRTUAL_KEYBOARD_CHARS):
             key_y = keyboard_y_start + row_idx * (key_height + key_spacing)
-            total_row_width = len(row) * (key_height + key_spacing)
+            # Largeurs réelles (touches larges pour <-, OK et espace) : pas de chevauchement
+            key_widths = [key_height * 2 if c in ["<-", "OK", " "] else key_height for c in row]
+            total_row_width = sum(key_widths) + key_spacing * (len(row) - 1)
             row_start_x = (config.SCREEN_WIDTH - total_row_width) / 2
             
             for col_idx, char in enumerate(row):
                 # Dimensions et position de base de la touche
-                key_x = row_start_x + col_idx * (key_height + key_spacing)
-                key_width = key_height * 2 if char in ["<-", "OK", " "] else key_height
+                key_x = row_start_x + sum(key_widths[:col_idx]) + col_idx * key_spacing
+                key_width = key_widths[col_idx]
                 
                 # Animation: Effet de pulsation pour la touche sélectionnée
                 scale_factor = 1.0
@@ -7172,7 +7216,7 @@ def run_game_over(events, dt, screen, game_state):
 
     # Dessin
     try:
-        screen.fill(config.COLOR_BACKGROUND); overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 180)); screen.blit(overlay, (0, 0))
+        draw_screen_background(screen, game_state); overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 180)); screen.blit(overlay, (0, 0))
         utils.draw_text_with_shadow(screen, "GAME OVER", font_large, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.20), "center")
         
         # Afficher le décompte si les entrées sont verrouillées
@@ -9553,7 +9597,7 @@ def run_update(events, dt, screen, game_state):
         t.start()
 
     # Dessin
-    screen.fill(config.COLOR_BACKGROUND)
+    draw_screen_background(screen, game_state, darken=170)
 
     # Animation simple (points qui bougent)
     msg = game_state.get('update_message', "")
