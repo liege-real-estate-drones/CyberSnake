@@ -59,6 +59,26 @@ Redémarrer ensuite la borne.
 
 Ne plus déplacer les câbles USB des encodeurs après l'installation (sinon relancer l'assistant).
 
+## Boutons de chaque console (`borne_reglages.py`)
+
+Panneau : 2 rangées de 4 boutons + Coin / Player. Réglages trouvés en lisant le code de
+chaque émulateur (chacun place les boutons à sa façon) :
+
+| Où | Réglage | Pourquoi |
+|---|---|---|
+| EmulationStation | haut `Y X L1 L2`, bas `B A R1 R2`, Coin = Select = Hotkey, Player = Start | disposition arcade standard, suivie par MAME, FinalBurn Neo, RetroArch |
+| Mega Drive | `megadrive.gx_controller1/2_mapping=megadrive` | sinon A est en haut à gauche ; ainsi A B C en bas, X Y Z en haut |
+| N64 | `configs/mupen64/input.xml` : haut C-gauche C-haut C-bas C-droite, bas A B Z R | Batocera met les boutons C sur un 2e stick que la borne n'a pas |
+| MAME 2003-Plus | `mame2003-plus_four_way_emulation` | diagonales des jeux 4 directions (Pac-Man...) |
+| MAME 2003-Plus | remap `<jeu>.rmp` en manette « 6-Button » pour les jeux de combat | sinon poings et pieds sont mélangés (type « RetroPad » : B A Y X L R) |
+| Tous | `global.autosave=0` | un vieil état rechargé au lancement fait planter le jeu |
+
+Vérifier : `python3 /userdata/system/borne_manettes/borne_reglages.py`
+Remettre ce qui a bougé (ex. après une mise à jour de Batocera) : même commande avec `--appliquer`.
+
+⚠️ Coin étant aussi la Hotkey : Coin + bouton 2 du bas redémarre le jeu, Coin + bouton 2
+du haut recharge un état, Coin + gauche/droite rembobine / accélère. Lâcher Coin avant de jouer.
+
 ## Commandes utiles
 
 | Action | Commande |

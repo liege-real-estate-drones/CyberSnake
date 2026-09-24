@@ -332,5 +332,49 @@ class TestBornePistolets(unittest.TestCase):
         self.assertIn('value="/dev/ttyACM1"', new)
 
 
+class TestBorneReglages(unittest.TestCase):
+    def setUp(self):
+        import borne_reglages
+        import xml.etree.ElementTree as ET
+        self.br, self.ET = borne_reglages, ET
+
+    def test_pad_gets_arcade_layout_and_duplicates_removed(self):
+        pad = ('<inputConfig type="joystick" deviceName="DragonRise Inc.   Generic   USB  Joystick  " '
+               'deviceGUID="03000000790000000600000010010000">'
+               '<input name="a" type="button" id="3" value="1" code="291" />'
+               '<input name="up" type="axis" id="0" value="-1" code="0" /></inputConfig>')
+        root = self.ET.fromstring(f"<inputList>{pad}{pad}</inputList>")
+        self.assertFalse(self.br.pad_buttons_ok(self.br.pad_entries(root)[0]))
+        self.assertTrue(self.br.fix_pad(root))
+        entries = self.br.pad_entries(root)
+        self.assertEqual(len(entries), 1)
+        self.assertTrue(self.br.pad_buttons_ok(entries[0]))
+        names = [i.get("name") for i in entries[0].findall("input")]
+        self.assertIn("up", names)  # Les directions ne sont pas touchées
+        self.assertEqual(names.count("a"), 1)
+
+    def test_n64_c_buttons(self):
+        root = self.ET.fromstring('<inputList><defaultInputList><input name="a" value="C Button R" />'
+                                  '<input name="pageup" value="L Trig" /></defaultInputList></inputList>')
+        self.assertFalse(self.br.n64_ok(root))
+        self.br.fix_n64(root)
+        vals = {i.get("name"): i.get("value") for i in root.iter("input")}
+        self.assertEqual(vals, {"a": "B Button", "pageup": "C Button D"})
+
+    def test_core_option_and_conf(self):
+        text = 'mame2003-plus_skip_warnings = "enabled"\n'
+        new = self.br.set_core_option(text, "mame2003-plus_four_way_emulation", '"enabled"')
+        self.assertEqual(self.br.core_option(new, "mame2003-plus_four_way_emulation"), '"enabled"')
+        again = self.br.set_core_option(new, "mame2003-plus_four_way_emulation", '"disabled"')
+        self.assertEqual(again.count("four_way"), 1)
+        self.assertEqual(self.br.conf_value("a.b=1\nglobal.autosave=0\n", "global.autosave"), "0")
+        self.assertIsNone(self.br.conf_value("#global.autosave=1\n", "global.autosave"))
+
+    def test_mame2003_fighters(self):
+        conf = ('mame["sfa2.zip"].core=mame078plus\nmame["1941.zip"].core=mame078plus\n'
+                'mame["sf2ce.zip"].core=mame\nneogeo["mk3.zip"].core=mame078plus\n')
+        self.assertEqual(self.br.mame2003_fighters(conf, {"sfa2", "sf2ce", "mk3"}), ["mk3", "sfa2"])
+
+
 if __name__ == "__main__":
     unittest.main()
