@@ -444,6 +444,9 @@ HOWTO_ITEMS = [
     ("icon_multishot.png", "Multi-tir", "Tirs en éventail"),
     ("icon_invincible.png", "Invincible", "Aucun dégât"),
     ("icon_emp.png", "EMP", "Détruit les mines proches"),
+    ("icon_magnet.png", "Aimant", "Attire la nourriture proche"),
+    ("icon_slowmo.png", "Ralenti", "Ralentit ennemis et tirs ennemis"),
+    ("icon_mirror.png", "Miroir", "Renvoie les tirs ennemis"),
 ]
 
 

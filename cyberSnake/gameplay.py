@@ -12,9 +12,27 @@ import game_objects
 import fx
 import boss as boss_mod
 import enemies
+import bonuses
+import arenas
 import progress
 from render import draw_game_elements_on_surface
 from ui_common import get_joystick_ids
+
+
+def _reflect_projectile(game_state, projectile, player, current_time):
+    """Bonus Miroir : le tir ennemi repart vers son tireur et devient un tir du joueur."""
+    try:
+        dx, dy = projectile.direction
+        projectile.direction = (-dx, -dy)
+        projectile.owner_snake = player
+        projectile.color = config.POWERUP_TYPES.get("mirror", {}).get("color", projectile.color)
+        projectile.move(34)  # Sort du corps du joueur
+        game_state.setdefault('player_projectiles', []).append(projectile)
+        cx, cy = projectile.rect.center
+        fx.add_popup(cx, cy, "RENVOYÉ !", projectile.color, now=current_time)
+        utils.play_sound("shield_absorb")
+    except Exception:
+        logging.warning("Miroir : renvoi du tir impossible", exc_info=True)
 
 
 def reset_game(game_state):
@@ -23,6 +41,7 @@ def reset_game(game_state):
     print("Resetting game...")
     current_time_reset = pygame.time.get_ticks()
     fx.clear_popups()
+    bonuses.reset()
     game_state['game_start_time'] = current_time_reset
     game_state.pop('game_end_time', None)
     game_state['boss'] = None
@@ -307,6 +326,13 @@ def reset_game(game_state):
             utils.music_call("stop")
             utils.play_selected_music(base_path)
         except pygame.error as e: print(f"Erreur redémarrage musique pendant reset: {e}")
+
+    # --- Arène animée (portails, portes laser, zone qui rétrécit) ---
+    try:
+        arenas.setup(game_state, current_time_reset)
+    except Exception as e:
+        logging.error(f"Erreur préparation arène animée: {e}", exc_info=True)
+        game_state['arena'] = None
 
     # --- Défi du jour : modificateur appliqué au départ ---
     if game_state.get('daily_challenge'):
@@ -903,6 +929,12 @@ def run_game(events, dt, screen, game_state):
         logging.error(f"Erreur mouvement serpents/IA: {e}", exc_info=True)
         game_state['current_state'] = config.MENU; return config.MENU
 
+    # --- Arène animée : portails, portes laser, zone qui rétrécit (après les déplacements) ---
+    try:
+        arenas.update(game_state, current_time)
+    except Exception as e:
+        logging.error(f"Erreur arène animée: {e}", exc_info=True)
+
     # --- Tir des IA (Après tous les mouvements) ---
     try:
         if ai_should_shoot and enemy_snake and enemy_snake.alive:
@@ -1018,6 +1050,8 @@ def run_game(events, dt, screen, game_state):
                             )
                             if not too_close:
                                 available_powerups = list(config.POWERUP_TYPES.keys())
+                                if current_game_mode == config.MODE_PVP:  # Sans ennemis IA, Ralenti et Miroir sont inutiles
+                                    available_powerups = [k for k in available_powerups if k not in ("slowmo", "mirror")]
                                 if available_powerups: powerup_type = random.choice(available_powerups); powerups.append(game_objects.PowerUp(spawn_pos, powerup_type)); current_occupied.add(spawn_pos); spawned_count += 1
                     if spawned_count > 0: game_state['last_powerup_spawn_time'] = current_time
 
@@ -1286,6 +1320,9 @@ def run_game(events, dt, screen, game_state):
                          seg_rect_p1 = pygame.Rect(seg_pos_p1[0]*config.GRID_SIZE, seg_pos_p1[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
                          if en_proj.rect.colliderect(seg_rect_p1):
                              en_rem_indices.add(l); hit_something_en = True
+                             if bonuses.is_mirror_active(player_snake, current_time):
+                                 _reflect_projectile(game_state, en_proj, player_snake, current_time)
+                                 break
                              survived_p1 = player_snake.handle_damage(current_time, en_proj.owner_snake, damage_source_pos=en_proj.rect.center) # Passe l'owner IA
                              if not survived_p1:
                                  if not p1_died_this_frame:
@@ -1308,6 +1345,9 @@ def run_game(events, dt, screen, game_state):
                         seg_rect_p2 = pygame.Rect(seg_pos_p2[0]*config.GRID_SIZE, seg_pos_p2[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
                         if en_proj.rect.colliderect(seg_rect_p2): # en_proj est le projectile IA
                             en_rem_indices.add(l); hit_something_en = True
+                            if bonuses.is_mirror_active(player2_snake, current_time):
+                                _reflect_projectile(game_state, en_proj, player2_snake, current_time)
+                                break
                             survived_p2 = player2_snake.handle_damage(current_time, en_proj.owner_snake, damage_source_pos=en_proj.rect.center) # Passe l'owner IA
                             if not survived_p2:
                                 if not p2_died_this_frame:
@@ -1782,6 +1822,7 @@ def run_game(events, dt, screen, game_state):
     # --- Boss (Survie) : récompense à sa défaite ; poseurs de mines ---
     try:
         enemies.update_special_enemies(game_state, current_time)
+        bonuses.update(game_state, current_time)
         boss_mod.update_boss(game_state, current_time)
     except Exception as e:
         logging.error(f"Erreur mise à jour boss: {e}", exc_info=True)

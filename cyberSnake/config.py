@@ -449,6 +449,10 @@ POWERUP_TYPES = {
     "emp": {"color": COLOR_EMP_POWERUP, "symbol": "E", "objective_tag": "powerup_emp", "duration": 0, "image_file": "icon_emp.png"}, # EMP est instantané
     "invincibility": {"color": COLOR_INVINCIBILITY_POWERUP, "symbol": "I", "objective_tag": "powerup_invinc", "duration": POWERUP_BASE_DURATION, "image_file": "icon_invincible.png"},
     "multishot": {"color": COLOR_MULTISHOT_POWERUP, "symbol": "M", "objective_tag": "powerup_generic", "duration": POWERUP_MULTISHOT_DURATION, "image_file": "icon_multishot.png"},
+    # Nouveaux bonus (bonuses.py) : minuteurs indépendants, cumulables
+    "magnet": {"color": (255, 70, 90), "symbol": "U", "objective_tag": "powerup_generic", "duration": 9000, "image_file": "icon_magnet.png"},
+    "slowmo": {"color": (120, 200, 255), "symbol": "T", "objective_tag": "powerup_generic", "duration": 7000, "image_file": "icon_slowmo.png"},
+    "mirror": {"color": (220, 150, 255), "symbol": "<>", "objective_tag": "powerup_generic", "duration": 8000, "image_file": "icon_mirror.png"},
     # "armor_plate" a été supprimé d'ici
 }
 # --- Fin Suppression ---

@@ -754,6 +754,8 @@ def choose_food_type(current_game_mode, current_objective):
 
 # Zones (pixels) couvertes par les panneaux du HUD : rien n'y apparaît (mis à jour à chaque image)
 HUD_EXCLUSION_RECTS = []
+# Cases où rien ne doit apparaître (ex : portails des arènes animées)
+EXTRA_BLOCKED_CELLS = set()
 
 
 def _under_hud(pos):
@@ -769,7 +771,7 @@ def get_random_empty_position(occupied_positions):
     max_attempts = config.GRID_WIDTH * config.GRID_HEIGHT // 2
     for attempt in range(max_attempts):
         pos = (random.randint(0, config.GRID_WIDTH - 1), random.randint(0, config.GRID_HEIGHT - 1))
-        if pos not in occupied_positions:
+        if pos not in occupied_positions and pos not in EXTRA_BLOCKED_CELLS:
             if attempt < max_attempts // 2 and _under_hud(pos):
                 continue
             return pos

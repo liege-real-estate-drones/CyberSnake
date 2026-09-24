@@ -4,7 +4,7 @@
 Le code est réparti dans des modules thématiques ; ce fichier ré-exporte les fonctions
 utilisées par cybersnake.pygame (table des états) et par les tests.
 """
-from ui_common import *  # noqa: F401,F403
+from ui_common import is_confirm_button, is_back_button, get_joystick_ids, draw_ui_panel  # noqa: F401
 from render import draw_game_elements_on_surface  # noqa: F401
 from gameplay import reset_game, run_game  # noqa: F401
 from demo_mode import run_demo  # noqa: F401

@@ -12,6 +12,7 @@ import config
 # Importe le module utils pour accéder aux fonctions utilitaires
 import utils
 import fx
+import bonuses
 import logging # Added for detailed score logging
 
 
@@ -146,6 +147,9 @@ class Projectile:
         """Déplace le projectile."""
         time_factor = dt / (1000.0 / 60.0) if dt > 0 else 0
         distance = self.speed * time_factor
+        owner = self.owner_snake
+        if owner is not None and not getattr(owner, 'is_player', False) and bonuses.enemies_slowed(pygame.time.get_ticks()):
+            distance *= bonuses.ENEMY_PROJECTILE_SLOW  # Bonus Ralenti
         dx, dy = self.direction
         self.x += dx * distance
         self.y += dy * distance
@@ -898,6 +902,8 @@ class Snake:
             base_interval *= float(getattr(config, "GAME_SPEED_FACTOR", 1.0))
         except Exception:
             pass
+        if not self.is_player and bonuses.enemies_slowed(pygame.time.get_ticks()):
+            base_interval *= bonuses.ENEMY_SLOW_FACTOR  # Bonus Ralenti
         return base_interval
 
     def move(self, obstacles, current_time): # `obstacles` est un set ici
@@ -1257,10 +1263,13 @@ class Snake:
             self.increment_combo(points=2)
             self.powerups_collected = getattr(self, 'powerups_collected', 0) + 1
             if cx is not None:
-                labels = {"shield": "BOUCLIER", "rapid_fire": "TIR RAPIDE", "emp": "EMP", "invincibility": "INVINCIBLE", "multishot": "MULTI-TIR"}
+                labels = {"shield": "BOUCLIER", "rapid_fire": "TIR RAPIDE", "emp": "EMP", "invincibility": "INVINCIBLE", "multishot": "MULTI-TIR",
+                          "magnet": "AIMANT", "slowmo": "RALENTI", "mirror": "MIROIR"}
                 fx.add_popup(cx, cy - 20, labels.get(type_key, type_key.upper()), data['color'], big=True)
 
         duration = data.get("duration", config.POWERUP_BASE_DURATION)
+        if bonuses.activate(self, type_key, current_time, duration):
+            return  # Nouveaux bonus : minuteurs propres, n'annulent pas les autres
         if duration > 0:
             new_end_time = current_time + duration
             self.deactivate_powerups()
@@ -1649,6 +1658,9 @@ class Snake:
         mult_end = self.effect_end_timers.get('score_multiplier', 0)
         if self.score_multiplier_active and mult_end > current_time:
              effects_to_draw.append(("X2", config.COLOR_FOOD_MULTIPLIER, mult_end - current_time, config.FOOD_EFFECT_DURATION))
+
+        # 6b. Nouveaux bonus (aimant, ralenti, miroir)
+        effects_to_draw.extend(bonuses.status_effects(self, current_time))
 
         # 7. Frozen
         frozen_end = self.effect_end_timers.get('freeze_self', 0)

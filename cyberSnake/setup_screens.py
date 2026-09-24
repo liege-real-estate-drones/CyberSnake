@@ -9,6 +9,7 @@ import logging
 import config
 import utils
 import progress
+import arenas
 from gameplay import reset_game
 from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
@@ -836,6 +837,7 @@ def run_map_selection(events, dt, screen, game_state):
             "Couloirs": "Couloirs et rotations rapides",
             "Chambres": "Séparations, lectures de trajectoire",
         }
+        map_desc_by_key.update(arenas.MAP_DESCRIPTIONS)
 
         desc_lines = []
         if selected_key_or_label_preview == "Aléatoire":

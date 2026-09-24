@@ -18,7 +18,7 @@ jobs:
       - name: Noms indéfinis (pyflakes)
         run: |
           cd cyberSnake
-          ! python -m pyflakes *.py cybersnake.pygame | grep "undefined name"
+          ! python -m pyflakes *.py cybersnake.pygame | grep "undefined name '"
       - name: Tests unitaires
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Test de fumée (une partie dans chaque mode)

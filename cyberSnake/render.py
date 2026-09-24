@@ -9,6 +9,7 @@ import config
 import utils
 import fx
 import boss as boss_mod
+import arenas
 from ui_common import _format_mmss, _hud_begin, _hud_end, draw_ui_panel, draw_wall_tile
 
 
@@ -235,11 +236,16 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
             return
 
     # --- Dessin Murs ---
+    laser_cells = arenas.laser_cells_active(game_state)
     for wall_pos in current_map_walls:
+        if wall_pos in laser_cells:
+            continue  # Dessinée comme porte laser par arenas.draw
         wall_rect = pygame.Rect(wall_pos[0] * config.GRID_SIZE, wall_pos[1] * config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
         try:
             draw_wall_tile(target_surface, wall_rect, grid_pos=wall_pos, current_time=current_time)
         except Exception: pass
+
+    arenas.draw(target_surface, game_state, current_time)
 
     # --- Copies des listes d'objets ---
     foods_copy = list(foods); mines_copy = list(mines); powerups_copy = list(powerups)

@@ -48,6 +48,7 @@ try:
     import fx
     import screens
     import progress
+    import arenas  # Enregistre les arènes animées dans config.MAPS
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
