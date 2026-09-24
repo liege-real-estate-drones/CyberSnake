@@ -56,7 +56,7 @@ echo "Installation des données dans $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 # Sauvegarde des données du joueur (scores, options, contrôles, cartes favorites)
 USER_BACKUP_DIR="/tmp/cybersnake_user_backup"
-USER_FILES="highscores.json game_options.json controls.json favorite_maps.json"
+USER_FILES="highscores.json game_options.json controls.json favorite_maps.json progress.json"
 rm -rf "$USER_BACKUP_DIR"
 mkdir -p "$USER_BACKUP_DIR"
 for f in $USER_FILES; do

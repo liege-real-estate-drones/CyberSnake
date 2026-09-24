@@ -47,6 +47,7 @@ try:
     import menu_input
     import fx
     import screens
+    import progress
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -190,6 +191,11 @@ def main():
 
     # --- Chargement Options (vidéo) ---
     grid_size_override = None
+    try:
+        progress.load(base_path_assets)
+        progress.register_colors_in_config()
+    except Exception as e:
+        logging.warning(f"Progression (progress.json) non chargée: {e}", exc_info=True)
     try:
         opts = utils.load_game_options(base_path_assets)
         config.SHOW_GRID = bool(opts.get("show_grid", getattr(config, "SHOW_GRID", True)))

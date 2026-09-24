@@ -118,6 +118,14 @@ def update_boss(game_state, current_time):
         except Exception:
             logging.warning("Boss: récompense non appliquée", exc_info=True)
     game_state['boss_banner_text'] = "BOSS VAINCU ! +2 ARMURE +20 MUNITIONS"
+    try:
+        import progress
+        new = progress.record_boss_defeat()
+        if new:
+            game_state['boss_banner_text'] = "BOSS VAINCU ! COULEUR DÉBLOQUÉE : " + ", ".join(new)
+            game_state.setdefault('new_unlocks', []).extend(new)
+    except Exception:
+        logging.warning("Boss: progression non enregistrée", exc_info=True)
     game_state['boss_banner_until'] = current_time + BOSS_BANNER_MS
     logging.info("Boss vaincu.")
 

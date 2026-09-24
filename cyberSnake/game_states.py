@@ -64,6 +64,7 @@ import utils
 import game_objects
 import fx
 import boss as boss_mod
+import progress
 import subprocess
 import os
 import sys
@@ -675,8 +676,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     try:
         fx.draw_popups(target_surface, current_time, font_small, font_default)
         fx.draw_flash(target_surface, current_time)
-        if current_game_mode == config.MODE_SURVIVAL:
-            boss_mod.draw_boss_ui(target_surface, game_state, current_time, font_default, font_medium)
+        # Barre de vie du boss (Survie) + bannières d'annonce (boss, défi du jour)
+        boss_mod.draw_boss_ui(target_surface, game_state, current_time, font_default, font_medium)
     except Exception:
         pass
 
@@ -1535,6 +1536,11 @@ def reset_game(game_state):
     fx.clear_popups()
     game_state['boss'] = None
     game_state['boss_banner_until'] = 0
+    game_state['progress_recorded'] = False
+    game_state['new_unlocks'] = []
+    game_state['daily_rank'] = None
+    if game_state.get('daily_challenge'):
+        random.seed(progress.daily_seed())  # Même départ pour tout le monde aujourd'hui
     game_state['player_projectiles'] = []
     game_state['player2_projectiles'] = []
     game_state['enemy_projectiles'] = []
@@ -1798,7 +1804,39 @@ def reset_game(game_state):
             pygame.mixer.music.stop()
             utils.play_selected_music(base_path)
         except pygame.error as e: print(f"Erreur redémarrage musique pendant reset: {e}")
+
+    # --- Défi du jour : modificateur appliqué au départ ---
+    if game_state.get('daily_challenge'):
+        try:
+            _apply_daily_modifier(game_state, initial_occupied)
+        except Exception as e:
+            logging.error(f"Erreur modificateur défi du jour: {e}", exc_info=True)
     print("Game Reset Complete.")
+
+
+def _apply_daily_modifier(game_state, occupied):
+    name, desc = progress.daily_modifier()
+    player = game_state.get('player_snake')
+    if name == "Champ de mines":
+        for _ in range(10):
+            pos = utils.get_random_empty_position(occupied)
+            if pos:
+                game_state.setdefault('mines', []).append(game_objects.Mine(pos))
+                occupied.add(pos)
+    elif name == "Festin":
+        for _ in range(6):
+            pos = utils.get_random_empty_position(occupied)
+            if pos:
+                game_state.setdefault('foods', []).append(game_objects.Food(pos, utils.choose_food_type(game_state.get('current_game_mode'), None)))
+                occupied.add(pos)
+    elif name == "Blindé" and player:
+        player.add_armor(2)
+        player.ammo = 0
+    elif name == "Arsenal" and player:
+        player.add_ammo(30)
+    game_state['boss_banner_text'] = f"DÉFI DU JOUR : {name} - {desc}"
+    game_state['boss_banner_until'] = pygame.time.get_ticks() + 4000
+    logging.info(f"Défi du jour ({progress.today_key()}) : {name}")
 
 # --- START: REVISED run_menu function in game_states.py (with joystick input) ---
 def run_menu(events, dt, screen, game_state):
@@ -1847,8 +1885,16 @@ def run_menu(events, dt, screen, game_state):
     top_surv_hs = f"Vague Max: {survie_scores[0]['name']} {survie_scores[0]['score']}" if survie_scores else "Vague Max: ---"
 
     # Options du menu
+    try:
+        _dm_name, _dm_desc = progress.daily_modifier()
+        _daily_board = progress.daily_scores()
+        _daily_best = f"{_daily_board[0]['name']} {_daily_board[0]['score']}" if _daily_board else "---"
+        daily_info = f"Aujourd'hui : {_dm_name} | Meilleur du jour : {_daily_best}"
+    except Exception:
+        daily_info = "Une partie Solo imposée, la même pour tous aujourd'hui"
     menu_options = [
         (config.MODE_SOLO, "Joueur Seul", top_solo_hs),
+        (config.DAILY_CHALLENGE, "Défi du jour", daily_info),
         (config.MODE_CLASSIC, "Snake Classique", top_classic_hs),
         (config.MODE_VS_AI, "Joueur vs IA", top_vsai_hs),
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),
@@ -1917,6 +1963,10 @@ def run_menu(events, dt, screen, game_state):
 
                             targeted_next_state = config.MENU # Par défaut
 
+                            # Défi du jour = partie Solo avec carte/départ imposés
+                            game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
+                            if selected_option == config.DAILY_CHALLENGE:
+                                selected_option = config.MODE_SOLO
                             if selected_option == config.HALL_OF_FAME:
                                 targeted_next_state = config.HALL_OF_FAME
                             elif selected_option == config.UPDATE:
@@ -2005,6 +2055,10 @@ def run_menu(events, dt, screen, game_state):
                         selected_option = selected_option_tuple[0]
                         utils.play_sound("powerup_pickup") # Son de confirmation
 
+                        # Défi du jour = partie Solo avec carte/départ imposés
+                        game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
+                        if selected_option == config.DAILY_CHALLENGE:
+                            selected_option = config.MODE_SOLO
                         if selected_option == config.HALL_OF_FAME:
                             next_state = config.HALL_OF_FAME
                         elif selected_option == config.UPDATE:
@@ -2064,6 +2118,10 @@ def run_menu(events, dt, screen, game_state):
                     selected_option = selected_option_tuple[0]
                     utils.play_sound("powerup_pickup")
 
+                    # Défi du jour = partie Solo avec carte/départ imposés
+                    game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
+                    if selected_option == config.DAILY_CHALLENGE:
+                        selected_option = config.MODE_SOLO
                     if selected_option == config.HALL_OF_FAME:
                         next_state = config.HALL_OF_FAME
                     elif selected_option == config.UPDATE:
@@ -2475,6 +2533,10 @@ def run_options(events, dt, screen, game_state):
         ("white", "Blanc"),
         ("yellow", "Jaune"),
     ]
+    # Couleurs exclusives débloquées par des exploits
+    for _ck, (_cname, _crgb, _cgoal) in progress.UNLOCKABLE_COLORS.items():
+        if progress.is_unlocked(_ck):
+            snake_colors.append((_ck, _cname + " *"))
     snake_color_keys = [k for k, _ in snake_colors]
     if pending_snake_color_p1 not in snake_color_keys:
         pending_snake_color_p1 = snake_color_keys[0]
@@ -4550,6 +4612,20 @@ def run_map_selection(events, dt, screen, game_state):
     last_axis_move_time = game_state.get('last_axis_move_time_map', 0) # Utilise une clé unique
     current_time = pygame.time.get_ticks()
     # -----------------------------------------------------------------
+
+    # --- Défi du jour : carte imposée (la même pour tout le monde aujourd'hui) ---
+    if game_state.get('daily_challenge'):
+        try:
+            day_rng = random.Random(progress.daily_seed())
+            map_keys = sorted(config.MAPS.keys())
+            game_state['selected_map_key'] = day_rng.choice(map_keys) if map_keys else config.DEFAULT_MAP_KEY
+            game_state['current_random_map_walls'] = None
+            reset_game(game_state)
+            game_state['current_state'] = config.PLAYING
+            return config.PLAYING
+        except Exception as e:
+            logging.error(f"Défi du jour: impossible de lancer la partie: {e}", exc_info=True)
+            game_state['daily_challenge'] = False
 
     # --- MODIFIÉ: Charge/Met à jour la liste des cartes si nécessaire ---
     if _map_selection_needs_update:
@@ -7030,6 +7106,10 @@ def run_game_over(events, dt, screen, game_state):
                              (len(hs_list) >= config.MAX_HIGH_SCORES and score_to_check > hs_list[-1]['score']))
         except (IndexError, KeyError, TypeError): is_high_score = False # Erreur si hs_list[-1] n'existe pas ou format incorrect
 
+    is_daily = bool(game_state.get('daily_challenge', False))
+    if is_daily:
+        is_high_score = False  # Le Défi du jour a son propre classement
+
     if is_high_score and not hs_saved:
         try:
             utils.save_high_score(name_for_hs, score_to_check, mode_key, base_path)
@@ -7054,6 +7134,20 @@ def run_game_over(events, dt, screen, game_state):
                  if p1_score >= p2_score: winner_text = f"{p1_name} Gagne (Score)!"
                  else: winner_text = f"{p2_name} Gagne (Score)!"
             else: winner_text = "Objectif Kills Atteint?" # Devrait pas arriver si la logique est bonne
+
+    # --- Progression (couleurs à débloquer) + Défi du jour : enregistré une seule fois ---
+    if not game_state.get('progress_recorded'):
+        game_state['progress_recorded'] = True
+        try:
+            pvp_won = current_game_mode == config.MODE_PVP and "Gagne" in str(winner_text)
+            career_score = max(p1_score, p2_score) if current_game_mode == config.MODE_PVP else p1_score
+            unlocked_now = progress.record_game(current_game_mode, career_score, kills=p1_kills,
+                                                wave=survival_wave, pvp_won=pvp_won)
+            game_state['new_unlocks'] = list(game_state.get('new_unlocks') or []) + list(unlocked_now)
+            if is_daily:
+                game_state['daily_rank'] = progress.record_daily(p1_name, p1_score)
+        except Exception as e:
+            logging.error(f"Erreur enregistrement progression: {e}", exc_info=True)
 
     next_state = config.GAME_OVER
     for event in events:
@@ -7249,6 +7343,17 @@ def run_game_over(events, dt, screen, game_state):
         if is_high_score: 
             utils.draw_text(screen, "High Score Enregistré!", font_default, config.COLOR_TEXT_HIGHLIGHT, 
                           (config.SCREEN_WIDTH / 2, y_menu - 40), "center")
+        if is_daily:
+            rank = game_state.get('daily_rank')
+            board = progress.daily_scores()
+            best = f"{board[0]['name']} {board[0]['score']}" if board else "---"
+            daily_txt = f"Défi du jour : {'#' + str(rank) if rank else 'hors classement'}  (meilleur du jour : {best})"
+            utils.draw_text(screen, daily_txt, font_default, (120, 230, 255), (config.SCREEN_WIDTH / 2, y_menu - 40), "center")
+        new_unlocks = game_state.get('new_unlocks') or []
+        if new_unlocks and (current_time // 400) % 4 != 0:
+            utils.draw_text_with_shadow(screen, "NOUVELLE COULEUR DÉBLOQUÉE : " + ", ".join(new_unlocks) + " (Options)",
+                                        font_default, (255, 210, 60), config.COLOR_UI_SHADOW,
+                                        (config.SCREEN_WIDTH / 2, y_menu - 80), "center")
         
         # Menu options de fin de partie
         menu_spacing = 40
@@ -9431,6 +9536,7 @@ USER_DATA_FILES = {
     config.GAME_OPTIONS_FILE,
     config.FAVORITE_MAP_FILE,
     config.CONTROLS_FILE,
+    "progress.json",
 }
 
 def update_worker(game_state):

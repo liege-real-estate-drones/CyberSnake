@@ -4,6 +4,7 @@
 import pygame
 import random
 import math
+import colorsys
 from collections import defaultdict, OrderedDict, deque
 
 # Importe toutes les constantes depuis config.py
@@ -1754,6 +1755,12 @@ class Snake:
 
     def draw(self, surface, current_time, font_small, font_default):
         if not self.alive or not self.positions: return
+        # Couleur « Arc-en-ciel » (débloquable) : teinte animée
+        if self.is_player and self.player_num in (1, 2):
+            preset = getattr(config, "SNAKE_COLOR_PRESET_P1" if self.player_num == 1 else "SNAKE_COLOR_PRESET_P2", "")
+            if preset == "rainbow":
+                r, g, b = colorsys.hsv_to_rgb((current_time * 0.00025) % 1.0, 0.85, 1.0)
+                self.color = (int(r * 255), int(g * 255), int(b * 255))
         render_px = [(int(round(x)), int(round(y))) for (x, y) in self.get_render_positions_px(current_time)]
         _g = int(getattr(config, "GRID_SIZE", 20))
         self._render_head_center_px = (render_px[0][0] + _g // 2, render_px[0][1] + _g // 2)
