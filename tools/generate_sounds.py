@@ -111,3 +111,44 @@ if __name__ == "__main__":
     # Nouveau record : fanfare brillante
     write("new_record.wav", seq(*[tone(0.1, note(n), None, "square", 0.28, 0.003, 0.05) for n in (72, 72, 72, 76, 79)],
                                 tone(0.6, note(84), None, "square", 0.3, 0.003, 0.45, vibrato=0.01)))
+
+    # --- Interface (menus) : sons courts et discrets ---
+    write("menu_move.wav", mix(tone(0.035, 1500, 1300, "tri", 0.30, 0.001, 0.025),
+                               tone(0.035, 3000, 2600, "sine", 0.08, 0.001, 0.025)))
+    write("menu_select.wav", seq(tone(0.05, note(79), None, "square", 0.22, 0.002, 0.03),
+                                 tone(0.12, note(86), None, "square", 0.22, 0.002, 0.10)))
+    write("menu_back.wav", seq(tone(0.05, note(74), None, "tri", 0.35, 0.002, 0.03),
+                               tone(0.10, note(67), None, "tri", 0.35, 0.002, 0.08)))
+    # Action impossible (compétence pas prête) : bourdon grave bref
+    write("denied.wav", mix(tone(0.14, 140, 120, "square", 0.25, 0.003, 0.06),
+                            tone(0.14, 147, 126, "square", 0.25, 0.003, 0.06)))
+
+    # --- Jeu ---
+    # Dash : souffle filtré qui monte puis retombe
+    write("dash.wav", mix(noise(0.28, 0.45, 0.22, 0.35, seed=7), tone(0.28, 300, 1400, "sine", 0.18, 0.01, 0.2)))
+    # Bouclier (compétence) : scintillement montant
+    write("shield_up.wav", mix(tone(0.45, 400, 1600, "tri", 0.3, 0.01, 0.25, vibrato=0.02),
+                               tone(0.45, 600, 2400, "sine", 0.12, 0.01, 0.3)))
+    # EMP : impulsion grave + zap descendant
+    write("emp_blast.wav", mix(tone(0.7, 2400, 60, "saw", 0.3, 0.002, 0.5), noise(0.7, 0.5, 0.6, 0.06, seed=11),
+                               tone(0.7, 55, 40, "sine", 0.5, 0.005, 0.5)))
+    # Vague de mines mobiles : trois bips d'alerte
+    write("mine_wave.wav", seq(*[tone(0.07, 1760, None, "square", 0.22, 0.002, 0.03) for _ in range(3)], gap=0.06))
+    # Nouvelle vague (Survie) : sirène montante + accord
+    write("wave_start.wav", mix(tone(0.9, 220, 660, "saw", 0.22, 0.05, 0.3, vibrato=0.01),
+                                [0.0] * int(0.55 * RATE) + seq(tone(0.35, note(69), None, "square", 0.2, 0.004, 0.3)),
+                                [0.0] * int(0.55 * RATE) + seq(tone(0.35, note(76), None, "square", 0.16, 0.004, 0.3))))
+    # Portail : glissando ondulant
+    write("portal.wav", tone(0.3, 300, 1200, "sine", 0.4, 0.005, 0.15, vibrato=0.08))
+    # Armure régénérée : petit carillon
+    write("armor_regen.wav", seq(tone(0.07, note(81), None, "tri", 0.35, 0.002, 0.05),
+                                 tone(0.18, note(88), None, "tri", 0.35, 0.002, 0.15)))
+    # Compte à rebours de début de partie
+    write("countdown.wav", tone(0.12, note(69), None, "square", 0.25, 0.002, 0.08))
+    write("go.wav", mix(tone(0.4, note(81), None, "square", 0.25, 0.002, 0.3), tone(0.4, note(76), None, "square", 0.2, 0.002, 0.3)))
+    # Fin de combo : deux notes douces qui descendent
+    write("combo_end.wav", seq(tone(0.07, note(76), None, "tri", 0.25, 0.002, 0.05),
+                               tone(0.12, note(69), None, "tri", 0.22, 0.002, 0.1)))
+    # Palier de combo : note qui monte (hauteur choisie par le jeu via plusieurs fichiers)
+    for i, n in enumerate((72, 74, 76, 79, 81, 84)):
+        write(f"combo_{i + 1}.wav", tone(0.09, note(n), None, "square", 0.2, 0.002, 0.07))

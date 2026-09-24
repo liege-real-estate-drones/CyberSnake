@@ -2,6 +2,8 @@
 
 # -*- coding: utf-8 -*-
 import pygame
+
+import game_clock
 import random
 import math
 import colorsys
@@ -70,7 +72,7 @@ class Particle:
         self.color = color
         self.size = float(size)
         self.lifetime = lifetime
-        self.start_time = pygame.time.get_ticks()
+        self.start_time = game_clock.ticks()
         self.gravity = gravity
         self.shrink_rate = shrink_rate
 
@@ -85,7 +87,7 @@ class Particle:
             self.size -= self.shrink_rate * time_factor
             self.size = max(0, self.size)
 
-        current_ticks = pygame.time.get_ticks()
+        current_ticks = game_clock.ticks()
         expired = (current_ticks - self.start_time >= self.lifetime)
         return expired or self.size <= 0.5
 
@@ -115,6 +117,65 @@ def _tinted_sprite(sprite, color, strength):
         tinted.fill(tuple(int(c * k) for c in color[:3]) + (0,), special_flags=pygame.BLEND_RGBA_ADD)
         _tinted_sprite_cache[key] = tinted
     return tinted
+
+
+_hue_sprite_cache = {}
+
+
+def _hue_shifted(sprite, from_rgb, to_rgb):
+    """Recolore un sprite dans la teinte de to_rgb (ombres et reflets conservés).
+
+    Tous les pixels colorés prennent la teinte cible (une simple rotation de teinte donnait
+    des couleurs mélangées, les sprites n'étant pas d'une seule teinte) ; les pixels gris restent gris.
+
+    Travaille sur les sprites déjà réduits à la taille de la grille (quelques centaines
+    de pixels) : quelques millisecondes, une seule fois par couleur grâce au cache."""
+    h0, s0, _ = colorsys.rgb_to_hsv(*[c / 255.0 for c in from_rgb[:3]])
+    ht, st, _ = colorsys.rgb_to_hsv(*[c / 255.0 for c in to_rgb[:3]])
+    ht = round(ht * 48) / 48.0  # Teinte quantifiée : l'arc-en-ciel animé reste en cache
+    key = (id(sprite), round(h0, 3), ht, round(st, 1))
+    out = _hue_sprite_cache.get(key)
+    if out is not None:
+        return out
+    if len(_hue_sprite_cache) > 400:
+        _hue_sprite_cache.clear()
+    sat_k = (st / s0) if s0 > 0.05 else 1.0
+    out = sprite.copy()
+    w, h = out.get_size()
+    out.lock()
+    try:
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = out.get_at((x, y))
+                if a == 0:
+                    continue
+                _hh, ss, vv = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+                r2, g2, b2 = colorsys.hsv_to_rgb(ht, min(1.0, ss * sat_k), vv)
+                out.set_at((x, y), (int(r2 * 255), int(g2 * 255), int(b2 * 255), a))
+    finally:
+        out.unlock()
+    _hue_sprite_cache[key] = out
+    return out
+
+
+def _draw_spine(surface, snake, render_px, color, grid_px):
+    """Relie les anneaux du serpent par un « câble » lumineux (le corps paraît continu)."""
+    if len(render_px) < 2:
+        return
+    half = grid_px // 2
+    outer = tuple(int(c * 0.45) for c in color[:3])
+    inner = tuple(min(255, int(c * 0.9) + 20) for c in color[:3])
+    w_outer = max(3, int(grid_px * 0.42))
+    w_inner = max(1, int(grid_px * 0.12))
+    positions = snake.positions
+    for i in range(len(render_px) - 1):
+        a, b = positions[i], positions[i + 1]
+        if abs(a[0] - b[0]) + abs(a[1] - b[1]) != 1:
+            continue  # Passage d'un bord à l'autre : pas de trait à travers l'écran
+        p = (render_px[i][0] + half, render_px[i][1] + half)
+        q = (render_px[i + 1][0] + half, render_px[i + 1][1] + half)
+        pygame.draw.line(surface, outer, p, q, w_outer)
+        pygame.draw.line(surface, inner, p, q, w_inner)
 
 
 def cx_skill_ok(snake):
@@ -148,7 +209,7 @@ class Projectile:
         time_factor = dt / (1000.0 / 60.0) if dt > 0 else 0
         distance = self.speed * time_factor
         owner = self.owner_snake
-        if owner is not None and not getattr(owner, 'is_player', False) and bonuses.enemies_slowed(pygame.time.get_ticks()):
+        if owner is not None and not getattr(owner, 'is_player', False) and bonuses.enemies_slowed(game_clock.ticks()):
             distance *= bonuses.ENEMY_PROJECTILE_SLOW  # Bonus Ralenti
         dx, dy = self.direction
         self.x += dx * distance
@@ -156,9 +217,15 @@ class Projectile:
         self.rect.center = (int(self.x), int(self.y))
 
     def draw(self, surface):
-        """Dessine le projectile."""
+        """Dessine le projectile : traînée lumineuse + cœur blanc."""
         try:
-            pygame.draw.rect(surface, self.color, self.rect)
+            dx, dy = self.direction
+            length = max(6, self.size * 3)
+            head = (int(self.x), int(self.y))
+            tail = (int(self.x - dx * length), int(self.y - dy * length))
+            pygame.draw.line(surface, self.color, tail, head, max(2, self.size))
+            core = tuple(min(255, int(c) + 150) for c in self.color[:3])
+            pygame.draw.circle(surface, core, head, max(2, self.size // 2 + 1))
         except (TypeError, ValueError) as draw_err:
             logger.warning("Échec du dessin du projectile avec couleur %s et rect %s : %s", self.color, self.rect, draw_err)
 
@@ -181,15 +248,13 @@ class Mine:
         )
 
     def draw(self, surface):
-        """Dessine la mine avec clignotement."""
-        current_time = pygame.time.get_ticks()
+        """Dessine la mine (sprite néon, noyau qui clignote)."""
+        current_time = game_clock.ticks()
         flash_state = (current_time // config.MINE_FLASH_INTERVAL) % 2 == 0
-        draw_color = config.COLOR_MINE if flash_state else config.COLOR_MINE_ALT
         try:
-            pygame.draw.rect(surface, draw_color, self.rect)
-            pygame.draw.line(surface, config.COLOR_BACKGROUND, self.rect.topleft, self.rect.bottomright, 2)
-            pygame.draw.line(surface, config.COLOR_BACKGROUND, self.rect.topright, self.rect.bottomleft, 2)
-        except (TypeError, ValueError) as draw_err:
+            sprite = fx.mine_sprite(self.size, flash_state)
+            surface.blit(sprite, sprite.get_rect(center=self.rect.center))
+        except (TypeError, ValueError, pygame.error) as draw_err:
             logger.warning("Échec du dessin de la mine %s : %s", self.rect, draw_err)
 
     def get_center_pos_px(self):
@@ -218,7 +283,7 @@ class Nest:
         self.max_health = config.NEST_INITIAL_HEALTH
         self.health = self.max_health
         # Utilise le nouveau timer pour l'éclosion automatique
-        self.auto_spawn_trigger_time = pygame.time.get_ticks() + config.NEST_AUTO_SPAWN_TIME
+        self.auto_spawn_trigger_time = game_clock.ticks() + config.NEST_AUTO_SPAWN_TIME
         self.is_active = True
         self.rect = pygame.Rect(
             self.position[0] * config.GRID_SIZE,
@@ -278,63 +343,34 @@ class Nest:
             return
 
 
+        now = game_clock.ticks()
+        time_left_ms = max(0, self.auto_spawn_trigger_time - now)
+        g = config.GRID_SIZE
         try:
-            color_ratio = self.health / max(1, self.max_health)
-            base_color = config.COLOR_NEST
-            damaged_color = config.COLOR_NEST_DAMAGED
-            current_color = (
-                int(base_color[0] + (damaged_color[0] - base_color[0]) * (1 - color_ratio)),
-                int(base_color[1] + (damaged_color[1] - base_color[1]) * (1 - color_ratio)),
-                int(base_color[2] + (damaged_color[2] - base_color[2]) * (1 - color_ratio))
-            )
-            current_color = tuple(max(0, min(255, c)) for c in current_color)
-        except (TypeError, IndexError, ZeroDivisionError):
-            current_color = config.COLOR_NEST_DAMAGED if self.health < self.max_health else config.COLOR_NEST
-
-
-        try:
-            pygame.draw.ellipse(surface, current_color, self.rect)
-            border_color = tuple(max(0, c - 20) for c in current_color)
-            pygame.draw.ellipse(surface, border_color, self.rect, 1)
+            damage_ratio = 1.0 - self.health / max(1, self.max_health)
+            # Pulsation : de plus en plus rapide quand l'éclosion approche
+            speed = 0.004 if time_left_ms > 10000 else 0.012
+            pulse = 1.0 + 0.08 * math.sin(now * speed)
+            fx.draw_glow(surface, self.rect.center, (255, 140, 40), g * 1.5 * pulse, 5)
+            size = int(g * 1.25 * pulse)
+            sprite = fx.nest_sprite(size, damage_ratio)
+            surface.blit(sprite, sprite.get_rect(center=self.rect.center))
         except (pygame.error, TypeError, ValueError) as draw_err:
-            # print(f"Warning: Error drawing nest ellipse: {draw_err}") # Décommentez pour debug
             logger.warning("Échec du dessin du nid %s : %s", self.rect, draw_err)
 
-        # --- Affichage Infos Nid (MODIFIÉ pour timer permanent) ---
-        current_time_draw = pygame.time.get_ticks()
-        time_left_auto_spawn = max(0, (self.auto_spawn_trigger_time - current_time_draw) / 1000)
-
-        # Prépare les textes à afficher
-        display_countdown = f"{int(time_left_auto_spawn)}s" # Toujours afficher le temps restant en secondes
-        display_health = f"H:{self.health}/{self.max_health}" # Toujours afficher la santé
-
-        # Couleur du countdown (clignote si < 5s)
-        countdown_color = config.COLOR_WHITE
-        if time_left_auto_spawn <= 5.0 and (int(time_left_auto_spawn * 2)) % 2 == 0:
-            countdown_color = config.COLOR_TEXT_HIGHLIGHT
-
-        # Dessin des textes (Countdown en haut, Santé en bas)
+        # Anneau de compte à rebours (se vide jusqu'à l'éclosion) + secondes à la fin
         try:
-            y_offset_start = self.rect.centery # Centre vertical comme référence
-            line_height = font_small.get_height()
-            gap = 1 # Petit espace entre les lignes de texte
-
-            # 1. Dessine le Countdown
-            countdown_surf = font_small.render(display_countdown, True, countdown_color)
-            countdown_rect = countdown_surf.get_rect(centerx=self.rect.centerx)
-            # Positionne le countdown légèrement au-dessus du centre
-            countdown_rect.bottom = y_offset_start - gap // 2
-            surface.blit(countdown_surf, countdown_rect)
-
-            # 2. Dessine la Santé
-            health_surf = font_small.render(display_health, True, config.COLOR_WHITE) # Santé toujours en blanc
-            health_rect = health_surf.get_rect(centerx=self.rect.centerx)
-            # Positionne la santé légèrement en dessous du centre
-            health_rect.top = y_offset_start + gap // 2
-            surface.blit(health_surf, health_rect)
-
+            ratio = time_left_ms / max(1, config.NEST_AUTO_SPAWN_TIME)
+            ring = self.rect.inflate(int(g * 0.9), int(g * 0.9))
+            urgent = time_left_ms <= 10000
+            ring_col = (255, 80, 60) if urgent and (now // 250) % 2 == 0 else (255, 190, 90)
+            pygame.draw.arc(surface, (60, 35, 20), ring, 0, 2 * math.pi, max(2, g // 10))
+            if ratio > 0:
+                pygame.draw.arc(surface, ring_col, ring, math.pi / 2, math.pi / 2 + 2 * math.pi * ratio, max(2, g // 8))
+            if urgent:
+                txt = font_small.render(str(int(math.ceil(time_left_ms / 1000))), True, ring_col)
+                surface.blit(txt, txt.get_rect(midbottom=(self.rect.centerx, ring.top - 1)))
         except (pygame.error, AttributeError, TypeError, ValueError) as text_err:
-            # print(f"Warning: Error rendering/blitting nest text: {text_err}") # Décommentez pour debug
             logger.warning("Échec du rendu des informations du nid %s : %s", self.rect, text_err)
 
 
@@ -348,7 +384,8 @@ class MovingMine:
     def __init__(self, spawn_pixel_x, spawn_pixel_y, target_grid_pos):
         self.x = float(spawn_pixel_x)
         self.y = float(spawn_pixel_y)
-        self.speed = config.MOVING_MINE_SPEED
+        self.speed = config.MOVING_MINE_SPEED * config.GRID_SIZE / 20.0
+        self.spawn_time = game_clock.ticks()
         self.is_active = True
         self.size = config.GRID_SIZE
         self.rect = pygame.Rect(int(self.x - self.size // 2), int(self.y - self.size // 2), self.size, self.size)
@@ -367,35 +404,51 @@ class MovingMine:
             self.vx = math.cos(angle) * self.speed
             self.vy = math.sin(angle) * self.speed
 
-    def update(self, dt, player_head_pos):
-        """Met à jour la position et vérifie la proximité/collision.
+    def update(self, dt, player_head_pos, current_time=None):
+        """Avance la mine (légèrement guidée vers la tête visée) et la fait exploser à proximité.
         Retourne: bool: a explosé ?
         """
         if not self.is_active:
             return False
+        if current_time is None:
+            current_time = game_clock.ticks()
+        if current_time - self.spawn_time > config.MOVING_MINE_LIFETIME:
+            self.is_active = False  # S'éteint (pas de dégâts)
+            cx, cy = self.get_center_pos_px()
+            utils.emit_particles(cx, cy, 8, [config.COLOR_MINE_ALT, (90, 90, 110)], (1, 3), (200, 500), (1, 3))
+            return False
 
         time_factor = dt / (1000.0 / 60.0) if dt > 0 else 0
+        g = config.GRID_SIZE
+        target_x = target_y = None
+        if player_head_pos:
+            target_x = player_head_pos[0] * g + g // 2
+            target_y = player_head_pos[1] * g + g // 2
+            # Guidage doux : la mine tourne d'au plus MOVING_MINE_TURN_DEG par image vers sa cible
+            desired = math.atan2(target_y - self.y, target_x - self.x)
+            current = math.atan2(self.vy, self.vx)
+            diff = (desired - current + math.pi) % (2 * math.pi) - math.pi
+            max_turn = math.radians(config.MOVING_MINE_TURN_DEG) * time_factor
+            current += max(-max_turn, min(max_turn, diff))
+            self.vx = math.cos(current) * self.speed
+            self.vy = math.sin(current) * self.speed
+
         self.x += self.vx * time_factor
         self.y += self.vy * time_factor
         self.rect.center = (int(self.x), int(self.y))
 
-        screen_rect_check = pygame.Rect(-self.size * 2, -self.size * 2,
-                                        config.SCREEN_WIDTH + 4 * self.size,
-                                        config.SCREEN_HEIGHT + 4 * self.size)
+        screen_rect_check = pygame.Rect(-self.size * 3, -self.size * 3,
+                                        config.SCREEN_WIDTH + 6 * self.size,
+                                        config.SCREEN_HEIGHT + 6 * self.size)
         if not screen_rect_check.colliderect(self.rect):
             self.is_active = False
             return False
 
-        exploded = False
-        if player_head_pos:
-            player_center_x = player_head_pos[0] * config.GRID_SIZE + config.GRID_SIZE // 2
-            player_center_y = player_head_pos[1] * config.GRID_SIZE + config.GRID_SIZE // 2
-            dist_sq = (self.x - player_center_x)**2 + (self.y - player_center_y)**2
-
-            if dist_sq < config.MOVING_MINE_PROXIMITY_RADIUS**2:
-                exploded = self.explode(proximity=True)
-
-        return exploded
+        if target_x is not None:
+            dist_sq = (self.x - target_x) ** 2 + (self.y - target_y) ** 2
+            if dist_sq < (config.MOVING_MINE_PROXIMITY_CELLS * g) ** 2:
+                return self.explode(proximity=True)
+        return False
 
     def explode(self, proximity=False):
         """Gère l'explosion de la mine. Retourne True."""
@@ -417,15 +470,17 @@ class MovingMine:
         if not self.is_active:
             return
 
-        current_time = pygame.time.get_ticks()
-        flash_interval = config.MINE_FLASH_INTERVAL * 0.6
-        flash_state = (current_time // flash_interval) % 2 == 0
-        draw_color = config.COLOR_MINE if flash_state else config.COLOR_MINE_ALT
-
+        current_time = game_clock.ticks()
+        flash_state = (current_time // 120) % 2 == 0  # Clignote vite : elle fonce sur toi
         try:
-            pygame.draw.rect(surface, draw_color, self.rect)
-            pygame.draw.line(surface, config.COLOR_BACKGROUND, self.rect.topleft, self.rect.bottomright, 2)
-            pygame.draw.line(surface, config.COLOR_BACKGROUND, self.rect.topright, self.rect.bottomleft, 2)
+            # Traînée derrière la mine
+            speed = math.hypot(self.vx, self.vy) or 1.0
+            tx = self.x - self.vx / speed * self.size * 0.9
+            ty = self.y - self.vy / speed * self.size * 0.9
+            pygame.draw.line(surface, (140, 20, 30), (int(tx), int(ty)), self.rect.center, max(2, self.size // 3))
+            fx.draw_glow(surface, self.rect.center, config.COLOR_MINE, self.size * 1.4, 6)
+            sprite = fx.mine_sprite(self.size, flash_state)
+            surface.blit(sprite, sprite.get_rect(center=self.rect.center))
         except (TypeError, ValueError, pygame.error) as draw_err:
             logger.warning("Échec du dessin de la mine mobile %s : %s", self.rect, draw_err)
 
@@ -835,7 +890,8 @@ class Snake:
                 # print(f"DEBUG: {self.name} regenerated {self.ammo_regen_rate} ammo.") # Optionnel: Pour déboguer
 
         if self.is_player and self.combo_counter > 0 and current_time >= self.combo_timer:
-            utils.play_sound("combo_break")
+            if self.combo_counter >= 3:
+                utils.play_sound("combo_break")
             self.combo_counter = 0
             self.combo_timer = 0
 
@@ -879,8 +935,10 @@ class Snake:
                     # print(f"DEBUG: {self.name} regenerating 1 armor via timer. Current: {self.armor}") # Debug
                     self.add_armor(1)
                     self.last_armor_regen_tick_time = current_time  # Réinitialise pour le prochain intervalle
-                    # Jouer un son léger si on veut un feedback
-                    # utils.play_sound("armor_regen_tick")
+                    if self.is_player:
+                        utils.play_sound("armor_regen_tick")
+                        if cx_skill_ok(self):
+                            fx.add_popup(*self.get_head_center_px(), "ARMURE +1", config.COLOR_ARMOR_HIGHLIGHT)
             else:
                 # Si l'armure a atteint ou dépassé la limite de regen, on arrête le timer
                 # print(f"DEBUG: {self.name} reached armor regen stack limit ({self.armor}). Stopping timer.") # Debug
@@ -902,7 +960,7 @@ class Snake:
             base_interval *= float(getattr(config, "GAME_SPEED_FACTOR", 1.0))
         except Exception:
             pass
-        if not self.is_player and bonuses.enemies_slowed(pygame.time.get_ticks()):
+        if not self.is_player and bonuses.enemies_slowed(game_clock.ticks()):
             base_interval *= bonuses.ENEMY_SLOW_FACTOR  # Bonus Ralenti
         return base_interval
 
@@ -1033,7 +1091,7 @@ class Snake:
 
         if self.length <= 0:
             death_pos = last_center_px if last_center_px else self.get_head_center_px()
-            self.handle_damage(pygame.time.get_ticks(), is_shrink_death=True, death_pos_px=death_pos)
+            self.handle_damage(game_clock.ticks(), is_shrink_death=True, death_pos_px=death_pos)
             return
 
     def add_score(self, value, is_combo_bonus=False, is_objective_bonus=False):
@@ -1083,15 +1141,20 @@ class Snake:
 
     def increment_combo(self, points=1):
         if not self.alive or not self.is_player or points <= 0: return
-        current_time = pygame.time.get_ticks()
+        current_time = game_clock.ticks()
         if self.combo_counter == 0:
             self.combo_counter = 1
+            self._combo_milestone = 0
         else:
             self.combo_counter += points
         self.combo_timer = current_time + config.COMBO_TIMEOUT
         self.max_combo = max(getattr(self, 'max_combo', 0), self.combo_counter)
         if points > 0 and self.combo_counter > 1:
-             utils.play_sound("combo_increase")
+            # La note monte avec le combo : on entend la série s'allonger
+            utils.play_sound(f"combo_{min(6, max(1, self.combo_counter // 2))}")
+            if self.combo_counter >= 5 and self.combo_counter // 5 > getattr(self, '_combo_milestone', 0) and cx_skill_ok(self):
+                self._combo_milestone = self.combo_counter // 5
+                fx.add_popup(*self.get_head_center_px(), f"COMBO x{self.combo_counter} !", config.COLOR_COMBO_TEXT, big=True)
 
     def add_ammo(self, value):
         if self.alive:
@@ -1115,7 +1178,7 @@ class Snake:
                 # print(f"DEBUG: Low armor warning triggered for {self.name}. New armor: {self.armor}") # Debug
                 utils.play_sound("low_armor_warning")
                 self.low_armor_flash_active = True
-                current_time = pygame.time.get_ticks()
+                current_time = game_clock.ticks()
                 self.low_armor_flash_end_time = current_time + config.LOW_ARMOR_FLASH_DURATION
                 self.low_armor_flash_next_toggle_time = current_time + config.LOW_ARMOR_FLASH_ON_TIME
                 self.low_armor_flash_visible = True
@@ -1200,7 +1263,6 @@ class Snake:
                 return True
 
         # --- MORT ---
-        if self.is_player and self.combo_counter > 0: utils.play_sound("combo_break")
         self.combo_counter = 0
         self.combo_timer = 0
         self.alive = False
@@ -1293,7 +1355,7 @@ class Snake:
         self.invincible_powerup_active = False
         self.multishot_active = False
         self.powerup_end_time = 0
-        current_ticks = pygame.time.get_ticks()
+        current_ticks = game_clock.ticks()
         if was_invincible_powerup and self.invincible_timer <= current_ticks + 50:
             self.invincible_timer = 0
 
@@ -1490,7 +1552,10 @@ class Snake:
         self.growing = False
 
         last_valid_head = head_pos
-        collected_items_indices = set()
+        # Objets ramassés pendant la ruée : leurs effets (score, munitions, bonus, objectifs)
+        # sont appliqués par gameplay, avec la même logique qu'un déplacement normal
+        collected_foods = []
+        collected_powerups = []
 
         # Le dash part dans la direction demandée (virage en attente inclus)
         self._apply_direction_change()
@@ -1502,26 +1567,15 @@ class Snake:
             next_y = (last_valid_head[1] + dy + config.GRID_HEIGHT) % config.GRID_HEIGHT
             next_head = (next_x, next_y)
 
-            # --- Collecte d'items (simplifié pour le dash) ---
-            # Nourriture
+            # --- Collecte d'items ---
             for food_idx in range(len(foods_list) - 1, -1, -1):
-                if food_idx < len(foods_list) and ("food", food_idx) not in collected_items_indices and foods_list[food_idx].position == next_head:
-                    collected_food = foods_list.pop(food_idx)
-                    collected_items_indices.add(("food", food_idx))
-                    if collected_food.type != 'poison' or not collected_food.type_data.get('shrink'):
-                        self.grow()
-                    f_px, f_py = collected_food.get_center_pos_px()
-                    if f_px is not None: utils.emit_particles(f_px, f_py, 10, config.COLOR_FOOD_EAT_PARTICLE)
-                    # L'application complète des effets de nourriture (score, objectifs) est gérée dans run_game
-                    break # Un seul item par case de dash
-
-            # Powerups
+                if foods_list[food_idx].position == next_head:
+                    collected_foods.append(foods_list.pop(food_idx))
+                    break  # Un seul item par case de dash
             for pu_idx in range(len(powerups_list) - 1, -1, -1):
-                if pu_idx < len(powerups_list) and ("powerup", pu_idx) not in collected_items_indices and powerups_list[pu_idx].position == next_head and not powerups_list[pu_idx].is_expired():
-                    collected_pu = powerups_list.pop(pu_idx)
-                    collected_items_indices.add(("powerup", pu_idx))
-                    self.activate_powerup(collected_pu.type, current_time)
-                    break # Un seul item par case de dash
+                if powerups_list[pu_idx].position == next_head and not powerups_list[pu_idx].is_expired():
+                    collected_powerups.append(powerups_list.pop(pu_idx))
+                    break  # Un seul item par case de dash
 
             # --- Vérification Collision ---
             collided = False
@@ -1550,11 +1604,13 @@ class Snake:
                 if not self.handle_damage(current_time, killer_snake=None, damage_source_pos=obs_center_px):
                     # Le joueur est mort
                     self.growing = temp_growing # Restaurer l'état avant de retourner
-                    return {'died': True, 'collided': True, 'type': death_type_on_dash, 'position': next_head}
+                    return {'died': True, 'collided': True, 'type': death_type_on_dash, 'position': next_head,
+                            'foods': collected_foods, 'powerups': collected_powerups}
                 else: # Le joueur a survécu grâce à armure/bouclier
                     self.growing = temp_growing
                     # Le dash s'arrête, mais le joueur n'est pas mort
-                    return {'died': False, 'collided': True, 'type': death_type_on_dash}
+                    return {'died': False, 'collided': True, 'type': death_type_on_dash,
+                            'foods': collected_foods, 'powerups': collected_powerups}
 
 
             # Mouvement Si Pas de Collision fatale
@@ -1574,7 +1630,7 @@ class Snake:
         if end_px is not None:
             utils.emit_particles(end_px, end_py, 15, self.trail_color, (2, 5), (200, 400), (1, 4), 0.02, 0.2)
 
-        return {'died': False}
+        return {'died': False, 'foods': collected_foods, 'powerups': collected_powerups}
 
     def activate_shield(self, current_time):
         """Active la compétence Bouclier."""
@@ -2252,6 +2308,26 @@ class Snake:
         body_img = utils.images.get(f"snake_{prefix}_body.png")
         tail_img = utils.images.get(f"snake_{prefix}_tail.png")
 
+        # Couleur choisie dans les options : les sprites J1/J2 prennent sa teinte
+        # (dessinés en vert « cyber » pour J1 et rose pour J2). L'arc-en-ciel garde les sprites d'origine.
+        if self.is_player and self.player_num in (1, 2):
+            preset = getattr(config, "SNAKE_COLOR_PRESET_P1" if self.player_num == 1 else "SNAKE_COLOR_PRESET_P2", "")
+            drawn_rgb = config.SNAKE_COLOR_PRESETS.get("cyber" if self.player_num == 1 else "pink")
+            if preset != "rainbow" and drawn_rgb and tuple(self.color[:3]) != tuple(drawn_rgb):
+                try:
+                    head_img = _hue_shifted(head_img, drawn_rgb, self.color) if head_img else None
+                    body_img = _hue_shifted(body_img, drawn_rgb, self.color) if body_img else None
+                    tail_img = _hue_shifted(tail_img, drawn_rgb, self.color) if tail_img else None
+                except Exception:
+                    logger.debug("Recoloration des sprites impossible", exc_info=True)
+
+        # Corps continu : câble lumineux sous les anneaux
+        if body_img or head_img:
+            try:
+                _draw_spine(surface, self, render_px, base_color, _g)
+            except Exception:
+                pass
+
         # Teinte (effets, armure, flash) appliquée au dessin lui-même plutôt qu'en carré par-dessus
         if tint_color_to_use:
             try:
@@ -2612,7 +2688,7 @@ class EnemySnake(Snake):
         try:
             current_time = int(current_time)
         except Exception:
-            current_time = pygame.time.get_ticks()
+            current_time = game_clock.ticks()
 
         # Conscience des bonus (invincibilité / rapid fire / multishot)
         try:
@@ -2734,7 +2810,7 @@ class EnemySnake(Snake):
         try:
             current_time = int(current_time)
         except Exception:
-            current_time = pygame.time.get_ticks()
+            current_time = game_clock.ticks()
 
         if current_time < int(getattr(self, "_ai_burst_pause_until", 0) or 0):
             return False
@@ -3242,7 +3318,7 @@ class EnemySnake(Snake):
 
                 # Conscience des bonus: quand l'IA a un avantage offensif / invincible, elle joue plus agressif.
                 try:
-                    ticks = current_time if current_time is not None else pygame.time.get_ticks()
+                    ticks = current_time if current_time is not None else game_clock.ticks()
                     is_invincible = (
                         bool(getattr(self, "invincible_powerup_active", False))
                         or (int(getattr(self, "invincible_timer", 0) or 0) > 0 and int(ticks) < int(getattr(self, "invincible_timer", 0) or 0))
@@ -3388,7 +3464,7 @@ class EnemySnake(Snake):
         try:
             current_ticks = int(current_time)
         except Exception:
-            current_ticks = pygame.time.get_ticks()
+            current_ticks = game_clock.ticks()
         try:
             is_invincible = (
                 bool(getattr(self, "invincible_powerup_active", False))
@@ -3575,7 +3651,7 @@ class PowerUp:
         self.type = type_key
         self.data = config.POWERUP_TYPES[type_key]
         self.rect = pygame.Rect(position[0]*config.GRID_SIZE, position[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-        self.spawn_time = pygame.time.get_ticks()
+        self.spawn_time = game_clock.ticks()
         self.lifetime = config.POWERUP_LIFETIME
         self.objective_tag = self.data.get('objective_tag', 'powerup_generic')
         utils.play_sound("powerup_spawn")
@@ -3584,7 +3660,7 @@ class PowerUp:
 
     def is_expired(self):
         if self.position is None: return True
-        return pygame.time.get_ticks() > self.spawn_time + self.lifetime
+        return game_clock.ticks() > self.spawn_time + self.lifetime
 
     def get_center_pos_px(self):
         return self.rect.center if self.position else (None, None)

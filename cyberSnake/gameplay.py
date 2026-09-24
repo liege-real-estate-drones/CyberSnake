@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Logique d'une partie : initialisation (reset_game) et boucle de jeu (run_game)."""
 import pygame
+
+import game_clock
 import random
 import traceback
 import logging
@@ -16,6 +18,7 @@ import bonuses
 import arenas
 import joy_map
 import progress
+import screens
 from render import draw_game_elements_on_surface
 from ui_common import get_joystick_ids
 
@@ -36,12 +39,268 @@ def _reflect_projectile(game_state, projectile, player, current_time):
         logging.warning("Miroir : renvoi du tir impossible", exc_info=True)
 
 
+COUNTDOWN_MS = 3000   # « 3, 2, 1 » avant le départ (horloge de la partie figée)
+GO_BANNER_MS = 700    # « GO ! » affiché pendant les premiers instants
+DEATH_CAM_MS = 1300   # On voit l'explosion avant l'écran de fin
+
+
+def _enter_game_over(game_state):
+    game_state.pop('death_cam_until', None)
+    game_state['game_over_hs_saved'] = False
+    game_state['gameover_menu_selection'] = 0  # Reset menu selection to "Rejouer"
+    game_state['current_state'] = config.GAME_OVER
+    return config.GAME_OVER
+
+
+def _big_centered(screen, game_state, text, color, glow, size_ratio, scale=1.0, alpha=255):
+    sw, sh = screen.get_size()
+    font = screens._big_font(game_state, max(40, int(sh * size_ratio)))
+    surf = screens._glow_text(font, text, color, glow, 16)
+    if abs(scale - 1.0) > 0.01:
+        surf = pygame.transform.smoothscale(surf, (max(1, int(surf.get_width() * scale)), max(1, int(surf.get_height() * scale))))
+    if alpha < 255:
+        surf = surf.copy()
+        surf.set_alpha(max(0, int(alpha)))
+    screen.blit(surf, surf.get_rect(center=(sw // 2, int(sh * 0.45))))
+
+
+def _run_countdown(screen, game_state, real_now):
+    """« 3, 2, 1 » par-dessus l'arène figée (les commandes attendent le « GO ! »)."""
+    left = int(game_state.get('countdown_until', 0)) - real_now
+    step = 3 if left > 2000 else 2 if left > 1000 else 1
+    if left <= COUNTDOWN_MS and game_state.get('_countdown_step') != step:
+        game_state['_countdown_step'] = step
+        utils.play_sound("countdown")
+    frozen = game_clock.ticks()
+    # Temps de dessin arrondi : un serpent invincible (clignotant) reste visible pendant l'attente
+    draw_game_elements_on_surface(screen, game_state, frozen - frozen % 600)
+    if left <= COUNTDOWN_MS:
+        phase = (left % 1000) / 1000.0  # 1 -> 0 pendant chaque chiffre
+        _big_centered(screen, game_state, str(step), (255, 255, 255), (0, 220, 255), 0.22,
+                      scale=1.0 + 0.5 * max(0.0, phase - 0.6), alpha=255 * min(1.0, phase * 3 + 0.2))
+    game_state['_go_start'] = None
+    return config.PLAYING
+
+
+def _draw_go_banner(screen, game_state):
+    """« GO ! » juste après le compte à rebours."""
+    until = int(game_state.get('countdown_until', 0) or 0)
+    if not until or game_state.get('demo_mode'):
+        return
+    age = pygame.time.get_ticks() - until
+    if age < 0 or age > GO_BANNER_MS:
+        return
+    if not game_state.get('_go_start'):
+        game_state['_go_start'] = until
+        utils.play_sound("go")
+    t = age / GO_BANNER_MS
+    _big_centered(screen, game_state, "GO !", (255, 255, 200), (255, 190, 0), 0.2, scale=1.0 + 0.4 * t, alpha=255 * (1 - t))
+
+
+def _run_death_cam(dt, screen, game_state, real_now):
+    """Fin de partie : l'arène reste affichée (explosion, particules) puis l'écran de fin."""
+    until = int(game_state.get('death_cam_until', 0) or 0)
+    if real_now >= until:
+        return _enter_game_over(game_state)
+    now = game_clock.ticks()
+    utils.particles[:] = [p for p in utils.particles if not p.update(dt)]
+    shake_x, shake_y = utils.apply_shake_offset(now)
+    surf = game_state.get('_shake_surface')
+    if surf is None or surf.get_size() != screen.get_size():
+        surf = pygame.Surface(screen.get_size()).convert()
+        game_state['_shake_surface'] = surf
+    draw_game_elements_on_surface(surf, game_state, now)
+    screen.fill(config.COLOR_BACKGROUND)
+    screen.blit(surf, (shake_x, shake_y))
+    # Assombrissement progressif vers l'écran de fin
+    t = 1.0 - (until - real_now) / float(DEATH_CAM_MS)
+    veil = game_state.get('_death_veil')
+    if veil is None or veil.get_size() != screen.get_size():
+        veil = pygame.Surface(screen.get_size())
+        veil.fill((0, 0, 0))
+        game_state['_death_veil'] = veil
+    veil.set_alpha(int(170 * max(0.0, min(1.0, t))))
+    screen.blit(veil, (0, 0))
+    return config.PLAYING
+
+
+def _objective_modes(mode):
+    return mode not in (config.MODE_PVP, config.MODE_SURVIVAL, config.MODE_CLASSIC)
+
+
+def _complete_objective(game_state, snake, action_key, value, current_time):
+    """Fait progresser l'objectif en cours ; bonus de score s'il est atteint."""
+    objective = game_state.get('current_objective')
+    if not objective:
+        return False
+    done, bonus = utils.check_objective_completion(action_key, objective, value)
+    if done:
+        snake.add_score(bonus, is_objective_bonus=True)
+        game_state['current_objective'] = None
+        game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
+    return done
+
+
+def _eat_food(game_state, snake_object, collected_food, current_time):
+    """Effets d'une nourriture mangée (déplacement normal ou Dash)."""
+    current_game_mode = game_state.get('current_game_mode')
+    player_snake = game_state.get('player_snake')
+    player2_snake = game_state.get('player2_snake')
+    food_data = collected_food.type_data
+    food_type_key = collected_food.type
+    effect = food_data.get('effect')
+    utils.play_sound("eat" if food_type_key == 'normal' else "eat_special")
+    food_center_px = collected_food.get_center_pos_px()
+    if food_center_px and food_center_px[0] is not None:
+        utils.emit_particles(food_center_px[0], food_center_px[1], 10, config.COLOR_FOOD_EAT_PARTICLE, (1, 3), (200, 400), (1, 4), 0.05, 0.2)
+
+    if food_type_key == "armor_plate_food":
+        if snake_object.is_player:
+            # Feedback immédiat : +1 armure (cappée par MAX_ARMOR)
+            snake_object.add_armor(1)
+            # Active/rafraîchit une regen passive si on n'est pas au cap de regen
+            if snake_object.armor < config.ARMOR_REGEN_MAX_STACKS:
+                snake_object.last_armor_regen_tick_time = current_time
+                snake_object.is_armor_regen_pending = True
+            else:
+                snake_object.is_armor_regen_pending = False
+        # L'IA ignore cet effet (pas de regen passive pour elle)
+        return
+
+    should_grow = True
+    if food_type_key == 'poison' and food_data.get('shrink', False):
+        should_grow = False
+    if snake_object.is_ai and snake_object.is_baby and food_type_key not in ['normal', 'ammo']:
+        should_grow = False  # Bébé ne grandit qu'avec normal/ammo
+    if should_grow:
+        snake_object.grow()
+
+    if snake_object.is_player:
+        snake_object.add_score(food_data.get('score', 0))
+        # Mode classique: pas de munitions, pas de combo/regen ammo
+        if current_game_mode != config.MODE_CLASSIC:
+            snake_object.add_ammo(food_data.get('ammo', 0))
+            snake_object.increment_combo(food_data.get('combo_points', 0))
+            if _objective_modes(current_game_mode) and collected_food.objective_tag:
+                _complete_objective(game_state, snake_object, collected_food.objective_tag, 1, current_time)
+            # Régénération des munitions
+            if food_type_key == 'normal':
+                if snake_object.ammo_regen_rate < config.AMMO_REGEN_MAX_RATE:
+                    snake_object.ammo_regen_rate += 1
+                    snake_object.normal_food_eaten_at_max_rate = 0
+                else:
+                    snake_object.normal_food_eaten_at_max_rate += 1
+                    if snake_object.normal_food_eaten_at_max_rate >= config.AMMO_REGEN_FOOD_COUNT_FOR_INTERVAL_REDUCTION:
+                        new_interval = snake_object.ammo_regen_interval - config.AMMO_REGEN_INTERVAL_REDUCTION_STEP
+                        snake_object.ammo_regen_interval = max(config.AMMO_REGEN_MIN_INTERVAL, new_interval)
+                        snake_object.normal_food_eaten_at_max_rate = 0
+
+    # Effets de durée (sauf grow, ammo_only, armor_plate)
+    if effect and effect not in ['grow', 'ammo_only', 'armor_plate']:
+        if effect != 'freeze_opponent':
+            snake_object.apply_food_effect(food_type_key, current_time, player1_snake=player_snake, player2_snake=player2_snake)
+        elif snake_object.is_player:  # Joueur mange freeze_opponent
+            freeze_duration = config.ENEMY_FREEZE_DURATION
+            opponent_snake = None
+            if current_game_mode == config.MODE_PVP:
+                opponent_snake = player2_snake if snake_object == player_snake else player_snake
+            elif current_game_mode == config.MODE_VS_AI:
+                opponent_snake = game_state.get('enemy_snake')
+            if opponent_snake and opponent_snake.alive:
+                opponent_snake.freeze(current_time, freeze_duration)
+            for baby_ai in list(game_state.get('active_enemies', [])):
+                if baby_ai and baby_ai.alive:
+                    baby_ai.freeze(current_time, freeze_duration)
+
+
+def _take_powerup(game_state, snake_object, collected_pu, current_time):
+    """Effets d'un bonus ramassé (déplacement normal ou Dash)."""
+    current_game_mode = game_state.get('current_game_mode')
+    game_state['last_powerup_spawn_time'] = current_time  # Reset timer on pickup
+    pu_center_px = collected_pu.get_center_pos_px()
+
+    if snake_object.is_player and _objective_modes(current_game_mode):
+        for tag in (collected_pu.objective_tag, 'powerup_generic'):
+            if tag and _complete_objective(game_state, snake_object, tag, 1, current_time):
+                break
+
+    if collected_pu.type != 'emp':
+        snake_object.activate_powerup(collected_pu.type, current_time)
+        return
+
+    # Effet EMP : détruit toutes les mines et tous les tirs
+    utils.play_sound("emp_blast")
+    utils.trigger_shake(6 if snake_object.is_player else 4, 350)
+    fx.trigger_flash((255, 255, 160), 220, 90, now=current_time)
+    if pu_center_px and pu_center_px[0] is not None:
+        utils.emit_particles(pu_center_px[0], pu_center_px[1], 50, config.COLOR_EMP_PULSE, (3, 10), (700, 1500), (4, 8), 0.01, 0.08)
+        fx.add_shockwave(pu_center_px[0], pu_center_px[1], config.COLOR_EMP_POWERUP, now=current_time)
+    destroyed_fixed = len(game_state.get('mines', []))
+    destroyed_total = destroyed_fixed + len(game_state.get('moving_mines', []))
+    for key in ('mines', 'moving_mines', 'player_projectiles', 'player2_projectiles', 'enemy_projectiles'):
+        lst = game_state.get(key)
+        if lst is None:
+            game_state[key] = []
+        else:
+            lst.clear()  # Vidée sur place : les références locales de run_game restent valides
+
+    if snake_object.is_player:
+        emp_score_bonus = int(round(destroyed_fixed * (config.MINE_SCORE_VALUE * config.EMP_MINE_SCORE_PERCENTAGE)))
+        if emp_score_bonus > 0:
+            snake_object.add_score(emp_score_bonus, is_objective_bonus=True)  # Considéré comme bonus
+        snake_object.increment_combo(points=3 + (destroyed_total // 2))
+        if destroyed_total > 0 and _objective_modes(current_game_mode):
+            _complete_objective(game_state, snake_object, 'destroy_mine', destroyed_total, current_time)
+        if pu_center_px and pu_center_px[0] is not None:
+            fx.add_popup(pu_center_px[0], pu_center_px[1] - 20, "EMP !", config.COLOR_EMP_POWERUP, now=current_time, big=True)
+
+
+def _apply_dash_loot(game_state, snake, dash_result, current_time):
+    """Nourriture et bonus traversés pendant un Dash : mêmes effets qu'en se déplaçant."""
+    if not dash_result:
+        return
+    for food in dash_result.get('foods', []):
+        if snake.alive:
+            _eat_food(game_state, snake, food, current_time)
+    for pu in dash_result.get('powerups', []):
+        if snake.alive:
+            _take_powerup(game_state, snake, pu, current_time)
+
+
+def _update_moving_mines(game_state, current_time, dt, players):
+    """Déplace les mines mobiles ; une explosion blesse les joueurs proches.
+    Retourne la liste des joueurs tués. Les mines éteintes sont retirées."""
+    g = config.GRID_SIZE
+    alive = [p for p in players if p is not None and p.alive and p.positions]
+    killed = []
+    for mm in list(game_state.get('moving_mines', [])):
+        if not mm.is_active:
+            continue
+        head = None
+        if alive:
+            head = min((p.get_head_position() for p in alive),
+                       key=lambda h: (h[0] * g + g // 2 - mm.x) ** 2 + (h[1] * g + g // 2 - mm.y) ** 2)
+        if not mm.update(dt, head, current_time):
+            continue
+        reach = (config.MOVING_MINE_DAMAGE_CELLS * g) ** 2
+        cx, cy = mm.get_center_pos_px()
+        for p in alive:
+            if not p.alive:
+                continue
+            hit = any((x * g + g // 2 - cx) ** 2 + (y * g + g // 2 - cy) ** 2 <= reach for (x, y) in p.positions)
+            if hit and not p.handle_damage(current_time, None, damage_source_pos=(cx, cy)):
+                killed.append(p)
+    game_state['moving_mines'] = [m for m in game_state.get('moving_mines', []) if m.is_active]
+    return killed
+
+
 def reset_game(game_state):
     """Réinitialise l'état du jeu dans game_state."""
 
     print("Resetting game...")
-    current_time_reset = pygame.time.get_ticks()
+    current_time_reset = game_clock.ticks()
     fx.clear_popups()
+    fx.clear_shockwaves()
     bonuses.reset()
     game_state['game_start_time'] = current_time_reset
     game_state.pop('game_end_time', None)
@@ -341,6 +600,15 @@ def reset_game(game_state):
             _apply_daily_modifier(game_state, initial_occupied)
         except Exception as e:
             logging.error(f"Erreur modificateur défi du jour: {e}", exc_info=True)
+
+    # « 3, 2, 1, GO ! » : l'horloge de la partie reste figée jusqu'au départ (pas en démo)
+    game_state.pop('death_cam_until', None)
+    game_state['_countdown_step'] = None
+    game_state['_go_start'] = None
+    if game_state.get('demo_mode'):
+        game_state['countdown_until'] = 0
+    else:
+        game_state['countdown_until'] = pygame.time.get_ticks() + int(getattr(config, "TRANSITION_FADE_MS", 260)) + COUNTDOWN_MS
     print("Game Reset Complete.")
 
 
@@ -365,7 +633,7 @@ def _apply_daily_modifier(game_state, occupied):
     elif name == "Arsenal" and player:
         player.add_ammo(30)
     game_state['boss_banner_text'] = f"DÉFI DU JOUR : {name} - {desc}"
-    game_state['boss_banner_until'] = pygame.time.get_ticks() + 4000
+    game_state['boss_banner_until'] = game_clock.ticks() + 4000
     logging.info(f"Défi du jour ({progress.today_key()}) : {name}")
 
 # --- START: REVISED run_menu function in game_states.py (with joystick input) ---
@@ -424,7 +692,7 @@ def run_game(events, dt, screen, game_state):
 
     # --- Vérifications Critiques ---
     critical_error = False; error_message = ""
-    dbg_time = pygame.time.get_ticks()
+    dbg_time = game_clock.ticks()
     try:
         last_dbg = int(game_state.get('_run_game_debug_last', 0) or 0)
     except Exception:
@@ -450,6 +718,15 @@ def run_game(events, dt, screen, game_state):
         except Exception: pass
         game_state['current_state'] = config.MENU; return config.MENU
 
+    # --- Compte à rebours de départ / ralenti de fin : la partie est figée ---
+    real_now = pygame.time.get_ticks()
+    if any(ev.type == pygame.QUIT for ev in events):
+        return False
+    if real_now < int(game_state.get('countdown_until', 0) or 0):
+        return _run_countdown(screen, game_state, real_now)
+    if game_state.get('death_cam_until'):
+        return _run_death_cam(dt, screen, game_state, real_now)
+
     # --- Coop (Survie à deux) : le Joueur 2 joue avec le Joueur 1 contre l'IA ---
     coop = bool(game_state.get('coop')) and current_game_mode == config.MODE_SURVIVAL
     two_players = current_game_mode == config.MODE_PVP or coop
@@ -458,7 +735,7 @@ def run_game(events, dt, screen, game_state):
     game_over = False
     p1_died_this_frame = False
     p2_died_this_frame = False
-    current_time = pygame.time.get_ticks()
+    current_time = game_clock.ticks()
 
     # --- MàJ PvP Respawn, Difficulté IA, Objectifs/Vagues ---
     # (Ces sections restent identiques, sauf si elles contenaient des 'print' à remplacer)
@@ -519,6 +796,11 @@ def run_game(events, dt, screen, game_state):
             if survival_wave > 0 and current_time >= survival_wave_start_time + config.SURVIVAL_WAVE_DURATION:
                 survival_wave += 1; game_state['survival_wave'] = survival_wave
                 game_state['survival_wave_start_time'] = current_time
+                # Annonce de la vague (remplacée par celle du boss si un boss apparaît)
+                bonus_armor_wave = (survival_wave - 1) % config.SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL == 0
+                game_state['boss_banner_text'] = f"VAGUE {survival_wave}" + ("  —  +1 ARMURE" if bonus_armor_wave else "")
+                game_state['boss_banner_until'] = current_time + 2000
+                utils.play_sound("wave_start")
                 try:
                     boss_mod.maybe_spawn_boss(game_state, current_time, survival_wave)
                     enemies.spawn_wave_enemies(game_state, current_time, survival_wave)
@@ -530,8 +812,11 @@ def run_game(events, dt, screen, game_state):
                 game_state['current_survival_interval_factor'] = current_survival_interval_factor
                 logging.info(f"Starting Wave {survival_wave} (Interval factor: {current_survival_interval_factor:.2f})")
 
-                if player_snake and player_snake.alive and survival_wave > 1 and (survival_wave - 1) % config.SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL == 0:
-                    player_snake.add_armor(1); utils.play_sound("objective_complete")
+                if survival_wave > 1 and bonus_armor_wave:
+                    for rewarded in (player_snake, player2_snake if coop else None):  # Coop : les deux joueurs
+                        if rewarded and rewarded.alive:
+                            rewarded.add_armor(1)
+                    utils.play_sound("objective_complete")
                     logging.info(f"Wave {survival_wave - 1} complete! +1 Armor.")
 
                 target_nest_count = min(survival_wave, config.MAX_NESTS_SURVIVAL)
@@ -666,6 +951,7 @@ def run_game(events, dt, screen, game_state):
                         p1_obstacles_for_dash = utils.get_obstacles_for_player(player_snake, player_snake, player2_snake, enemy_snake, mines, current_map_walls, active_enemies)
                         # Assurez-vous de passer toutes les listes nécessaires à activate_dash
                         dash_result_p1 = player_snake.activate_dash(current_time, p1_obstacles_for_dash, foods, powerups, mines, wall_positions) # wall_positions est set(current_map_walls)
+                        _apply_dash_loot(game_state, player_snake, dash_result_p1, current_time)
 
                         if dash_result_p1 and dash_result_p1.get('died'):
                             p1_died_this_frame = True
@@ -683,7 +969,7 @@ def run_game(events, dt, screen, game_state):
                         elif dash_result_p1 and dash_result_p1.get('collided'):
                             logging.info(f"{player_snake.name} collided during dash with {dash_result_p1.get('type')}.")
                     else:
-                        utils.play_sound("combo_break") # Son pour compétence non prête
+                        utils.play_sound("denied")  # Compétence pas encore prête
                 elif current_game_mode != config.MODE_CLASSIC and button == shoot_button: # Tirer
                     logging.debug(f"Button {button} (Shoot) pressed")
                     new_projectiles_list = player_snake.shoot(current_time)
@@ -693,7 +979,7 @@ def run_game(events, dt, screen, game_state):
                 elif current_game_mode != config.MODE_CLASSIC and button == shield_button: # Shield
                     logging.debug(f"Button {button} (Shield) pressed")
                     if player_snake.shield_ready: player_snake.activate_shield(current_time)
-                    else: utils.play_sound("combo_break")
+                    else: utils.play_sound("denied")
                  # else:
                  #     logging.debug(f"Button {button} pressed, but not mapped to an action.")
                  # --- END NEW BUTTON MAPPING ---
@@ -710,6 +996,7 @@ def run_game(events, dt, screen, game_state):
                     if player2_snake.dash_ready:
                         p2_obstacles_for_dash = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, enemy_snake if coop else None, mines, current_map_walls, active_enemies if coop else [])
                         dash_result_p2 = player2_snake.activate_dash(current_time, p2_obstacles_for_dash, foods, powerups, mines, wall_positions)
+                        _apply_dash_loot(game_state, player2_snake, dash_result_p2, current_time)
 
                         if dash_result_p2 and dash_result_p2.get('died'):
                             p2_died_this_frame = True
@@ -719,7 +1006,7 @@ def run_game(events, dt, screen, game_state):
                             game_state['p2_death_cause'] = f"{death_type_p2}_dash"
                             p2_moved_this_frame = True
                     else:
-                        utils.play_sound("combo_break")
+                        utils.play_sound("denied")
                 elif button == shoot_button: # Tirer
                     logging.debug(f"P2 Button {button} (Shoot) pressed")
                     new_projectiles_list_p2 = player2_snake.shoot(current_time)
@@ -730,7 +1017,7 @@ def run_game(events, dt, screen, game_state):
                 elif button == shield_button: # Shield
                     logging.debug(f"P2 Button {button} (Shield) pressed")
                     if player2_snake.shield_ready: player2_snake.activate_shield(current_time)
-                    else: utils.play_sound("combo_break")
+                    else: utils.play_sound("denied")
                  # Note: Pause/Escape are typically handled by Player 1 only.
              # --- END: Player 2 Joystick Button Handling ---
         # --- FIN Gestion Boutons Joystick ---
@@ -933,6 +1220,18 @@ def run_game(events, dt, screen, game_state):
     except Exception as e:
         logging.error(f"Erreur arène animée: {e}", exc_info=True)
 
+    # --- Mines mobiles (Survie) : filent vers le joueur le plus proche ---
+    try:
+        if moving_mines and not game_over:
+            for dead in _update_moving_mines(game_state, current_time, dt, [player_snake, player2_snake if coop else None]):
+                if dead is player_snake:
+                    p1_died_this_frame = True
+                elif dead is player2_snake:
+                    p2_died_this_frame = True
+            moving_mines = game_state['moving_mines']
+    except Exception as e:
+        logging.error(f"Erreur mines mobiles: {e}", exc_info=True)
+
     # --- Tir des IA (Après tous les mouvements) ---
     try:
         if ai_should_shoot and enemy_snake and enemy_snake.alive:
@@ -1057,9 +1356,12 @@ def run_game(events, dt, screen, game_state):
                 mine_wave_interval_adjusted = config.MINE_WAVE_INTERVAL * spawn_factor
                 if current_time - last_mine_wave_spawn_time > mine_wave_interval_adjusted:
                     game_state['last_mine_wave_spawn_time'] = current_time
-                    player_pos_target = player_snake.get_head_position() if player_snake and player_snake.alive else (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
+                    wave_targets = [s for s in (player_snake, player2_snake if coop else None) if s and s.alive]
+                    player_pos_target = random.choice(wave_targets).get_head_position() if wave_targets else (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
+                    utils.play_sound("mine_wave")
                     spawned_mine_count = 0
-                    for _ in range(config.MINE_WAVE_COUNT):
+                    # 1 mine en vague 1, puis une de plus toutes les 2 vagues (max MINE_WAVE_COUNT)
+                    for _ in range(min(config.MINE_WAVE_COUNT, 1 + survival_wave // 2)):
                         spawn_edge = random.choice(['top', 'bottom', 'left', 'right']); sx_grid, sy_grid = 0, 0; grid_margin = 2
                         if spawn_edge == 'top': sx_grid, sy_grid = random.randint(0, config.GRID_WIDTH - 1), -grid_margin
                         elif spawn_edge == 'bottom': sx_grid, sy_grid = random.randint(0, config.GRID_WIDTH - 1), config.GRID_HEIGHT + grid_margin -1
@@ -1139,7 +1441,13 @@ def run_game(events, dt, screen, game_state):
                             p1_rem_indices.add(i); hit_something = True; utils.play_sound("hit_enemy"); utils.emit_particles(proj_center[0], proj_center[1], 5, config.COLOR_NEST_DAMAGED)
                             if nest.take_damage():
                                 nests_hit_indices_proj.add(j) # Marquer pour suppression à la fin
-                                # ... (logique de drop/spawn bébé IA si nécessaire) ...
+                                # Nid détruit : retour visuel et sonore
+                                ncx, ncy = nest.get_center_pos_px()
+                                utils.play_sound("nest_destroyed")
+                                utils.emit_particles(ncx, ncy, 35, [config.COLOR_NEST_DAMAGED, (255, 170, 60), config.COLOR_WHITE], (2, 7), (500, 1100), (2, 6), 0.03)
+                                utils.trigger_shake(4, 220)
+                                fx.add_shockwave(ncx, ncy, (255, 170, 60), now=current_time)
+                                fx.add_popup(ncx, ncy - 10, f"NID DÉTRUIT +{config.NEST_DESTROY_SCORE}", (255, 190, 90), now=current_time, big=True)
                                 if player_snake and player_snake.alive: player_snake.add_score(config.NEST_DESTROY_SCORE); player_snake.increment_combo(2)
                             break
                     if hit_something: continue
@@ -1409,160 +1717,17 @@ def run_game(events, dt, screen, game_state):
                 head_pos = snake_object.get_head_position()
                 if not head_pos: continue
 
-                # --- Collecte Nourriture & Powerups ---
-                collected_food_index = -1
+                # --- Collecte Nourriture & Powerups (logique partagée avec le Dash) ---
                 for i in range(len(foods) - 1, -1, -1):
-                    if head_pos == foods[i].position: collected_food_index = i; break
-                if collected_food_index != -1:
-                    # ... (Logique collecte nourriture - inchangée, mais attention à l'indentation) ...
-                    collected_food = foods.pop(collected_food_index); food_data = collected_food.type_data; food_type_key = collected_food.type; effect = food_data.get('effect')
-                    if food_type_key == 'normal': utils.play_sound("eat")
-                    else: utils.play_sound("eat_special")
-                    food_center_px = collected_food.get_center_pos_px()
-                    if food_center_px: utils.emit_particles(food_center_px[0], food_center_px[1], 10, config.COLOR_FOOD_EAT_PARTICLE, (1, 3), (200, 400), (1, 4), 0.05, 0.2)
-                    
-                    # Gérer la logique de gain d'armure ici si c'est 'armor_plate_food'
-                    if food_type_key == "armor_plate_food":
-                        if snake_object.is_player:
-                            # Feedback immédiat : +1 armure (cappée par MAX_ARMOR)
-                            snake_object.add_armor(1)
-
-                            # Active/rafraîchit une regen passive si on n'est pas au cap de regen
-                            if snake_object.armor < config.ARMOR_REGEN_MAX_STACKS:
-                                snake_object.last_armor_regen_tick_time = current_time
-                                snake_object.is_armor_regen_pending = True
-                                logging.debug(f"{snake_object.name} ate armor food: +1 armor, regen pending refreshed.")
-                            else:
-                                snake_object.is_armor_regen_pending = False
-                                logging.debug(f"{snake_object.name} ate armor food: +1 armor, regen cap reached.")
-                        # L'IA ignore cet effet (pas de regen passive pour elle)
-
-                    else: # Autres types de nourriture
-                        should_grow = True
-                        if food_type_key == 'poison' and food_data.get('shrink', False): should_grow = False
-                        # Cas spécifique bébé IA
-                        if snake_object.is_ai and snake_object.is_baby and food_type_key not in ['normal', 'ammo']:
-                             should_grow = False # Bébé ne grandit qu'avec normal/ammo
-
-                        if should_grow: snake_object.grow()
-
-                        if snake_object.is_player:
-                            snake_object.add_score(food_data.get('score', 0))
-
-                            # Mode classique: pas de munitions, pas de combo/regen ammo
-                            if current_game_mode != config.MODE_CLASSIC:
-                                # Ammo bonus maintenant géré directement dans config.FOOD_TYPES["normal"]
-                                #if food_type_key == 'normal': snake_object.add_ammo(config.NORMAL_FOOD_AMMO_BONUS)
-                                #else: snake_object.add_ammo(food_data.get('ammo', 0)) # Gère ammo pack
-                                snake_object.add_ammo(food_data.get('ammo', 0)) # Simplifié: prend la valeur ammo du dict
-
-                                snake_object.increment_combo(food_data.get('combo_points', 0))
-                                if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC and collected_food.objective_tag:
-                                    obj_completed, bonus = utils.check_objective_completion(collected_food.objective_tag, current_objective, 1)
-                                    if obj_completed:
-                                        snake_object.add_score(bonus, is_objective_bonus=True)
-                                        game_state['current_objective'] = None
-                                        game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-
-                                # Logique regen ammo
-                                if food_type_key == 'normal':
-                                    if snake_object.ammo_regen_rate < config.AMMO_REGEN_MAX_RATE:
-                                        snake_object.ammo_regen_rate += 1
-                                        snake_object.normal_food_eaten_at_max_rate = 0
-                                        logging.debug(f"{snake_object.name} ammo regen rate increased to +{snake_object.ammo_regen_rate}")
-                                    else:
-                                        snake_object.normal_food_eaten_at_max_rate += 1
-                                        if snake_object.normal_food_eaten_at_max_rate >= config.AMMO_REGEN_FOOD_COUNT_FOR_INTERVAL_REDUCTION:
-                                            new_interval = snake_object.ammo_regen_interval - config.AMMO_REGEN_INTERVAL_REDUCTION_STEP
-                                            snake_object.ammo_regen_interval = max(config.AMMO_REGEN_MIN_INTERVAL, new_interval) # Utilise MIN_INTERVAL
-                                            snake_object.normal_food_eaten_at_max_rate = 0
-                                            logging.debug(f"{snake_object.name} ammo regen interval reduced to {snake_object.ammo_regen_interval}ms")
-
-                        # Applique les effets de durée (sauf grow, ammo_only, armor_plate)
-                        if effect and effect not in ['grow', 'ammo_only', 'armor_plate']:
-                            if effect != 'freeze_opponent':
-                                snake_object.apply_food_effect(food_type_key, current_time, player1_snake=player_snake, player2_snake=player2_snake)
-                            elif snake_object.is_player: # Joueur mange freeze_opponent
-                                freeze_duration = config.ENEMY_FREEZE_DURATION
-                                opponent_snake = None
-                                if current_game_mode == config.MODE_PVP: opponent_snake = player2_snake if snake_object == player_snake else player_snake
-                                elif current_game_mode == config.MODE_VS_AI: opponent_snake = enemy_snake
-
-                                if opponent_snake and opponent_snake.alive: opponent_snake.freeze(current_time, freeze_duration)
-                                # Geler aussi les bébés IA si présents
-                                active_enemies_copy_freeze = list(active_enemies)
-                                for baby_ai in active_enemies_copy_freeze:
-                                    if baby_ai and baby_ai.alive: baby_ai.freeze(current_time, freeze_duration)
-
-                        # Food burst
-                        if snake_object == player_snake and food_type_key == 'normal' and current_game_mode == config.MODE_SOLO and random.random() < config.FOOD_BURST_CHANCE:
-                           # ... (logique food burst) ...
-                           pass
-
-
-                collected_powerup_index = -1
+                    if head_pos == foods[i].position:
+                        _eat_food(game_state, snake_object, foods.pop(i), current_time)
+                        break
                 for i in range(len(powerups) - 1, -1, -1):
-                    # ... (logique collecte powerup - inchangée, mais attention indentation) ...
                     pu = powerups[i]
-                    if head_pos == pu.position and not pu.is_expired():
-                         # Seuls les joueurs OU l'IA principale peuvent prendre les powerups
-                         if snake_object.is_player or (snake_object == enemy_snake):
-                             collected_powerup_index = i
-                             break
-                if collected_powerup_index != -1:
-                    collected_pu = powerups.pop(collected_powerup_index)
-                    game_state['last_powerup_spawn_time'] = current_time # Reset timer on pickup
-                    pu_center_px = collected_pu.get_center_pos_px()
-
-                    # Objectif
-                    if snake_object.is_player and current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
-                        obj_tags_to_check = [collected_pu.objective_tag, 'powerup_generic']
-                        for tag in obj_tags_to_check:
-                             if tag and game_state['current_objective']: # Vérifie si objectif existe
-                                 obj_completed_pu, bonus_pu = utils.check_objective_completion(tag, current_objective, 1)
-                                 if obj_completed_pu:
-                                     snake_object.add_score(bonus_pu, is_objective_bonus=True)
-                                     game_state['current_objective'] = None
-                                     game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-                                     break # Arrête de vérifier les tags si un correspond
-
-                    # Effet EMP
-                    if collected_pu.type == 'emp':
-                        utils.play_sound("explode_mine")
-                        utils.trigger_shake(6 if snake_object.is_player else 4, 350)
-                        if pu_center_px: utils.emit_particles(pu_center_px[0], pu_center_px[1], 50, config.COLOR_EMP_PULSE, (3, 10), (700, 1500), (4, 8), 0.01, 0.08)
-                        
-                        destroyed_fixed_mines_count = len(mines)
-                        destroyed_moving_mines_count = len(moving_mines)
-                        destroyed_total_mines_count = destroyed_fixed_mines_count + destroyed_moving_mines_count
-                        
-                        # Clear mines and projectiles
-                        mines.clear(); game_state['mines'] = []
-                        moving_mines.clear(); game_state['moving_mines'] = []
-                        player_projectiles.clear(); game_state['player_projectiles'] = []
-                        player2_projectiles.clear(); game_state['player2_projectiles'] = []
-                        enemy_projectiles.clear(); game_state['enemy_projectiles'] = []
-
-                        # Score/Combo bonus pour le joueur
-                        if snake_object.is_player:
-                            emp_score_bonus = 0
-                            if destroyed_fixed_mines_count > 0:
-                                emp_score_bonus = int(round(destroyed_fixed_mines_count * (config.MINE_SCORE_VALUE * config.EMP_MINE_SCORE_PERCENTAGE)))
-                            if emp_score_bonus > 0: snake_object.add_score(emp_score_bonus, is_objective_bonus=True) # Considéré comme bonus
-                            combo_points = 3 + (destroyed_total_mines_count // 2)
-                            snake_object.increment_combo(points=combo_points)
-                            
-                            # Objectif destruction mines
-                            if destroyed_total_mines_count > 0 and current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
-                                if game_state['current_objective']: # Vérifie si objectif existe
-                                     obj_completed_mine_emp, bonus_mine_emp = utils.check_objective_completion('destroy_mine', current_objective, destroyed_total_mines_count)
-                                     if obj_completed_mine_emp:
-                                         snake_object.add_score(bonus_mine_emp, is_objective_bonus=True)
-                                         game_state['current_objective'] = None
-                                         game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-                    else: # Autres powerups
-                        snake_object.activate_powerup(collected_pu.type, current_time)
-
+                    # Seuls les joueurs OU l'IA principale peuvent prendre les powerups
+                    if head_pos == pu.position and not pu.is_expired() and (snake_object.is_player or snake_object == enemy_snake):
+                        _take_powerup(game_state, snake_object, powerups.pop(i), current_time)
+                        break
 
                 # --- Collision Tête contre Mine Fixe ---
                 if snake_object.alive and not snake_object.ghost_active:
@@ -1932,14 +2097,14 @@ def run_game(events, dt, screen, game_state):
     if coop:
         game_over = not ((player_snake and player_snake.alive) or (player2_snake and player2_snake.alive))
 
-    # --- Transition vers Game Over ---
+    # --- Transition vers Game Over (après un court ralenti sur l'explosion) ---
     if game_over:
         logging.info("Game Over sequence initiated.")
-        try: utils.music_call("fadeout", 1000)
+        try: utils.music_call("fadeout", 1000 + DEATH_CAM_MS)
         except pygame.error: pass
-        game_state['game_over_hs_saved'] = False
-        game_state['gameover_menu_selection'] = 0 # Reset menu selection to "Rejouer"
-        game_state['current_state'] = config.GAME_OVER; return config.GAME_OVER
+        if game_state.get('demo_mode'):
+            return _enter_game_over(game_state)
+        game_state['death_cam_until'] = pygame.time.get_ticks() + DEATH_CAM_MS
 
     # --- Mise à Jour Particules & Screen Shake ---
   
@@ -1959,7 +2124,11 @@ def run_game(events, dt, screen, game_state):
         target_surf = screen; temp_surf = None
         if utils.screen_shake_timer > 0 and (shake_x != 0 or shake_y != 0):
             try:
-                temp_surf = pygame.Surface(screen.get_size(), flags=pygame.SRCALPHA)
+                # Surface réutilisée (en allouer une en plein écran à chaque image coûte cher sur la borne)
+                temp_surf = game_state.get('_shake_surface')
+                if temp_surf is None or temp_surf.get_size() != screen.get_size():
+                    temp_surf = pygame.Surface(screen.get_size()).convert()
+                    game_state['_shake_surface'] = temp_surf
                 target_surf = temp_surf
             except pygame.error as surf_e:
                 logging.warning(f"Erreur création surface temporaire pour shake: {surf_e}")
@@ -1968,6 +2137,7 @@ def run_game(events, dt, screen, game_state):
         if temp_surf and target_surf == temp_surf:
             screen.fill(config.COLOR_BACKGROUND)
             screen.blit(temp_surf, (shake_x, shake_y))
+        _draw_go_banner(screen, game_state)
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin final de run_game: {e}", exc_info=True)
         game_state['current_state'] = config.MENU; return config.MENU

@@ -15,6 +15,7 @@ from utils_safejson import read_json_or_default, safe_write_json
 
 # Importe toutes les constantes
 import config
+import game_clock
 # Importe les classes nécessaires (pour emit_particles)
 # Note: Dépendance circulaire au niveau des fichiers, mais gérée par Python à l'exécution
 import game_objects
@@ -58,6 +59,7 @@ DEFAULT_GAME_OPTIONS = {
     # Audio
     "music_volume": 0.3,
     "sound_volume": 0.6,
+    "music_track": 0,  # 0 = musique par défaut, 1..9 = pistes
     # UI
     "show_fps": False,
     "visual_fx": "standard",
@@ -268,6 +270,7 @@ def apply_controls_to_config(controls):
 # ... (inchangé) ...
 sounds = {}
 images = {}
+images_hd = {}  # Images d'origine (192 px), pour les icônes affichées plus grand que la grille
 high_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": [], "classic": []}
 particles = []
 kill_feed = deque(maxlen=config.MAX_KILL_FEED_MESSAGES)
@@ -280,7 +283,23 @@ selected_music_file = config.DEFAULT_MUSIC_FILE
 selected_music_index = 0
 
 # --- Fonctions de Chargement & Volume ---
-# ... (inchangé) ...
+def cover_scale(img, size):
+    """Remplit `size` sans déformer l'image : mise à l'échelle puis recadrage centré.
+
+    La couverture est carrée : l'étirer en 16:9 écrasait les serpents et le logo.
+    Le recadrage garde le bas de l'image (logo « CYBER SNAKE »)."""
+    tw, th = int(size[0]), int(size[1])
+    iw, ih = img.get_size()
+    if iw <= 0 or ih <= 0 or tw <= 0 or th <= 0:
+        return pygame.transform.scale(img, (max(1, tw), max(1, th)))
+    k = max(tw / iw, th / ih)
+    sw, sh = max(tw, int(round(iw * k))), max(th, int(round(ih * k)))
+    scaled = pygame.transform.smoothscale(img, (sw, sh))
+    x = (sw - tw) // 2
+    y = max(0, min(sh - th, int((sh - th) * 0.75)))
+    return scaled.subsurface(pygame.Rect(x, y, tw, th)).copy()
+
+
 def load_assets(base_path):
     global sounds, sound_volume
     loaded_sounds = {}
@@ -304,36 +323,34 @@ def load_assets(base_path):
     try:
         if os.path.exists(menu_bg_path):
             img = pygame.image.load(menu_bg_path).convert()
-            menu_bg = pygame.transform.scale(img, (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+            menu_bg = cover_scale(img, (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
     except Exception:
         pass
 
     # --- Chargement et Optimisation des Images ---
-    global images
+    global images, images_hd
     images = {} # On reset le dictionnaire
+    images_hd = {}
     logger.info(f"Début chargement images depuis base_path: {base_path}")
 
-    # Liste de TOUS les fichiers à charger (Nourriture + Powerups + Serpents)
-    files_to_load = [
-        # Nourriture
-        "food_energy.png", "food_ammo.png", "food_poison.png", "food_speed.png",
-        "food_multiplier.png", "food_freeze.png", "food_ghost.png", "food_bonus.png", "food_armor.png",
-        # Powerups
-        "icon_shield.png", "icon_rapid.png", "icon_emp.png", "icon_invincible.png", "icon_multishot.png",
-        # Serpents (P1)
-        "snake_p1_head.png", "snake_p1_body.png", "snake_p1_tail.png",
-        # Serpents (P2)
-        "snake_p2_head.png", "snake_p2_body.png", "snake_p2_tail.png",
-        # Serpents (Ennemi)
-        "snake_enemy_head.png", "snake_enemy_body.png", "snake_enemy_tail.png"
-    ]
+    # Toutes les images déclarées par la nourriture et les bonus (un bonus ajouté dans
+    # config.py est chargé automatiquement), puis les serpents
+    files_to_load = []
+    for data in list(config.FOOD_TYPES.values()) + list(config.POWERUP_TYPES.values()):
+        name = data.get("image_file")
+        if name and name not in files_to_load:
+            files_to_load.append(name)
+    for who in ("p1", "p2", "enemy"):
+        for part in ("head", "body", "tail"):
+            files_to_load.append(f"snake_{who}_{part}.png")
 
     for filename in files_to_load:
         full_path = os.path.join(base_path, filename)
         if os.path.exists(full_path):
             try:
-                # 1. Charger l'image brute (1024x1024 ou autre)
+                # 1. Charger l'image brute (192x192)
                 raw_image = pygame.image.load(full_path).convert_alpha()
+                images_hd[filename] = raw_image  # Version nette pour les écrans d'aide / HUD agrandi
 
                 # 2. REDIMENSIONNEMENT HAUTE QUALITÉ
                 # C'est LA ligne qui change tout : smoothscale lisse les pixels pour obtenir de belles icônes 20x20
@@ -386,7 +403,10 @@ def _apply_sound_volume_internal():
     base_volumes.update({
         "eat":0.85, "eat_special":0.9, "shoot_p1":0.6, "shoot_p2":0.6,
         "hit_p1":0.9, "hit_p2":0.9, "hit_enemy":0.8, "explode_mine":1.0,
-        "powerup_pickup":0.9, "dash_sound":0.8
+        "powerup_pickup":0.9, "dash_sound":0.8,
+        # Sons d'interface plus discrets que les sons de jeu
+        "menu_move":0.45, "menu_select":0.7, "menu_back":0.65, "denied":0.6, "countdown":0.7,
+        "combo_1":0.5, "combo_2":0.5, "combo_3":0.5, "combo_4":0.55, "combo_5":0.55, "combo_6":0.6,
     })
     for name, sound in sounds.items():
         if sound:
@@ -713,9 +733,6 @@ def choose_food_type(current_game_mode, current_objective):
     # --- RESTRICTION MODE SURVIE ---
     if current_game_mode == config.MODE_SURVIVAL:
         current_probs.pop("bonus_points", None)  # Supprime "$" si présent
-        # Vous pourriez vouloir supprimer d'autres types ici aussi pour Survie
-        # current_probs.pop("score_multiplier", None) # Exemple: supprimer aussi "x2"
-        print("DEBUG: choose_food_type - Survival mode detected, removed bonus_points prob.")  # Debug
     # --- FIN RESTRICTION ---
 
     # MODIFICATION: Autorise 'freeze_opponent' en PvP ET Vs AI
@@ -1013,7 +1030,7 @@ def trigger_shake(intensity=config.SCREEN_SHAKE_DEFAULT_INTENSITY, duration=conf
     global screen_shake_intensity, screen_shake_timer, screen_shake_start_time # Modifie les globales
     if not bool(getattr(config, "SCREEN_SHAKE_ENABLED", True)):
         return
-    current_time = pygame.time.get_ticks()
+    current_time = game_clock.ticks()
     if intensity >= screen_shake_intensity or current_time > screen_shake_start_time + screen_shake_timer:
         screen_shake_intensity = intensity
         screen_shake_timer = duration
@@ -1075,8 +1092,8 @@ def play_selected_music(base_path):
         print("Erreur: Mixer non initialisé pour jouer musique.")
     return success
 
-def select_and_load_music(number_key, base_path):
-    """Sélectionne une piste musicale par numéro et la charge."""
+def select_and_load_music(number_key, base_path, persist=True):
+    """Sélectionne une piste musicale par numéro et la charge (et la mémorise si persist)."""
     global selected_music_file, selected_music_index # Modifie les globales
     new_track_file = None
     new_index = -1
@@ -1098,6 +1115,13 @@ def select_and_load_music(number_key, base_path):
                 selected_music_file = new_track_file # Met à jour globale si succès
                 selected_music_index = new_index
                 print(f"Musique sélectionnée: {selected_music_file} (Index: {selected_music_index})")
+                if persist:
+                    try:
+                        opts = load_game_options(base_path)
+                        opts["music_track"] = int(new_index)
+                        save_game_options(opts, base_path)
+                    except Exception as e:
+                        logger.warning(f"Piste musicale non mémorisée: {e}")
                 return True
             except pygame.error as e:
                 print(f"Erreur chargement piste {number_key} ({new_track_file}): {e}")
@@ -1112,7 +1136,7 @@ def select_and_load_music(number_key, base_path):
 def add_kill_feed_message(killer_name, victim_name):
     """Ajoute un message formaté à la deque kill_feed."""
     global kill_feed # Modifie la globale
-    timestamp = pygame.time.get_ticks()
+    timestamp = game_clock.ticks()
     killer_str = str(killer_name)[:15].strip() if killer_name else "???"
     victim_str = str(victim_name)[:15].strip() if victim_name else "???"
     killer_str = killer_str if killer_str else "???"

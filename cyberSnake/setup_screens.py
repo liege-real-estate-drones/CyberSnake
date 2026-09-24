@@ -148,22 +148,22 @@ def run_name_entry_solo(events, dt, screen, game_state):
                     if value < -threshold:  # HAUT
                         vk_row = (vk_row - 1 + len(VIRTUAL_KEYBOARD_CHARS)) % len(VIRTUAL_KEYBOARD_CHARS)
                         vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold:  # BAS
                         vk_row = (vk_row + 1) % len(VIRTUAL_KEYBOARD_CHARS)
                         vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                 elif axis == axis_h:  # Axe horizontal
                     value = (-value) if inv_h else value
                     if value < -threshold:  # GAUCHE
                         vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold:  # DROITE
                         vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
 
                 if moved:
@@ -183,24 +183,24 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 if hat_y > 0: # HAUT
                     vk_row = (vk_row - 1) % len(VIRTUAL_KEYBOARD_CHARS)
                     vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
                 elif hat_y < 0: # BAS
                     vk_row = (vk_row + 1) % len(VIRTUAL_KEYBOARD_CHARS)
                     vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
                 
                 if hat_x < 0: # GAUCHE
                     vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
                 elif hat_x > 0: # DROITE
                     vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
                 
@@ -215,7 +215,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 if is_back_button(event.button):  # Retour menu
                     logging.info("Joystick back pressed in name entry solo, returning to MENU.")
                     next_state = config.MENU
-                    utils.play_sound("combo_break")
+                    utils.play_sound("menu_back")
 
                     # Nettoyage de l'état spécifique à cet écran
                     game_state.pop('name_entry_start_time_solo', None)
@@ -256,7 +256,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                         if player1_name_input:
                             player1_name_input = player1_name_input[:-1]
                             game_state['player1_name_input'] = player1_name_input
-                            utils.play_sound("combo_break")
+                            utils.play_sound("menu_back")
                         continue
 
                     # Ajout d'un caractère
@@ -279,10 +279,10 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 if player1_name_input: # S'assurer qu'il y a quelque chose à effacer
                     player1_name_input = player1_name_input[:-1]
                     game_state['player1_name_input'] = player1_name_input
-                    utils.play_sound("combo_break")
+                    utils.play_sound("menu_back")
             elif key == pygame.K_ESCAPE:
                 next_state = config.MENU
-                utils.play_sound("combo_break")
+                utils.play_sound("menu_back")
                 return next_state
             elif game_state.get('input_active_solo', False) and hasattr(event, 'unicode') and event.unicode.isprintable():
                 if len(player1_name_input) < 15:
@@ -562,12 +562,12 @@ def run_map_selection(events, dt, screen, game_state):
                     if value < -threshold: # HAUT
                         map_selection_index = (map_selection_index - 1 + num_maps_total) % num_maps_total
                         game_state['map_selection_index'] = map_selection_index
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time
                     elif value > threshold: # BAS
                         map_selection_index = (map_selection_index + 1) % num_maps_total
                         game_state['map_selection_index'] = map_selection_index
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
@@ -576,12 +576,12 @@ def run_map_selection(events, dt, screen, game_state):
                 if hat_y > 0: # HAUT
                     map_selection_index = (map_selection_index - 1 + num_maps_total) % num_maps_total
                     game_state['map_selection_index'] = map_selection_index
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                 elif hat_y < 0: # BAS
                     map_selection_index = (map_selection_index + 1) % num_maps_total
                     game_state['map_selection_index'] = map_selection_index
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
@@ -603,7 +603,7 @@ def run_map_selection(events, dt, screen, game_state):
                         game_state['current_random_map_walls'] = None
                         logging.info(f"Map selected via joystick: {map_data.get('name', selected_key_or_label)}")
 
-                    utils.play_sound("powerup_pickup")
+                    utils.play_sound("menu_select")
                     _current_random_map_walls = None
                     _map_selection_needs_update = True
 
@@ -648,8 +648,8 @@ def run_map_selection(events, dt, screen, game_state):
                     success, saved_name = utils.save_favorite_map(_current_random_map_walls, base_path)
                     if success:
                         utils.play_sound("objective_complete"); _map_selection_needs_update = True
-                    else: utils.play_sound("combo_break")
-                else: utils.play_sound("combo_break")
+                    else: utils.play_sound("menu_back")
+                else: utils.play_sound("menu_back")
             elif event.instance_id == p1_id and event.button == 7: # Bouton 7 pour Supprimer Favori
                 selected_key_or_label = _map_keys_display[map_selection_index]
                 if selected_key_or_label in _favorite_maps:
@@ -658,14 +658,14 @@ def run_map_selection(events, dt, screen, game_state):
                         utils.play_sound("explode_mine") # Son de succès
                         _map_selection_needs_update = True # Force la mise à jour de la liste
                     else:
-                        utils.play_sound("combo_break") # Son d'échec
+                        utils.play_sound("menu_back") # Son d'échec
                 else:
-                    utils.play_sound("combo_break") # Pas un favori, ne peut pas supprimer
+                    utils.play_sound("menu_back") # Pas un favori, ne peut pas supprimer
             elif event.instance_id == p1_id and is_back_button(event.button): # Retour
                 _current_random_map_walls = None; _map_selection_needs_update = True
                 if current_game_mode == config.MODE_PVP: next_state = config.MENU
                 else: next_state = config.NAME_ENTRY_SOLO
-                utils.play_sound("combo_break"); game_state['last_axis_move_time_map'] = 0
+                utils.play_sound("menu_back"); game_state['last_axis_move_time_map'] = 0
                 return next_state
 
         # --- FIN AJOUT ---
@@ -678,11 +678,11 @@ def run_map_selection(events, dt, screen, game_state):
             if key == pygame.K_UP:
                 map_selection_index = (map_selection_index - 1 + num_maps_total) % num_maps_total
                 game_state['map_selection_index'] = map_selection_index
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key == pygame.K_DOWN:
                 map_selection_index = (map_selection_index + 1) % num_maps_total
                 game_state['map_selection_index'] = map_selection_index
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif is_random_selected and (key == pygame.K_LEFT or key == pygame.K_RIGHT):
                 try:
                     _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
@@ -699,10 +699,10 @@ def run_map_selection(events, dt, screen, game_state):
                         utils.play_sound("objective_complete") # Son de succès
                         _map_selection_needs_update = True # Force la mise à jour de la liste affichée
                     else:
-                        utils.play_sound("combo_break") # Son d'échec
+                        utils.play_sound("menu_back") # Son d'échec
                 else:
                     print("Impossible de sauvegarder une carte aléatoire vide.")
-                    utils.play_sound("combo_break")
+                    utils.play_sound("menu_back")
             # --- FIN NOUVEAU ---
             elif key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                 try:
@@ -728,7 +728,7 @@ def run_map_selection(events, dt, screen, game_state):
                         game_state['current_random_map_walls'] = None # Pas une carte aléatoire
                         print(f"Map selected: {map_data.get('name', selected_key_or_label)}")
 
-                    utils.play_sound("powerup_pickup")
+                    utils.play_sound("menu_select")
                     _current_random_map_walls = None # Nettoie la carte temporaire
                     _map_selection_needs_update = True # Force rechargement au prochain affichage
 
@@ -762,7 +762,7 @@ def run_map_selection(events, dt, screen, game_state):
                     next_state = config.MENU
                 else:
                     next_state = config.NAME_ENTRY_SOLO
-                utils.play_sound("combo_break")
+                utils.play_sound("menu_back")
                 return next_state
     # --- FIN MODIFICATION Événements ---
 
@@ -1207,7 +1207,7 @@ def run_classic_setup(events, dt, screen, game_state):
         nonlocal pending_wall_style, pending_wall_style_random_choice
 
         if selection_index == IDX_START:
-            utils.play_sound("powerup_pickup")
+            utils.play_sound("menu_select")
             apply_choice()
             game_state['classic_setup_selection_index'] = 0
             game_state['last_axis_move_time_classic_setup'] = 0
@@ -1215,7 +1215,7 @@ def run_classic_setup(events, dt, screen, game_state):
             return config.NAME_ENTRY_SOLO
 
         if selection_index == IDX_BACK:
-            utils.play_sound("combo_break")
+            utils.play_sound("menu_back")
             game_state['classic_setup_selection_index'] = 0
             game_state['last_axis_move_time_classic_setup'] = 0
             game_state['current_state'] = config.MENU
@@ -1226,11 +1226,11 @@ def run_classic_setup(events, dt, screen, game_state):
                 pending_wall_style = str(pending_wall_style_random_choice).strip().lower()
             except Exception:
                 pending_wall_style = "panel"
-            utils.play_sound("powerup_pickup")
+            utils.play_sound("menu_select")
             return config.CLASSIC_SETUP
 
         adjust_current(1)
-        utils.play_sound("eat")
+        utils.play_sound("menu_move")
         return config.CLASSIC_SETUP
 
     for event in events:
@@ -1253,21 +1253,21 @@ def run_classic_setup(events, dt, screen, game_state):
                     value = (-value) if inv_v else value
                     if value < -threshold:
                         selection_index = (selection_index - 1 + menu_len) % menu_len
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold:
                         selection_index = (selection_index + 1) % menu_len
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                 elif axis == axis_h:  # Horizontal
                     value = (-value) if inv_h else value
                     if value < -threshold:
                         adjust_current(-1)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold:
                         adjust_current(1)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
 
                 if moved:
@@ -1282,11 +1282,11 @@ def run_classic_setup(events, dt, screen, game_state):
                         selection_index = (selection_index - 1 + menu_len) % menu_len
                     else:
                         selection_index = (selection_index + 1) % menu_len
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     moved = True
                 if hat_x != 0:
                     adjust_current(1 if hat_x > 0 else -1)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     moved = True
                 if moved:
                     last_axis_move_time = current_time
@@ -1294,7 +1294,7 @@ def run_classic_setup(events, dt, screen, game_state):
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == p1_id:
                 if is_back_button(event.button):
-                    utils.play_sound("combo_break")
+                    utils.play_sound("menu_back")
                     game_state['classic_setup_selection_index'] = 0
                     game_state['last_axis_move_time_classic_setup'] = 0
                     game_state['current_state'] = config.MENU
@@ -1305,23 +1305,23 @@ def run_classic_setup(events, dt, screen, game_state):
         elif event.type == pygame.KEYDOWN:
             key = event.key
             if key == pygame.K_ESCAPE:
-                utils.play_sound("combo_break")
+                utils.play_sound("menu_back")
                 game_state['classic_setup_selection_index'] = 0
                 game_state['last_axis_move_time_classic_setup'] = 0
                 game_state['current_state'] = config.MENU
                 return config.MENU
             if key in (pygame.K_UP, pygame.K_w):
                 selection_index = (selection_index - 1 + menu_len) % menu_len
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key in (pygame.K_DOWN, pygame.K_s):
                 selection_index = (selection_index + 1) % menu_len
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key in (pygame.K_LEFT, pygame.K_a):
                 adjust_current(-1)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key in (pygame.K_RIGHT, pygame.K_d):
                 adjust_current(1)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 return handle_confirm()
 
@@ -1706,19 +1706,19 @@ def run_vs_ai_setup(events, dt, screen, game_state):
 
         if event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_ESCAPE,):
-                utils.play_sound("combo_break")
+                utils.play_sound("menu_back")
                 game_state['current_state'] = config.MENU
                 return config.MENU
             if event.key in (pygame.K_LEFT, pygame.K_a):
                 idx = (idx - 1) % len(keys)
                 cur = keys[idx]
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif event.key in (pygame.K_RIGHT, pygame.K_d):
                 idx = (idx + 1) % len(keys)
                 cur = keys[idx]
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                utils.play_sound("powerup_pickup")
+                utils.play_sound("menu_select")
                 _apply_choice()
                 game_state['current_state'] = config.NAME_ENTRY_SOLO
                 return config.NAME_ENTRY_SOLO
@@ -1735,12 +1735,12 @@ def run_vs_ai_setup(events, dt, screen, game_state):
                     if value < -threshold:  # Gauche
                         idx = (idx - 1) % len(keys)
                         cur = keys[idx]
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time
                     elif value > threshold:  # Droite
                         idx = (idx + 1) % len(keys)
                         cur = keys[idx]
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
@@ -1749,22 +1749,22 @@ def run_vs_ai_setup(events, dt, screen, game_state):
                 if hat_x < 0:
                     idx = (idx - 1) % len(keys)
                     cur = keys[idx]
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                 elif hat_x > 0:
                     idx = (idx + 1) % len(keys)
                     cur = keys[idx]
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == p1_id:
                 if is_back_button(event.button):
-                    utils.play_sound("combo_break")
+                    utils.play_sound("menu_back")
                     game_state['current_state'] = config.MENU
                     return config.MENU
                 if is_confirm_button(event.button):
-                    utils.play_sound("powerup_pickup")
+                    utils.play_sound("menu_select")
                     _apply_choice()
                     game_state['current_state'] = config.NAME_ENTRY_SOLO
                     return config.NAME_ENTRY_SOLO
@@ -1957,12 +1957,12 @@ def run_pvp_setup(events, dt, screen, game_state):
                     if value < -threshold: # HAUT
                         pvp_setup_index = (pvp_setup_index - 1 + num_options) % num_options
                         game_state['pvp_setup_index'] = pvp_setup_index
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold: # BAS
                         pvp_setup_index = (pvp_setup_index + 1) % num_options
                         game_state['pvp_setup_index'] = pvp_setup_index
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                 elif axis == axis_h: # Axe horizontal pour GAUCHE/DROITE (modifier valeur)
                     value = (-value) if inv_h else value
@@ -1992,7 +1992,7 @@ def run_pvp_setup(events, dt, screen, game_state):
                     else: # BAS
                         pvp_setup_index = (pvp_setup_index + 1) % num_options
                     game_state['pvp_setup_index'] = pvp_setup_index
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     moved = True
                 if hat_x != 0:
                     if 0 <= pvp_setup_index < num_options:
@@ -2010,14 +2010,14 @@ def run_pvp_setup(events, dt, screen, game_state):
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == p1_id:
                 if is_back_button(event.button):  # Retour carte
-                    utils.play_sound("combo_break")
+                    utils.play_sound("menu_back")
                     next_state = config.MAP_SELECTION
                     game_state['current_state'] = next_state
                     game_state['last_axis_move_time_pvp'] = 0
                     return next_state
 
                 if is_confirm_button(event.button):  # Confirmer
-                    utils.play_sound("powerup_pickup")
+                    utils.play_sound("menu_select")
                     next_state = config.NAME_ENTRY_PVP
                     game_state['current_state'] = next_state
                     game_state['pvp_name_entry_stage'] = 1
@@ -2033,11 +2033,11 @@ def run_pvp_setup(events, dt, screen, game_state):
             if key == pygame.K_UP:
                 pvp_setup_index = (pvp_setup_index - 1 + num_options) % num_options
                 game_state['pvp_setup_index'] = pvp_setup_index
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key == pygame.K_DOWN:
                 pvp_setup_index = (pvp_setup_index + 1) % num_options
                 game_state['pvp_setup_index'] = pvp_setup_index
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key in (pygame.K_LEFT, pygame.K_MINUS, pygame.K_KP_MINUS):
                 if 0 <= pvp_setup_index < num_options:
                     change_func = options[pvp_setup_index][2]
@@ -2051,7 +2051,7 @@ def run_pvp_setup(events, dt, screen, game_state):
                          try: change_func(1); utils.play_sound("shoot_p1")
                          except Exception as e: print(f"Erreur change_func(1) option {pvp_setup_index}: {e}")
             elif key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
-                utils.play_sound("powerup_pickup")
+                utils.play_sound("menu_select")
                 pvp_cond = game_state.get('pvp_condition_type'); pvp_time = game_state.get('pvp_target_time')
                 pvp_kills = game_state.get('pvp_target_kills'); pvp_armor = game_state.get('pvp_start_armor')
                 pvp_ammo = game_state.get('pvp_start_ammo')
@@ -2065,7 +2065,7 @@ def run_pvp_setup(events, dt, screen, game_state):
                 return next_state
             elif key == pygame.K_ESCAPE:
                 next_state = config.MAP_SELECTION
-                utils.play_sound("combo_break")
+                utils.play_sound("menu_back")
                 logging.debug(f"Exiting run_pvp_setup (KEYDOWN escape), next_state: {next_state}") # NOUVEAU LOG
                 return next_state
 
@@ -2198,23 +2198,23 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                         vk_row = (vk_row - 1) % len(VIRTUAL_KEYBOARD_CHARS)
                         # S'assurer que la colonne est valide pour la nouvelle ligne
                         vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold: # BAS
                         vk_row = (vk_row + 1) % len(VIRTUAL_KEYBOARD_CHARS)
                         # S'assurer que la colonne est valide pour la nouvelle ligne
                         vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                 elif axis == axis_h: # Axe horizontal
                     value = (-value) if inv_h else value
                     if value < -threshold: # GAUCHE
                         vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold: # DROITE
                         vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
 
                 if moved:
@@ -2234,23 +2234,23 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 if hat_y > 0: # HAUT
                     vk_row = (vk_row - 1) % len(VIRTUAL_KEYBOARD_CHARS)
                     vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                 elif hat_y < 0: # BAS
                     vk_row = (vk_row + 1) % len(VIRTUAL_KEYBOARD_CHARS)
                     vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
                 
                 if hat_x < 0: # GAUCHE
                     vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
                 elif hat_x > 0: # DROITE
                     vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                     input_active = True  # Activation de l'entrée après mouvement hat
                 
@@ -2344,7 +2344,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                         game_state['player2_name_input'] = new_value
                         player2_name_input = new_value  # Mettre à jour la copie locale
                     current_input_value = new_value  # <--- MISE À JOUR ICI
-                    utils.play_sound("combo_break")
+                    utils.play_sound("menu_back")
             elif selected_char:  # Ajout d'un caractère
                 try:
                     logging.debug(f"PVP Char Input: Stage {stage}, Char: '{selected_char}', vk_row: {vk_row}, vk_col: {vk_col}")
@@ -2376,7 +2376,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             if key == pygame.K_ESCAPE:
                 game_state['pvp_name_entry_stage'] = 1 # Réinitialise l'étape
                 next_state = config.MAP_SELECTION if game_state.get('coop') else config.PVP_SETUP
-                utils.play_sound("combo_break")
+                utils.play_sound("menu_back")
                 return next_state
             # Pour toutes les autres touches, vérifier si l'entrée est active
             elif input_active:
@@ -2421,7 +2421,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     new_value = current_input_value[:-1]
                     if stage == 1: game_state['player1_name_input'] = new_value
                     else: game_state['player2_name_input'] = new_value
-                    utils.play_sound("combo_break")
+                    utils.play_sound("menu_back")
                 elif game_state.get('input_active_pvp', False) and hasattr(event, 'unicode') and event.unicode.isprintable():
                  # current_input_value est ici la valeur avant cette modification
                  if len(current_input_value) < 15:

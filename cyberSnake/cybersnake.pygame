@@ -23,7 +23,8 @@ try:
         level=log_level,
         format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
         filename=log_filepath,
-        filemode='w'
+        filemode='w',
+        encoding='utf-8',  # Accents lisibles partout (sinon cp1252 sous Windows)
     )
     logging.info("--- Initialisation du Logging pour CyberSnake (Early) ---")
 except Exception as log_setup_error:
@@ -52,6 +53,8 @@ try:
     import joy_map
     import stick_wizard
     import borne_install
+    import es_media
+    import game_clock
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -175,6 +178,10 @@ def main():
             logging.error(f"Erreur initialisation joystick (ID {idx}): {joy_err}", exc_info=True)
     joystick_p1, joystick_p2 = joy_map.pick_players(all_joysticks)
     borne_install.refresh_installed(os.path.dirname(os.path.abspath(__file__)))  # Service J1/J2 à jour
+    try:
+        es_media.install(os.path.dirname(os.path.abspath(__file__)))  # Images dans la liste des jeux
+    except Exception:
+        logging.warning("Images EmulationStation non installées", exc_info=True)
     if joystick_p1 is not None:
         joystick_p1_name = joystick_p1.get_name()
         num_buttons_p1 = joystick_p1.get_numbuttons()
@@ -293,6 +300,9 @@ def main():
         try:
             utils.set_music_volume(opts.get("music_volume", utils.music_volume))
             utils.set_sound_volume(opts.get("sound_volume", utils.sound_volume))
+            track = int(opts.get("music_track", 0) or 0)
+            if track:
+                utils.select_and_load_music(track, base_path_assets, persist=False)
         except Exception:
             pass
         grid_size_override = opts.get("grid_size", None)
@@ -339,8 +349,12 @@ def main():
 
     # --- Configuration Fenêtre & Horloge ---
     try:
+        try:
+            pygame.display.set_icon(pygame.image.load(os.path.join(base_path_assets, "media", "icon.png")))
+        except Exception:
+            logging.warning("Icône du jeu introuvable (media/icon.png)")
         screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
-        pygame.display.set_caption("Cyber Snake Duel - Fusion") # Titre simplifié
+        pygame.display.set_caption("Cyber Snake")
         clock = pygame.time.Clock()
         logging.info("Fenêtre et horloge créées.")
         _log_hardware_info()
@@ -533,6 +547,10 @@ def main():
             state_events = events
         else:
             state_events = menu_translator.process(events, now_ticks)
+
+        # Horloge de la partie : elle ne tourne que pendant le jeu (la pause fige les minuteurs)
+        game_clock.set_running(game_state.get('current_state') in (config.PLAYING, config.DEMO)
+                               and now_ticks >= int(game_state.get('countdown_until', 0) or 0))
 
         # --- Transitions (fondu) ---
         fade_ms = int(getattr(config, "TRANSITION_FADE_MS", 260))

@@ -21,7 +21,7 @@ def _activate_menu_option(game_state, menu_options, menu_selection_index):
         logging.error(f"Menu : index de sélection hors limites ({menu_selection_index})")
         return config.MENU
     selected_option = menu_options[menu_selection_index][0]
-    utils.play_sound("powerup_pickup")
+    utils.play_sound("menu_select")
 
     # Défi du jour = partie Solo avec carte/départ imposés
     game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
@@ -139,12 +139,12 @@ def run_menu(events, dt, screen, game_state):
             elif event.type == pygame.JOYBUTTONDOWN:
                 if event.instance_id == p1_id and is_confirm_button(event.button):
                     game_state['show_version_popup'] = False
-                    utils.play_sound("powerup_pickup")
+                    utils.play_sound("menu_select")
                     return next_state
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER or event.key == pygame.K_ESCAPE:
                     game_state['show_version_popup'] = False
-                    utils.play_sound("powerup_pickup")
+                    utils.play_sound("menu_select")
                     return next_state
 
         # If popup is still showing, we skip normal menu processing AND drawing (except the overlay part)
@@ -188,11 +188,11 @@ def run_menu(events, dt, screen, game_state):
                     value = (-value) if inv_v else value
                     if value < -threshold: # HAUT
                         menu_selection_index = (menu_selection_index - 1 + num_options) % num_options
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time # Met à jour le temps
                     elif value > threshold: # BAS
                         menu_selection_index = (menu_selection_index + 1) % num_options
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time # Met à jour le temps
 
         elif event.type == pygame.JOYHATMOTION:
@@ -202,11 +202,11 @@ def run_menu(events, dt, screen, game_state):
                 # Utilise hat_y pour HAUT/BAS
                 if hat_y > 0: # HAUT PHYSIQUE
                     menu_selection_index = (menu_selection_index - 1 + num_options) % num_options
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time # Met à jour le temps
                 elif hat_y < 0: # BAS PHYSIQUE
                     menu_selection_index = (menu_selection_index + 1) % num_options
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time # Met à jour le temps
 
         # --- FIN Gestion Joystick Menu ---
@@ -218,10 +218,10 @@ def run_menu(events, dt, screen, game_state):
             # REMOVED: Keyboard UP/DOWN navigation
             # if key == pygame.K_UP:
             #     menu_selection_index = (menu_selection_index - 1 + num_options) % num_options
-            #     utils.play_sound("eat")
+            #     utils.play_sound("menu_move")
             # elif key == pygame.K_DOWN:
             #     menu_selection_index = (menu_selection_index + 1) % num_options
-            #     utils.play_sound("eat")
+            #     utils.play_sound("menu_move")
 
             if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                 return _activate_menu_option(game_state, menu_options, menu_selection_index)
@@ -1164,20 +1164,20 @@ def run_options(events, dt, screen, game_state):
         nonlocal next_state, reset_confirm_until, pending_wall_style, pending_wall_style_random_choice
 
         if selection_index == IDX_APPLY:
-            utils.play_sound("powerup_pickup")
+            utils.play_sound("menu_select")
             apply_options()
             next_state = return_state
             game_state.pop('options_return_state', None)
             return True
 
         if selection_index == IDX_BACK:
-            utils.play_sound("combo_break")
+            utils.play_sound("menu_back")
             next_state = return_state
             game_state.pop('options_return_state', None)
             return True
 
         if selection_index == IDX_CONTROLS:
-            utils.play_sound("powerup_pickup")
+            utils.play_sound("menu_select")
             game_state['controls_return_state'] = config.OPTIONS
             next_state = config.CONTROLS
             return True
@@ -1186,10 +1186,10 @@ def run_options(events, dt, screen, game_state):
             if current_time <= reset_confirm_until:
                 reset_confirm_until = 0
                 reset_to_defaults()
-                utils.play_sound("powerup_pickup")
+                utils.play_sound("menu_select")
             else:
                 reset_confirm_until = current_time + 2000
-                utils.play_sound("combo_break")
+                utils.play_sound("menu_back")
             return False
 
         if selection_index == IDX_WALL_STYLE and str(pending_wall_style).strip().lower() == "random":
@@ -1197,11 +1197,11 @@ def run_options(events, dt, screen, game_state):
                 pending_wall_style = str(pending_wall_style_random_choice).strip().lower()
             except Exception:
                 pending_wall_style = "panel"
-            utils.play_sound("powerup_pickup")
+            utils.play_sound("menu_select")
             return False
 
         adjust_current(1)
-        utils.play_sound("eat")
+        utils.play_sound("menu_move")
         return False
 
     for event in events:
@@ -1224,21 +1224,21 @@ def run_options(events, dt, screen, game_state):
                     value = (-value) if inv_v else value
                     if value < -threshold:
                         selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold:
                         selection_index = (selection_index + 1) % len(menu_items)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                 elif axis == axis_h:  # Horizontal
                     value = (-value) if inv_h else value
                     if value < -threshold:
                         adjust_current(-1)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
                     elif value > threshold:
                         adjust_current(1)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         moved = True
 
                 if moved:
@@ -1253,11 +1253,11 @@ def run_options(events, dt, screen, game_state):
                         selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
                     else:
                         selection_index = (selection_index + 1) % len(menu_items)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     moved = True
                 if hat_x != 0:
                     adjust_current(1 if hat_x > 0 else -1)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     moved = True
                 if moved:
                     last_axis_move_time = current_time
@@ -1280,16 +1280,16 @@ def run_options(events, dt, screen, game_state):
                 break
             if key == pygame.K_UP:
                 selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key == pygame.K_DOWN:
                 selection_index = (selection_index + 1) % len(menu_items)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key == pygame.K_LEFT:
                 adjust_current(-1)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key == pygame.K_RIGHT:
                 adjust_current(1)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 if handle_confirm():
                     break
@@ -1623,7 +1623,7 @@ def run_options(events, dt, screen, game_state):
                     key = (name, cell_px)
                     if key in preview_cache:
                         return preview_cache[key]
-                    src = utils.images.get(name)
+                    src = utils.images_hd.get(name) or utils.images.get(name)
                     if not src:
                         preview_cache[key] = None
                         return None
@@ -2026,7 +2026,7 @@ def run_controls_remap(events, dt, screen, game_state):
                 pending_invert["H"] = 0 if _get_bool(pending_invert, "H", False) else 1
             elif item_id == "INV_V":
                 pending_invert["V"] = 0 if _get_bool(pending_invert, "V", False) else 1
-            utils.play_sound("eat")
+            utils.play_sound("menu_move")
             return config.CONTROLS
 
         return config.CONTROLS
@@ -2038,13 +2038,13 @@ def run_controls_remap(events, dt, screen, game_state):
             step = 0.02
             threshold = max(0.05, min(0.95, round(float(threshold) + float(delta) * step, 2)))
             pending["threshold"] = threshold
-            utils.play_sound("eat")
+            utils.play_sound("menu_move")
         elif item_type == "toggle":
             if item_id == "INV_H":
                 pending_invert["H"] = 0 if _get_bool(pending_invert, "H", False) else 1
             elif item_id == "INV_V":
                 pending_invert["V"] = 0 if _get_bool(pending_invert, "V", False) else 1
-            utils.play_sound("eat")
+            utils.play_sound("menu_move")
 
     for event in events:
         if event.type == pygame.QUIT:
@@ -2074,7 +2074,7 @@ def run_controls_remap(events, dt, screen, game_state):
                 pending_buttons[str(listening_for)] = int(event.button)
                 game_state['controls_listening_for'] = None
                 listening_for = None
-                utils.play_sound("powerup_pickup")
+                utils.play_sound("menu_select")
                 set_message("Assigné.", 900)
                 continue
 
@@ -2092,7 +2092,7 @@ def run_controls_remap(events, dt, screen, game_state):
                     pending_axes["V"] = int(getattr(event, "axis", 1))
                 game_state['controls_listening_for'] = None
                 listening_for = None
-                utils.play_sound("powerup_pickup")
+                utils.play_sound("menu_select")
                 set_message("Axe assigné.", 900)
                 continue
 
@@ -2105,11 +2105,11 @@ def run_controls_remap(events, dt, screen, game_state):
                 hat_x, hat_y = event.value
                 if hat_y > 0:
                     selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                 elif hat_y < 0:
                     selection_index = (selection_index + 1) % len(menu_items)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                 elif hat_x != 0:
                     adjust_current(1 if hat_x > 0 else -1)
@@ -2125,11 +2125,11 @@ def run_controls_remap(events, dt, screen, game_state):
                     thr = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
                     if value < -thr:
                         selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time
                     elif value > thr:
                         selection_index = (selection_index + 1) % len(menu_items)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
@@ -2146,10 +2146,10 @@ def run_controls_remap(events, dt, screen, game_state):
                 return return_state
             if key == pygame.K_UP:
                 selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key == pygame.K_DOWN:
                 selection_index = (selection_index + 1) % len(menu_items)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key == pygame.K_LEFT:
                 adjust_current(-1)
             elif key == pygame.K_RIGHT:

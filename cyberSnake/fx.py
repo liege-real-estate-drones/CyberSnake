@@ -8,6 +8,8 @@ import math
 
 import pygame
 
+import game_clock
+
 import config
 
 # ---------------------------------------------------------------------------
@@ -143,7 +145,7 @@ MAX_POPUPS = 40
 
 def add_popup(x, y, text, color=(255, 255, 255), now=None, big=False):
     if now is None:
-        now = pygame.time.get_ticks()
+        now = game_clock.ticks()
     if len(_popups) >= MAX_POPUPS:
         _popups.pop(0)
     _popups.append({'x': float(x), 'y': float(y), 'text': str(text), 'color': color, 'start': now, 'big': big})
@@ -187,6 +189,119 @@ def draw_popups(surface, now, font_small, font_default):
 
 
 # ---------------------------------------------------------------------------
+# Ondes de choc (anneaux lumineux qui s'élargissent : EMP, explosions)
+# ---------------------------------------------------------------------------
+_shockwaves = []
+SHOCKWAVE_MS = 450
+MAX_SHOCKWAVES = 12
+
+
+def add_shockwave(x, y, color=(255, 255, 255), now=None, radius_cells=3.5, duration=SHOCKWAVE_MS):
+    if now is None:
+        now = game_clock.ticks()
+    if len(_shockwaves) >= MAX_SHOCKWAVES:
+        _shockwaves.pop(0)
+    _shockwaves.append({'x': int(x), 'y': int(y), 'color': color, 'start': now,
+                        'radius': max(8, int(config.GRID_SIZE * radius_cells)), 'duration': max(1, int(duration))})
+
+
+def clear_shockwaves():
+    _shockwaves.clear()
+
+
+def draw_shockwaves(surface, now):
+    if not _shockwaves:
+        return
+    alive = []
+    for w in _shockwaves:
+        age = now - w['start']
+        if age < 0 or age >= w['duration']:
+            continue
+        alive.append(w)
+        t = age / w['duration']
+        ease = 1 - (1 - t) ** 3
+        r = max(2, int(w['radius'] * ease))
+        fade = 1.0 - t
+        col = tuple(int(c * fade) for c in w['color'][:3])
+        width = max(1, int(config.GRID_SIZE * 0.35 * fade) + 1)
+        try:
+            pygame.draw.circle(surface, col, (w['x'], w['y']), r, width)
+            if r > 6:
+                inner = tuple(int(c * fade * 0.45) for c in w['color'][:3])
+                pygame.draw.circle(surface, inner, (w['x'], w['y']), max(1, r - width - 3), 1)
+        except Exception:
+            pass
+    _shockwaves[:] = alive
+
+
+# ---------------------------------------------------------------------------
+# Rendus néon mis en cache : mines, nids
+# ---------------------------------------------------------------------------
+_sprite_cache = {}
+
+
+def _cached(key, builder):
+    s = _sprite_cache.get(key)
+    if s is None:
+        if len(_sprite_cache) > 64:
+            _sprite_cache.clear()
+        s = builder()
+        _sprite_cache[key] = s
+    return s
+
+
+def mine_sprite(size, lit):
+    """Mine néon : noyau lumineux, coque sombre et piquants (deux états pour le clignotement)."""
+    def build():
+        s = max(8, int(size))
+        surf = pygame.Surface((s, s), pygame.SRCALPHA)
+        c = s / 2.0
+        red = (255, 40, 60) if lit else (150, 20, 35)
+        # Piquants
+        for k in range(8):
+            a = k * math.pi / 4
+            x1, y1 = c + math.cos(a) * s * 0.26, c + math.sin(a) * s * 0.26
+            x2, y2 = c + math.cos(a) * s * 0.48, c + math.sin(a) * s * 0.48
+            pygame.draw.line(surf, (90, 95, 110), (x1, y1), (x2, y2), max(2, s // 9))
+            pygame.draw.circle(surf, red, (int(x2), int(y2)), max(1, s // 14))
+        # Coque
+        pygame.draw.circle(surf, (35, 38, 50), (int(c), int(c)), int(s * 0.33))
+        pygame.draw.circle(surf, (110, 115, 135), (int(c), int(c)), int(s * 0.33), max(1, s // 16))
+        # Noyau
+        pygame.draw.circle(surf, red, (int(c), int(c)), int(s * 0.17))
+        if lit:
+            pygame.draw.circle(surf, (255, 210, 210), (int(c - s * 0.04), int(c - s * 0.04)), max(1, int(s * 0.06)))
+        return surf
+    return _cached(('mine', int(size), bool(lit)), build)
+
+
+def nest_sprite(size, damage_ratio):
+    """Nid : œuf alien segmenté, qui rougit et se fissure avec les dégâts."""
+    step = int(round(max(0.0, min(1.0, damage_ratio)) * 3))
+
+    def build():
+        s = max(10, int(size))
+        surf = pygame.Surface((s, s), pygame.SRCALPHA)
+        shell = (120 + 30 * step, 70 - 10 * step, 20)
+        rect = pygame.Rect(int(s * 0.14), int(s * 0.06), int(s * 0.72), int(s * 0.88))
+        pygame.draw.ellipse(surf, (40, 20, 10), rect.inflate(2, 2))
+        pygame.draw.ellipse(surf, shell, rect)
+        # Veines lumineuses
+        glow = (255, 170 - 30 * step, 40)
+        for k in (-1, 0, 1):
+            x = rect.centerx + k * rect.width // 4
+            pygame.draw.line(surf, glow, (x, rect.top + rect.height // 5), (x, rect.bottom - rect.height // 5), max(1, s // 16))
+        pygame.draw.ellipse(surf, (255, 220, 150), rect, max(1, s // 14))
+        # Fissures selon les dégâts
+        for k in range(step):
+            x0 = rect.left + rect.width * (0.3 + 0.2 * k)
+            pts = [(x0, rect.top + 3), (x0 + s * 0.08, rect.centery - s * 0.1), (x0 - s * 0.05, rect.centery + s * 0.1)]
+            pygame.draw.lines(surf, (20, 5, 0), False, pts, max(1, s // 14))
+        return surf
+    return _cached(('nest', int(size), step), build)
+
+
+# ---------------------------------------------------------------------------
 # Flash plein écran (dégâts, kill, mort)
 # ---------------------------------------------------------------------------
 _flash = {'color': (255, 255, 255), 'start': -10**9, 'duration': 1, 'alpha': 0}
@@ -195,7 +310,7 @@ _flash_surface_cache = {}
 
 def trigger_flash(color=(255, 255, 255), duration=180, alpha=110, now=None):
     if now is None:
-        now = pygame.time.get_ticks()
+        now = game_clock.ticks()
     _flash.update({'color': color, 'start': now, 'duration': max(1, duration), 'alpha': alpha})
 
 

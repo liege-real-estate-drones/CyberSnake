@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Écrans Pause et Game Over."""
 import pygame
+
+import game_clock
 import math
 import traceback
 import logging
@@ -47,7 +49,7 @@ def run_pause(events, dt, screen, game_state):
     def _resume_game(play_sound=True):
         if play_sound:
             try:
-                utils.play_sound("powerup_pickup")
+                utils.play_sound("menu_select")
             except Exception:
                 pass
         try:
@@ -114,7 +116,7 @@ def run_pause(events, dt, screen, game_state):
         except Exception:
             pass
         try:
-            utils.play_sound("eat")
+            utils.play_sound("menu_move")
         except Exception:
             pass
 
@@ -145,11 +147,11 @@ def run_pause(events, dt, screen, game_state):
                     value = (-value) if inv_v else value
                     if value < -threshold:
                         selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time
                     elif value > threshold:
                         selection_index = (selection_index + 1) % len(menu_items)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
@@ -157,11 +159,11 @@ def run_pause(events, dt, screen, game_state):
                 hat_x, hat_y = event.value
                 if hat_y > 0:
                     selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                 elif hat_y < 0:
                     selection_index = (selection_index + 1) % len(menu_items)
-                    utils.play_sound("eat")
+                    utils.play_sound("menu_move")
                     last_axis_move_time = current_time
                 else:
                     # Hat gauche/droite inutilisé dans le menu Pause
@@ -184,7 +186,7 @@ def run_pause(events, dt, screen, game_state):
                     music_num = (utils.selected_music_index % 9) + 1
                     if utils.select_and_load_music(music_num, base_path):
                         game_state['pause_music_changed'] = True
-                        utils.play_sound("powerup_pickup")
+                        utils.play_sound("menu_select")
                     continue
 
                 if is_confirm_button(button):
@@ -201,10 +203,10 @@ def run_pause(events, dt, screen, game_state):
 
             if key == pygame.K_UP:
                 selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key == pygame.K_DOWN:
                 selection_index = (selection_index + 1) % len(menu_items)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
             elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 return _activate_selected()
             elif key in (pygame.K_p, pygame.K_ESCAPE):
@@ -233,7 +235,7 @@ def run_pause(events, dt, screen, game_state):
 
     # Dessin de l'écran de pause
     try:
-        draw_game_elements_on_surface(screen, game_state, current_time)
+        draw_game_elements_on_surface(screen, game_state, game_clock.ticks())  # Partie figée
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         screen.blit(overlay, (0, 0))
@@ -479,12 +481,12 @@ def run_game_over(events, dt, screen, game_state):
                         threshold = 0.8  # Higher threshold for game over menu to prevent drift issues
                         if value < -threshold: # Haut - option précédente
                             gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
-                            utils.play_sound("eat")
+                            utils.play_sound("menu_move")
                             game_state['gameover_menu_selection'] = gameover_menu_selection
                             last_axis_move_time = current_time
                         elif value > threshold: # Bas - option suivante
                             gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
-                            utils.play_sound("eat")
+                            utils.play_sound("menu_move")
                             game_state['gameover_menu_selection'] = gameover_menu_selection
                             last_axis_move_time = current_time
                 # Navigation avec le hat (croix directionnelle)
@@ -495,12 +497,12 @@ def run_game_over(events, dt, screen, game_state):
                         hat_y = 1 if hat_x < 0 else -1
                     if hat_y > 0: # Haut
                         gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         game_state['gameover_menu_selection'] = gameover_menu_selection
                         last_axis_move_time = current_time
                     elif hat_y < 0: # Bas
                         gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
-                        utils.play_sound("eat")
+                        utils.play_sound("menu_move")
                         game_state['gameover_menu_selection'] = gameover_menu_selection
                         last_axis_move_time = current_time
         
@@ -530,7 +532,7 @@ def run_game_over(events, dt, screen, game_state):
                     # Check order: ["Rejouer", "Menu Principal"] (defined earlier in run_game_over)
 
                     if selected_option == "Rejouer":
-                        utils.play_sound("powerup_pickup")
+                        utils.play_sound("menu_select")
                         # Réinitialiser le timer de début de game over pour une future partie
                         game_state['game_over_start_time'] = 0
 
@@ -562,7 +564,7 @@ def run_game_over(events, dt, screen, game_state):
                         return next_state
 
                     elif selected_option == "Menu Principal":
-                        utils.play_sound("combo_break")
+                        utils.play_sound("menu_back")
                         game_state['game_over_hs_saved'] = False
                         # Réinitialiser le timer de début de game over
                         game_state['game_over_start_time'] = 0
@@ -616,7 +618,7 @@ def run_game_over(events, dt, screen, game_state):
     # Dessin
     try:
         if 'game_end_time' not in game_state:
-            game_state['game_end_time'] = current_time
+            game_state['game_end_time'] = game_clock.ticks()  # Même horloge que game_start_time
         duration_ms = game_state['game_end_time'] - int(game_state.get('game_start_time', game_state['game_end_time']) or 0)
         ps = player_snake
         stats = [("Durée", screens._fmt_duration(duration_ms))]

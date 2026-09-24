@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Mode démo (l'IA joue seule dans la boucle d'attente)."""
 import pygame
+
+import game_clock
 import random
 import logging
 from collections import deque
@@ -9,13 +11,13 @@ import config
 import utils
 import game_objects
 import screens
-from gameplay import reset_game, run_game
+from gameplay import reset_game, run_game, _apply_dash_loot
 from ui_common import draw_ui_panel
 
 
 def run_demo(events, dt, screen, game_state):
     """Mode démo (attract): auto-play et retour menu sur n'importe quel input."""
-    current_time = pygame.time.get_ticks()
+    current_time = game_clock.ticks()
 
     def _is_demo_input(ev) -> bool:
         try:
@@ -63,7 +65,7 @@ def run_demo(events, dt, screen, game_state):
         return config.MENU
 
     # Boucle d'attente (borne) : après un moment, la démo laisse place au Hall of Fame
-    _now_demo = pygame.time.get_ticks()
+    _now_demo = game_clock.ticks()
     if not game_state.get('_demo_start_time'):
         game_state['_demo_start_time'] = _now_demo
     if game_state.get('attract_mode') and _now_demo - int(game_state.get('_demo_start_time') or _now_demo) >= screens.ATTRACT_DEMO_MS:
@@ -369,7 +371,8 @@ def run_demo(events, dt, screen, game_state):
                                     ok = False
                                     break
                             if ok:
-                                player_snake.activate_dash(current_time, obstacles, foods, powerups, mines, current_map_walls)
+                                loot = player_snake.activate_dash(current_time, obstacles, foods, powerups, mines, current_map_walls)
+                                _apply_dash_loot(game_state, player_snake, loot, current_time)
                                 game_state['_demo_last_dash_time'] = current_time
             except Exception:
                 pass
