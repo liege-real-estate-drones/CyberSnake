@@ -73,7 +73,7 @@ class TestMovingMines(unittest.TestCase):
         p.invincible_timer = 0
         p.armor = 1
         mm = game_objects.MovingMine(10 * g + g // 2, 2 * g, (4, 4))  # Visée initiale ailleurs
-        mm.spawn_time = 0
+        mm.spawn_time = mm.warn_until = 0
         gs = _state(config.MODE_SURVIVAL, player_snake=p, moving_mines=[mm])
         killed = []
         for frame in range(400):
@@ -88,8 +88,20 @@ class TestMovingMines(unittest.TestCase):
     def test_mine_fizzles_after_lifetime(self):
         mm = game_objects.MovingMine(100, 100, (30, 20))
         mm.spawn_time = 0
-        self.assertFalse(mm.update(16, None, config.MOVING_MINE_LIFETIME + 1))
+        mm.warn_until = config.MOVING_MINE_WARN_MS
+        self.assertFalse(mm.update(16, None, config.MOVING_MINE_LIFETIME + config.MOVING_MINE_WARN_MS + 1))
         self.assertFalse(mm.is_active)
+
+    def test_mine_waits_at_edge_during_warning(self):
+        mm = game_objects.MovingMine(-40, 100, (30, 20))
+        mm.spawn_time = 0
+        mm.warn_until = config.MOVING_MINE_WARN_MS
+        x0 = mm.x
+        for t in range(0, config.MOVING_MINE_WARN_MS, 16):
+            mm.update(16, (2, 2), t)
+        self.assertEqual(mm.x, x0)       # Immobile pendant l'alerte
+        mm.update(16, (2, 2), config.MOVING_MINE_WARN_MS + 16)
+        self.assertNotEqual(mm.x, x0)    # Puis elle entre
 
 
 class TestAssets(unittest.TestCase):
@@ -146,6 +158,22 @@ class TestGameClock(unittest.TestCase):
         self.clock.set_running(False)
         self.real[0] += config.POWERUP_LIFETIME * 3
         self.assertFalse(pu.is_expired())
+
+
+class TestWalls(unittest.TestCase):
+    def test_old_styles_become_neon(self):
+        import walls
+        for old in ("panel", "classic", "hazard", "", None):
+            self.assertEqual(walls.normalize_style(old), "neon")
+        self.assertEqual(walls.normalize_style("violet"), "violet")
+
+    def test_arena_surface_is_cached_and_follows_walls(self):
+        import walls
+        bg = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT)).convert()
+        cells = frozenset({(3, 3), (4, 3), (5, 3), (5, 4)})
+        a = walls.arena_surface(bg, cells)
+        self.assertIs(walls.arena_surface(bg, set(cells)), a)          # Même murs : cache
+        self.assertIsNot(walls.arena_surface(bg, cells | {(9, 9)}), a)  # Murs changés : redessiné
 
 
 class TestEsMedia(unittest.TestCase):

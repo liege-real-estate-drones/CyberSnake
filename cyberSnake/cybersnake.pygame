@@ -55,6 +55,7 @@ try:
     import borne_install
     import es_media
     import game_clock
+    import walls
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -249,13 +250,8 @@ def main():
             ai_key = "normal"
         config.AI_DIFFICULTY = ai_key
 
-        try:
-            wall_key = str(opts.get("wall_style", getattr(config, "WALL_STYLE", "panel"))).strip().lower()
-        except Exception:
-            wall_key = str(getattr(config, "WALL_STYLE", "panel")).strip().lower()
-        if wall_key not in ("classic", "panel", "neon", "circuit", "glass", "grid", "hazard"):
-            wall_key = "panel"
-        config.WALL_STYLE = wall_key
+        # Murs : couleur du néon (les anciens styles en tuiles deviennent le néon cyan)
+        config.WALL_STYLE = walls.theme_key(walls.normalize_style(opts.get("wall_style", getattr(config, "WALL_STYLE", "neon"))))
 
         particle_key = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal"))).strip().lower()
         particle_map = {"off": 0.0, "low": 0.5, "normal": 1.0, "high": 1.6}

@@ -13,9 +13,8 @@ import random
 
 import pygame
 
-import game_clock
-
 import config
+import game_clock
 import utils
 import fx
 import game_objects

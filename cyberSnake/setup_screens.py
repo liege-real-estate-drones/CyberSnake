@@ -11,6 +11,7 @@ import utils
 import progress
 import arenas
 from gameplay import reset_game
+import walls as walls_mod
 from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
@@ -869,16 +870,8 @@ def run_map_selection(events, dt, screen, game_state):
         except Exception:
             mode_name = "?"
 
-        wall_style_key = str(getattr(config, "WALL_STYLE", "panel") or "panel").strip().lower()
-        wall_style_display_map = {
-            "classic": "Classique",
-            "panel": "Panneaux",
-            "neon": "Neon",
-            "circuit": "Circuit",
-            "glass": "Verre",
-            "grid": "Grille",
-            "hazard": "Danger",
-        }
+        wall_style_key = str(getattr(config, "WALL_STYLE", "neon") or "neon").strip().lower()
+        wall_style_display_map = {k: label for k, (label, _c) in walls_mod.THEMES.items()}
         wall_style_display = wall_style_display_map.get(wall_style_key, wall_style_key)
 
         speed_key = str(getattr(config, "GAME_SPEED", "normal") or "normal").strip().lower()
@@ -1028,7 +1021,7 @@ def run_classic_setup(events, dt, screen, game_state):
 
     # Valeurs courantes (session) - ne persiste pas sur disque
     pending_classic_arena = game_state.get('classic_setup_arena', getattr(config, "CLASSIC_ARENA", "full"))
-    pending_wall_style = game_state.get('classic_setup_wall_style', getattr(config, "WALL_STYLE", "panel"))
+    pending_wall_style = game_state.get('classic_setup_wall_style', getattr(config, "WALL_STYLE", "neon"))
     pending_snake_style_p1 = game_state.get('classic_setup_snake_style_p1', getattr(config, "SNAKE_STYLE_P1", None))
 
     if isinstance(pending_classic_arena, str):
@@ -1039,7 +1032,7 @@ def run_classic_setup(events, dt, screen, game_state):
     if isinstance(pending_wall_style, str):
         pending_wall_style = pending_wall_style.strip().lower()
     else:
-        pending_wall_style = str(getattr(config, "WALL_STYLE", "panel") or "panel").strip().lower()
+        pending_wall_style = str(getattr(config, "WALL_STYLE", "neon") or "neon").strip().lower()
 
     if isinstance(pending_snake_style_p1, str):
         pending_snake_style_p1 = pending_snake_style_p1.strip().lower() or None
@@ -1057,25 +1050,16 @@ def run_classic_setup(events, dt, screen, game_state):
         pending_classic_arena = "full" if "full" in classic_arena_keys else classic_arena_keys[0]
     classic_arena_display_map = dict(classic_arenas)
 
-    wall_styles = [
-        ("random", "Aleatoire"),
-        ("classic", "Classique"),
-        ("panel", "Panneaux"),
-        ("neon", "Neon"),
-        ("circuit", "Circuit"),
-        ("glass", "Verre"),
-        ("grid", "Grille"),
-        ("hazard", "Danger"),
-    ]
+    wall_styles = [("random", "Aléatoire")] + [(k, label) for k, (label, _c) in walls_mod.THEMES.items()]
     wall_style_keys = [k for k, _ in wall_styles]
     if pending_wall_style not in wall_style_keys:
-        pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
+        pending_wall_style = "neon" if "neon" in wall_style_keys else wall_style_keys[0]
     wall_style_display_map = dict(wall_styles)
 
     non_random_wall_style_keys = [k for k in wall_style_keys if k != "random"]
     pending_wall_style_random_choice = game_state.get('classic_setup_wall_style_random_choice', None)
     if pending_wall_style_random_choice not in non_random_wall_style_keys:
-        pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "panel"
+        pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "neon"
 
     def format_wall_style(style_key):
         sk = str(style_key).strip().lower()
@@ -1135,7 +1119,7 @@ def run_classic_setup(events, dt, screen, game_state):
         def _reroll():
             nonlocal pending_wall_style_random_choice
             if not non_random_wall_style_keys:
-                pending_wall_style_random_choice = "panel"
+                pending_wall_style_random_choice = "neon"
                 return
             new_choice = random.choice(non_random_wall_style_keys)
             if len(non_random_wall_style_keys) > 1:
@@ -1182,16 +1166,16 @@ def run_classic_setup(events, dt, screen, game_state):
         try:
             wall_key = str(pending_wall_style).strip().lower()
         except Exception:
-            wall_key = "panel"
+            wall_key = "neon"
         if wall_key == "random":
             try:
                 wall_key = str(pending_wall_style_random_choice).strip().lower()
             except Exception:
-                wall_key = "panel"
+                wall_key = "neon"
         try:
             config.WALL_STYLE = str(wall_key).strip().lower()
         except Exception:
-            config.WALL_STYLE = "panel"
+            config.WALL_STYLE = "neon"
 
         try:
             config.SNAKE_STYLE_P1 = pending_snake_style_p1 if pending_snake_style_p1 else None
@@ -1225,7 +1209,7 @@ def run_classic_setup(events, dt, screen, game_state):
             try:
                 pending_wall_style = str(pending_wall_style_random_choice).strip().lower()
             except Exception:
-                pending_wall_style = "panel"
+                pending_wall_style = "neon"
             utils.play_sound("menu_select")
             return config.CLASSIC_SETUP
 

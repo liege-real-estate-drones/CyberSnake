@@ -8,9 +8,8 @@ import math
 
 import pygame
 
-import game_clock
-
 import config
+import game_clock
 
 # ---------------------------------------------------------------------------
 # Fond d'arène (dégradé + grille + points lumineux), mis en cache
@@ -251,7 +250,13 @@ def _cached(key, builder):
 
 
 def mine_sprite(size, lit):
-    """Mine néon : noyau lumineux, coque sombre et piquants (deux états pour le clignotement)."""
+    """Mine néon (mine.png / mine_lit.png, tools/generate_sprites.py) ; dessin de secours sinon."""
+    import utils  # Import local : utils importe déjà fx
+    src = utils.images_hd.get("mine_lit.png" if lit else "mine.png")
+    if src is not None:
+        return _cached(('mine_png', int(size), bool(lit), id(src)),
+                       lambda: pygame.transform.smoothscale(src, (max(8, int(size)), max(8, int(size)))))
+
     def build():
         s = max(8, int(size))
         surf = pygame.Surface((s, s), pygame.SRCALPHA)

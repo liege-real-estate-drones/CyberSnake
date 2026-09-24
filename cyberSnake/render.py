@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 """Rendu d'une partie : arène, objets, serpents, effets et HUD."""
 import pygame
-
-import game_clock
 import math
 import traceback
 import logging
 
 import config
+import game_clock
 import utils
 import fx
 import boss as boss_mod
 import bonuses
+import walls as walls_mod
 import arenas
-from ui_common import _format_mmss, _hud_begin, _hud_end, draw_ui_panel, draw_wall_tile
+from ui_common import _format_mmss, _hud_begin, _hud_end, draw_ui_panel
 
 
 def _draw_minimal_hud(surface, game_state, current_time, font_small, font_default):
@@ -229,24 +229,19 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
         except Exception: print("ERREUR FATALE: Impossible de charger les polices de secours."); return
 
     # --- Dessin Fond & Grille (pré-calculé : dégradé + grille + vignettage) ---
+    # --- Fond + murs (structures néon pré-dessinées, voir walls.py) ---
+    laser_cells = arenas.laser_cells_active(game_state)  # Dessinées comme portes laser par arenas.draw
     try:
-        target_surface.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, getattr(config, "SHOW_GRID", True)), (0, 0))
+        background = fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, getattr(config, "SHOW_GRID", True))
+        static_walls = frozenset(w for w in current_map_walls if w not in laser_cells)
+        target_surface.blit(walls_mod.arena_surface(background, static_walls), (0, 0))
+        walls_mod.draw_sparks(target_surface, current_time)
     except Exception as e:
-        logging.warning(f"Erreur fond d'arène: {e}")
+        logging.warning(f"Erreur fond d'arène / murs: {e}")
         try:
             target_surface.fill(config.COLOR_BACKGROUND)
         except Exception:
             return
-
-    # --- Dessin Murs ---
-    laser_cells = arenas.laser_cells_active(game_state)
-    for wall_pos in current_map_walls:
-        if wall_pos in laser_cells:
-            continue  # Dessinée comme porte laser par arenas.draw
-        wall_rect = pygame.Rect(wall_pos[0] * config.GRID_SIZE, wall_pos[1] * config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
-        try:
-            draw_wall_tile(target_surface, wall_rect, grid_pos=wall_pos, current_time=current_time)
-        except Exception: pass
 
     arenas.draw(target_surface, game_state, current_time)
 

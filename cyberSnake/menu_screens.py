@@ -12,6 +12,7 @@ import progress
 import borne_install
 import stick_wizard
 from setup_screens import invalidate_map_selection_cache
+import walls as walls_mod
 from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
@@ -465,7 +466,7 @@ def run_options(events, dt, screen, game_state):
         pending_classic_arena = str(opts.get("classic_arena", getattr(config, "CLASSIC_ARENA", "full")))
         pending_game_speed = str(opts.get("game_speed", getattr(config, "GAME_SPEED", "normal")))
         pending_ai_difficulty = str(opts.get("ai_difficulty", getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
-        pending_wall_style = str(opts.get("wall_style", getattr(config, "WALL_STYLE", "panel"))).strip().lower()
+        pending_wall_style = walls_mod.normalize_style(opts.get("wall_style", getattr(config, "WALL_STYLE", "neon")))
         pending_particle_density = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal")))
         pending_screen_shake = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         pending_show_fps = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
@@ -527,7 +528,7 @@ def run_options(events, dt, screen, game_state):
     pending_classic_arena = str(game_state.get('pending_classic_arena', getattr(config, "CLASSIC_ARENA", "full")))
     pending_game_speed = str(game_state.get('pending_game_speed', getattr(config, "GAME_SPEED", "normal")))
     pending_ai_difficulty = str(game_state.get('pending_ai_difficulty', getattr(config, "AI_DIFFICULTY", "normal"))).strip().lower()
-    pending_wall_style = str(game_state.get('pending_wall_style', getattr(config, "WALL_STYLE", "panel"))).strip().lower()
+    pending_wall_style = str(game_state.get('pending_wall_style', getattr(config, "WALL_STYLE", "neon"))).strip().lower()
     pending_particle_density = str(game_state.get('pending_particle_density', getattr(config, "PARTICLE_DENSITY", "normal")))
     pending_screen_shake = bool(game_state.get('pending_screen_shake', getattr(config, "SCREEN_SHAKE_ENABLED", True)))
     pending_show_fps = bool(game_state.get('pending_show_fps', getattr(config, "SHOW_FPS", False)))
@@ -621,26 +622,17 @@ def run_options(events, dt, screen, game_state):
     snake_color_display_p1 = snake_color_display_map.get(pending_snake_color_p1, pending_snake_color_p1)
     snake_color_display_p2 = snake_color_display_map.get(pending_snake_color_p2, pending_snake_color_p2)
 
-    wall_styles = [
-        ("random", "Aleatoire"),
-        ("classic", "Classique"),
-        ("panel", "Panneaux"),
-        ("neon", "Neon"),
-        ("circuit", "Circuit"),
-        ("glass", "Verre"),
-        ("grid", "Grille"),
-        ("hazard", "Danger"),
-    ]
+    wall_styles = [("random", "Aléatoire")] + [(k, label) for k, (label, _c) in walls_mod.THEMES.items()]
     wall_style_keys = [k for k, _ in wall_styles]
     pending_wall_style = str(pending_wall_style).strip().lower()
     if pending_wall_style not in wall_style_keys:
-        pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
+        pending_wall_style = "neon" if "neon" in wall_style_keys else wall_style_keys[0]
     wall_style_display_map = dict(wall_styles)
 
     non_random_wall_style_keys = [k for k in wall_style_keys if k != "random"]
     pending_wall_style_random_choice = game_state.get('pending_wall_style_random_choice', None)
     if pending_wall_style_random_choice not in non_random_wall_style_keys:
-        pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "panel"
+        pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "neon"
 
     if pending_wall_style == "random":
         resolved_wall_style = pending_wall_style_random_choice
@@ -832,7 +824,7 @@ def run_options(events, dt, screen, game_state):
         def _reroll():
             nonlocal pending_wall_style_random_choice
             if not non_random_wall_style_keys:
-                pending_wall_style_random_choice = "panel"
+                pending_wall_style_random_choice = "neon"
                 return
             new_choice = random.choice(non_random_wall_style_keys)
             if len(non_random_wall_style_keys) > 1:
@@ -933,12 +925,12 @@ def run_options(events, dt, screen, game_state):
         try:
             wall_key = str(pending_wall_style).strip().lower()
         except Exception:
-            wall_key = "panel"
+            wall_key = "neon"
         if wall_key == "random":
             try:
                 wall_key = str(pending_wall_style_random_choice).strip().lower()
             except Exception:
-                wall_key = "panel"
+                wall_key = "neon"
         opts["wall_style"] = wall_key
         opts["classic_arena"] = str(pending_classic_arena)
         opts["game_speed"] = str(pending_game_speed)
@@ -971,7 +963,7 @@ def run_options(events, dt, screen, game_state):
         try:
             config.WALL_STYLE = str(wall_key).strip().lower()
         except Exception:
-            config.WALL_STYLE = "panel"
+            config.WALL_STYLE = "neon"
 
         speed_map = {"slow": 1.25, "normal": 1.0, "fast": 0.85}
         config.GAME_SPEED = str(pending_game_speed).strip().lower()
@@ -1087,11 +1079,11 @@ def run_options(events, dt, screen, game_state):
         pending_snake_color_p1 = str(defaults.get("snake_color_p1", "cyber")).strip().lower()
         pending_snake_color_p2 = str(defaults.get("snake_color_p2", "pink")).strip().lower()
 
-        pending_wall_style = str(defaults.get("wall_style", "panel")).strip().lower()
+        pending_wall_style = str(defaults.get("wall_style", "neon")).strip().lower()
         if pending_wall_style not in wall_style_keys:
-            pending_wall_style = "panel" if "panel" in wall_style_keys else wall_style_keys[0]
+            pending_wall_style = "neon" if "neon" in wall_style_keys else wall_style_keys[0]
         if pending_wall_style_random_choice not in non_random_wall_style_keys:
-            pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "panel"
+            pending_wall_style_random_choice = random.choice(non_random_wall_style_keys) if non_random_wall_style_keys else "neon"
 
         pending_classic_arena = str(defaults.get("classic_arena", "full")).strip().lower()
         pending_game_speed = str(defaults.get("game_speed", "normal")).strip().lower()
@@ -1196,7 +1188,7 @@ def run_options(events, dt, screen, game_state):
             try:
                 pending_wall_style = str(pending_wall_style_random_choice).strip().lower()
             except Exception:
-                pending_wall_style = "panel"
+                pending_wall_style = "neon"
             utils.play_sound("menu_select")
             return False
 
