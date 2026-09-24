@@ -458,6 +458,7 @@ def main():
 
     # États où le stick est converti en croix directionnelle (navigation unifiée + répétition)
     menu_translator = menu_input.MenuInputTranslator()
+    keyboard_echo_filter = menu_input.KeyboardEchoFilter()
     raw_axis_states = {config.PLAYING, config.DEMO, config.CONTROLS, config.STICK_WIZARD}
 
     # --- Boucle Principale ---
@@ -480,6 +481,8 @@ def main():
             pass
         events = pygame.event.get()
         now_ticks = pygame.time.get_ticks()
+        # Batocera (evmapy) double le stick en touches clavier : on retire ces échos
+        events = keyboard_echo_filter.process(events, now_ticks, pygame.joystick.get_count() > 0)
 
         # --- Inactivité / Attract (démo) ---
         try:

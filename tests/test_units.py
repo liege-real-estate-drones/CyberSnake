@@ -88,6 +88,41 @@ class TestMenuInput(unittest.TestCase):
         self.assertEqual([e.value for e in out], [(-1, 0)])
 
 
+class TestKeyboardEcho(unittest.TestCase):
+    def key(self, k):
+        return pygame.event.Event(pygame.KEYDOWN, key=k, mod=0, unicode="", scancode=0)
+
+    def hat(self, v):
+        return pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=v, instance_id=0, joy=0)
+
+    def test_echo_after_or_before_stick_is_dropped(self):
+        f = menu_input.KeyboardEchoFilter()
+        out = f.process([self.hat((0, -1)), self.key(pygame.K_UP)], 0, True)      # même image
+        out += f.process([self.key(pygame.K_DOWN)], 16, True)                      # image suivante
+        out += f.process([], 32, True)
+        out += f.process([self.key(pygame.K_LEFT)], 1000, True)                    # avant le stick...
+        out += f.process([self.hat((1, 0))], 1016, True)                           # ...qui arrive juste après
+        out += f.process([], 1032, True)
+        self.assertEqual([e.type for e in out], [pygame.JOYHATMOTION, pygame.JOYHATMOTION])
+        self.assertEqual(f.dropped, 3)
+
+    def test_autorepeat_of_echo_is_dropped(self):
+        f = menu_input.KeyboardEchoFilter()
+        out = f.process([self.hat((0, -1)), self.key(pygame.K_DOWN)], 0, True)
+        out += f.process([self.key(pygame.K_DOWN)], 600, True)   # répétition auto, stick tenu
+        out += f.process([], 616, True)
+        up = pygame.event.Event(pygame.KEYUP, key=pygame.K_DOWN, mod=0, unicode="", scancode=0)
+        out += f.process([up], 900, True) + f.process([], 916, True)
+        self.assertEqual([e.type for e in out], [pygame.JOYHATMOTION])
+
+    def test_real_keyboard_still_works(self):
+        f = menu_input.KeyboardEchoFilter()
+        out = f.process([self.key(pygame.K_DOWN)], 5000, True) + f.process([], 5016, True)
+        self.assertEqual([e.key for e in out], [pygame.K_DOWN])
+        # Sans manette : aucun délai
+        self.assertEqual(len(f.process([self.key(pygame.K_UP)], 6000, False)), 1)
+
+
 class TestProgress(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
