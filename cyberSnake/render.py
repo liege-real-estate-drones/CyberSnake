@@ -12,6 +12,7 @@ import boss as boss_mod
 import walls as walls_mod
 import arenas
 import hud
+import pvp_rounds
 from ui_common import _format_mmss, _hud_begin, _hud_end, draw_ui_panel
 
 
@@ -70,7 +71,7 @@ def _draw_minimal_hud(surface, game_state, current_time, font_small, font_defaul
         try:
             PvpCondition = getattr(config, 'PvpCondition', None)
             pvp_condition_type = game_state.get('pvp_condition_type')
-            if PvpCondition is not None and pvp_condition_type != PvpCondition.KILLS:
+            if PvpCondition is not None and pvp_condition_type in (PvpCondition.TIMER, PvpCondition.MIXED):
                 pvp_start_time = _safe_int(game_state.get('pvp_start_time', 0), 0)
                 pvp_target_time = _safe_int(game_state.get('pvp_target_time', 0), 0)
                 elapsed_ms = int(current_time) - int(pvp_start_time) if pvp_start_time > 0 else 0
@@ -572,13 +573,17 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                         bottom_text += f" ({int(current_prog)}/{int(target_val)})"
                     else:
                         bottom_text += f" ({int(current_prog)})"
-        elif PvpCondition is not None and pvp_condition_type != PvpCondition.KILLS:  
-            elapsed_ms = current_time - pvp_start_time if pvp_start_time > 0 else 0
-            time_left_ms = max(0, (pvp_target_time * 1000) - elapsed_ms)
-            total_seconds_left = time_left_ms // 1000;
-            minutes = total_seconds_left // 60;
-            seconds = total_seconds_left % 60
-            bottom_text = f"Temps: {minutes:02d}:{seconds:02d}";
+        else:  # PvP : manche en cours (match en manches) et temps restant
+            parts = []
+            match = pvp_rounds.match(game_state)
+            if match:
+                parts.append(f"Manche {match['round']}  ({match['wins'][0]} - {match['wins'][1]})")
+            if PvpCondition is not None and pvp_condition_type in (PvpCondition.TIMER, PvpCondition.MIXED):
+                elapsed_ms = current_time - pvp_start_time if pvp_start_time > 0 else 0
+                time_left_ms = max(0, (pvp_target_time * 1000) - elapsed_ms)
+                total_seconds_left = time_left_ms // 1000
+                parts.append(f"Temps: {total_seconds_left // 60:02d}:{total_seconds_left % 60:02d}")
+            bottom_text = "   |   ".join(parts)
             bottom_color = config.COLOR_TIMER_TEXT
 
         if bottom_text:

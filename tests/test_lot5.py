@@ -28,6 +28,7 @@ import rules  # noqa: E402
 import keyboard_controls  # noqa: E402
 import menu_input  # noqa: E402
 import game_objects  # noqa: E402
+import pvp_rounds  # noqa: E402
 
 utils.load_assets(GAME_DIR)
 FONTS = utils.load_fonts(GAME_DIR, 1.0)
@@ -254,6 +255,54 @@ class TestRules(unittest.TestCase):
             gs['player_projectiles'].append(shot)
             gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
             self.assertEqual(p2.armor, 0)
+
+
+class TestPvpRounds(unittest.TestCase):
+    def _win_round(self, gs, player):
+        snake = gs['player_snake'] if player == 1 else gs['player2_snake']
+        snake.kills = gs['pvp_target_kills']
+        return gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+
+    def test_best_of_three_match(self):
+        gs = new_game(config.MODE_PVP, pvp_best_of=3)
+        self.assertEqual(gs['pvp_match']['wins'], [0, 0])
+        self._win_round(gs, 1)
+        self.assertTrue(gs.get('round_transition'))
+        self.assertEqual(gs['pvp_match']['wins'], [1, 0])
+        gs['death_cam_until'] = 1  # Fin du ralenti
+        self.assertEqual(gameplay.run_game([], 16, pygame.Surface((800, 600)), gs), config.ROUND_SCORE)
+        first_map = gs['selected_map_key']
+        self.assertEqual(pvp_rounds.start_next_round(gs), config.PLAYING)
+        gs['countdown_until'] = 0
+        self.assertEqual(gs['pvp_match']['round'], 2)
+        self.assertEqual(gs['pvp_match']['wins'], [1, 0])  # Le score du match est conservé
+        self.assertNotEqual(gs['selected_map_key'], first_map)  # Nouvelle carte
+        self._win_round(gs, 1)
+        self.assertFalse(gs.get('round_transition'))
+        self.assertEqual(gs['pvp_match']['winner'], 1)
+
+    def test_single_game_has_no_rounds(self):
+        gs = new_game(config.MODE_PVP, pvp_best_of=1)
+        self._win_round(gs, 2)
+        self.assertFalse(gs.get('round_transition'))
+        self.assertIsNone(pvp_rounds.match(gs))
+
+    def test_score_limit_condition(self):
+        gs = new_game(config.MODE_PVP, pvp_condition_type=config.PvpCondition.SCORE, pvp_score_limit=50)
+        gs['player2_snake'].score = 60
+        gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+        self.assertEqual(gs['pvp_game_over_reason'], 'score')
+        self.assertEqual(pvp_rounds.round_winner(gs), 2)
+
+    def test_round_score_screen_draws(self):
+        gs = new_game(config.MODE_PVP, pvp_best_of=5)
+        self._win_round(gs, 2)
+        self.assertEqual(pvp_rounds.run_round_score([], 16, pygame.Surface((800, 600)), gs), config.ROUND_SCORE)
+
+    def test_legacy_score_limit_value_is_raised(self):
+        with MemoryOptions() as mem:
+            mem.data['pvp'] = {'best_of': 3, 'score_limit': 10, 'friendly_fire': False}
+            self.assertEqual(pvp_rounds.load_settings(), (3, pvp_rounds.DEFAULT_SCORE_LIMIT))
 
 
 if __name__ == "__main__":

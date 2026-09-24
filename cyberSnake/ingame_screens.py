@@ -9,6 +9,7 @@ import game_clock
 import utils
 import progress
 import screens
+import pvp_rounds
 from gameplay import reset_game
 from render import draw_game_elements_on_surface
 from ui_common import draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
@@ -406,6 +407,14 @@ def run_game_over(events, dt, screen, game_state):
                  if p1_score >= p2_score: winner_text = f"{p1_name} Gagne (Score)!"
                  else: winner_text = f"{p2_name} Gagne (Score)!"
             else: winner_text = "Objectif Kills Atteint?" # Devrait pas arriver si la logique est bonne
+        elif pvp_reason == 'score':
+            if p1_score > p2_score: winner_text = f"{p1_name} Gagne (Score)!"
+            elif p2_score > p1_score: winner_text = f"{p2_name} Gagne (Score)!"
+            else: winner_text = "Égalité au Score!"
+        match = pvp_rounds.match(game_state)
+        if match and match.get('winner'):
+            w1, w2 = match['wins']
+            winner_text = f"{(p1_name, p2_name)[match['winner'] - 1]} Gagne le match {max(w1, w2)}-{min(w1, w2)} !"
 
     # --- Progression (couleurs à débloquer) + Défi du jour : enregistré une seule fois ---
     if not game_state.get('progress_recorded'):
@@ -600,7 +609,11 @@ def run_game_over(events, dt, screen, game_state):
         duration_ms = game_state['game_end_time'] - int(game_state.get('game_start_time', game_state['game_end_time']) or 0)
         ps = player_snake
         stats = [("Durée", screens._fmt_duration(duration_ms))]
-        if current_game_mode == config.MODE_PVP:
+        if current_game_mode == config.MODE_PVP and pvp_rounds.match(game_state):
+            w1, w2 = pvp_rounds.match(game_state)['wins']
+            info_main_label, info_main_value = f"MANCHES  ({p1_name} - {p2_name})", f"{w1}  -  {w2}"
+            sub_lines = [f"Dernière manche : {p1_score} - {p2_score} points, {p1_kills} - {p2_kills} kills"]
+        elif current_game_mode == config.MODE_PVP:
             info_main_label, info_main_value = "SCORE", f"{p1_score}  -  {p2_score}"
             sub_lines = [f"{p1_name} : {p1_kills} kills   |   {p2_name} : {p2_kills} kills"]
         elif current_game_mode == config.MODE_SURVIVAL:

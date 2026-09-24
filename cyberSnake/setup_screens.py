@@ -11,6 +11,7 @@ import progress
 import arenas
 from gameplay import reset_game
 import walls as walls_mod
+import pvp_rounds
 from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
@@ -1859,12 +1860,15 @@ def run_pvp_setup(events, dt, screen, game_state):
     condition_names = {
         PvpCondition.TIMER: "Temps Limite",
         PvpCondition.KILLS: "Objectif Kills",
-        PvpCondition.MIXED: "Mixte (Temps ou Kills)"
+        PvpCondition.MIXED: "Mixte (Temps ou Kills)",
+        PvpCondition.SCORE: "Score Limite",
     }
+    if 'pvp_best_of' not in game_state or 'pvp_score_limit' not in game_state:
+        game_state['pvp_best_of'], game_state['pvp_score_limit'] = pvp_rounds.load_settings()
 
     def change_condition(change):
         current_condition_val = game_state.get('pvp_condition_type', PvpCondition.KILLS)
-        all_conditions = [PvpCondition.TIMER, PvpCondition.KILLS, PvpCondition.MIXED]
+        all_conditions = [PvpCondition.TIMER, PvpCondition.KILLS, PvpCondition.MIXED, PvpCondition.SCORE]
         try:
             current_index = all_conditions.index(current_condition_val)
             new_index = (current_index + change + len(all_conditions)) % len(all_conditions)
@@ -1874,15 +1878,26 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     def change_time(change):
         current_time_target = game_state.get('pvp_target_time', config.PVP_DEFAULT_TIME_SECONDS)
-        if game_state.get('pvp_condition_type') != PvpCondition.KILLS:
+        if game_state.get('pvp_condition_type') in (PvpCondition.TIMER, PvpCondition.MIXED):
             new_time = max(config.PVP_TIME_INCREMENT, current_time_target + change * config.PVP_TIME_INCREMENT)
             game_state['pvp_target_time'] = new_time
 
     def change_kills(change):
         current_kills_target = game_state.get('pvp_target_kills', config.PVP_DEFAULT_KILLS)
-        if game_state.get('pvp_condition_type') != PvpCondition.TIMER:
+        if game_state.get('pvp_condition_type') in (PvpCondition.KILLS, PvpCondition.MIXED):
             new_kills = max(1, current_kills_target + change * config.PVP_KILLS_INCREMENT)
             game_state['pvp_target_kills'] = new_kills
+
+    def change_score_limit(change):
+        if game_state.get('pvp_condition_type') == PvpCondition.SCORE:
+            limit = int(game_state.get('pvp_score_limit', pvp_rounds.DEFAULT_SCORE_LIMIT))
+            game_state['pvp_score_limit'] = max(pvp_rounds.SCORE_LIMIT_STEP, limit + change * pvp_rounds.SCORE_LIMIT_STEP)
+
+    def change_best_of(change):
+        choices = list(pvp_rounds.BEST_OF_CHOICES)
+        cur = game_state.get('pvp_best_of', 1)
+        idx = choices.index(cur) if cur in choices else 0
+        game_state['pvp_best_of'] = choices[(idx + change) % len(choices)]
 
     def change_start_armor(change):
         default_armor = getattr(config, 'PVP_DEFAULT_START_ARMOR', 0)
@@ -1904,8 +1919,10 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     options = [
         ("Condition Victoire", lambda gs: condition_names.get(gs.get('pvp_condition_type'), "?"), change_condition),
-        ("Temps Limite (sec)", lambda gs: str(gs.get('pvp_target_time')) if gs.get('pvp_condition_type') != PvpCondition.KILLS else "N/A", change_time),
-        ("Objectif Kills", lambda gs: str(gs.get('pvp_target_kills')) if gs.get('pvp_condition_type') != PvpCondition.TIMER else "N/A", change_kills),
+        ("Temps Limite (sec)", lambda gs: str(gs.get('pvp_target_time')) if gs.get('pvp_condition_type') in (PvpCondition.TIMER, PvpCondition.MIXED) else "N/A", change_time),
+        ("Objectif Kills", lambda gs: str(gs.get('pvp_target_kills')) if gs.get('pvp_condition_type') in (PvpCondition.KILLS, PvpCondition.MIXED) else "N/A", change_kills),
+        ("Score Limite", lambda gs: str(gs.get('pvp_score_limit')) if gs.get('pvp_condition_type') == PvpCondition.SCORE else "N/A", change_score_limit),
+        ("Manches", lambda gs: {1: "Partie unique", 3: "2 gagnantes sur 3", 5: "3 gagnantes sur 5"}.get(gs.get('pvp_best_of', 1), "?"), change_best_of),
         ("Armure Départ", lambda gs: str(gs.get('pvp_start_armor')), change_start_armor),
         ("Munitions Départ", lambda gs: str(gs.get('pvp_start_ammo')), change_start_ammo)
     ]
@@ -2000,6 +2017,7 @@ def run_pvp_setup(events, dt, screen, game_state):
 
                 if is_confirm_button(event.button):  # Confirmer
                     utils.play_sound("menu_select")
+                    pvp_rounds.save_settings(game_state.get('pvp_best_of', 1), game_state.get('pvp_score_limit', pvp_rounds.DEFAULT_SCORE_LIMIT))
                     next_state = config.NAME_ENTRY_PVP
                     game_state['current_state'] = next_state
                     game_state['pvp_name_entry_stage'] = 1
@@ -2056,7 +2074,7 @@ def run_pvp_setup(events, dt, screen, game_state):
         draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
         utils.draw_text_with_shadow(screen, "Configuration PvP", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
-        y_start, item_gap = config.SCREEN_HEIGHT * 0.30, 60
+        y_start, item_gap = config.SCREEN_HEIGHT * 0.26, min(60, int(config.SCREEN_HEIGHT * 0.085))
         label_x, value_x = config.SCREEN_WIDTH * 0.35, config.SCREEN_WIDTH * 0.65
         current_selection_idx = game_state.get('pvp_setup_index', 0)
         for i, (text, getter, _) in enumerate(options):

@@ -51,7 +51,7 @@ def _menu_states():
         _MENU_STATES = {config.MENU, config.TITLE, config.HALL_OF_FAME, config.HOW_TO_PLAY, config.OPTIONS,
                         config.CONTROLS, config.STICK_WIZARD, config.UPDATE, config.MAP_SELECTION,
                         config.NAME_ENTRY_SOLO, config.NAME_ENTRY_PVP, config.PVP_SETUP, config.VS_AI_SETUP,
-                        config.CLASSIC_SETUP, getattr(config, 'RULES', -1), getattr(config, 'ROUND_SCORE', -1)}
+                        config.CLASSIC_SETUP, config.RULES, config.BUTTON_COLORS_SCREEN}
     return _MENU_STATES
 
 
@@ -91,9 +91,9 @@ def reload_options():
 def role_for(game_state):
     """Rôle musical de l'écran courant (None : silence)."""
     state = game_state.get('current_state')
-    if state in (config.PLAYING, config.DEMO, config.PAUSED) or (
+    if state in (config.PLAYING, config.DEMO, config.PAUSED, config.ROUND_SCORE) or (
             state == config.OPTIONS and game_state.get('options_return_state') == config.PAUSED):
-        if game_state.get('death_cam_until') and state == config.PLAYING:
+        if game_state.get('death_cam_until') and state == config.PLAYING and not game_state.get('round_transition'):
             return None
         boss = game_state.get('boss')
         if boss is not None and getattr(boss, 'alive', False) and not game_state.get('demo_mode'):

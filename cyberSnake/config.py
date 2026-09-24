@@ -492,6 +492,7 @@ class PvpCondition:
     TIMER = 1
     KILLS = 2
     MIXED = 3
+    SCORE = 4  # Premier à atteindre le score limite (game_options.json : pvp.score_limit)
 
 
 PVP_DEFAULT_CONDITION = PvpCondition.KILLS

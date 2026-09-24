@@ -17,6 +17,7 @@ import arenas
 import joy_map
 import keyboard_controls
 import rules
+import pvp_rounds
 import progress
 import screens
 from render import draw_game_elements_on_surface
@@ -101,6 +102,10 @@ def _run_death_cam(dt, screen, game_state, real_now):
     """Fin de partie : l'arène reste affichée (explosion, particules) puis l'écran de fin."""
     until = int(game_state.get('death_cam_until', 0) or 0)
     if real_now >= until:
+        if game_state.pop('round_transition', False):  # PvP en manches : score, puis manche suivante
+            game_state.pop('death_cam_until', None)
+            game_state['current_state'] = config.ROUND_SCORE
+            return config.ROUND_SCORE
         return _enter_game_over(game_state)
     now = game_clock.ticks()
     utils.particles[:] = [p for p in utils.particles if not p.update(dt)]
@@ -571,6 +576,7 @@ def reset_game(game_state):
             game_state['player2_snake'] = None # Assurer que c'est None en cas d'erreur
         logging.debug(f"DEBUG PVP RESET: player2_snake après try/except: {game_state.get('player2_snake')}")
         game_state['pvp_start_time'] = current_time_reset
+        pvp_rounds.on_reset(game_state)  # Match en manches : nouveau match ou manche suivante
         num_initial_nests = 0 # Pas de nids en PvP
     num_initial_nests = 0  # Initialisation par défaut à 0
 
@@ -2069,10 +2075,16 @@ def run_game(events, dt, screen, game_state):
                 p2_reached_kills = player2_snake and player2_snake.kills >= pvp_target_kills
                 if p1_reached_kills or p2_reached_kills:
                     kills_target_reached = True
+            score_reached = False
+            if pvp_condition_type == getattr(PvpCondition, 'SCORE', -1):
+                limit = int(game_state.get('pvp_score_limit', pvp_rounds.DEFAULT_SCORE_LIMIT) or pvp_rounds.DEFAULT_SCORE_LIMIT)
+                score_reached = any(s is not None and s.score >= limit for s in (player_snake, player2_snake))
             if timer_ended:
                 game_over = True; game_state['pvp_game_over_reason'] = 'timer';
             elif kills_target_reached:
                 game_over = True; game_state['pvp_game_over_reason'] = 'kills';
+            elif score_reached:
+                game_over = True; game_state['pvp_game_over_reason'] = 'score'
     except Exception as e:
          logging.error(f"Erreur lors de la vérification de fin de partie: {e}", exc_info=True); game_over = True
 
@@ -2087,6 +2099,8 @@ def run_game(events, dt, screen, game_state):
     # --- Transition vers Game Over (après un court ralenti sur l'explosion) ---
     if game_over:
         logging.info("Game Over sequence initiated.")  # La musique s'éteint en fondu (music.py)
+        if current_game_mode == config.MODE_PVP and pvp_rounds.on_round_over(game_state):
+            game_state['round_transition'] = True  # Manche terminée, le match continue
         if game_state.get('demo_mode'):
             return _enter_game_over(game_state)
         game_state['death_cam_until'] = pygame.time.get_ticks() + DEATH_CAM_MS

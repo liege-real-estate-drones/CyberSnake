@@ -137,9 +137,12 @@ def draw_player_panel(surface, game_state, snake, corner, now, font_small, font_
     rows.append(('stats', None, font_default, None))
     if pvp:
         pvp_cond = game_state.get('pvp_condition_type', config.PVP_DEFAULT_CONDITION)
-        target = '-' if pvp_cond == config.PvpCondition.TIMER else str(game_state.get('pvp_target_kills', config.PVP_DEFAULT_KILLS))
         kills_color = getattr(config, f"COLOR_KILLS_TEXT_P{num}", player_color)
-        rows.append(('text', f"Kills : {snake.kills}/{target}", font_default, kills_color))
+        if pvp_cond == config.PvpCondition.SCORE:
+            rows.append(('text', f"Kills : {snake.kills}   Objectif : {game_state.get('pvp_score_limit', 100)} pts", font_small, kills_color))
+        else:
+            target = '-' if pvp_cond == config.PvpCondition.TIMER else str(game_state.get('pvp_target_kills', config.PVP_DEFAULT_KILLS))
+            rows.append(('text', f"Kills : {snake.kills}/{target}", font_default, kills_color))
     if not classic and alive:
         if snake.ammo_regen_rate > 0:
             rows.append(('text', f"Regen : +{snake.ammo_regen_rate} / {snake.ammo_regen_interval / 1000:.0f}s", font_small, config.COLOR_AMMO_TEXT))

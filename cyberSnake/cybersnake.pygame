@@ -60,6 +60,7 @@ try:
     import keyboard_controls
     import ui_common
     import settings_screens
+    import pvp_rounds
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -468,6 +469,7 @@ def main():
         config.UPDATE: game_states.run_update,
         config.DEMO: game_states.run_demo,
         config.RULES: settings_screens.run_rules,
+        config.ROUND_SCORE: pvp_rounds.run_round_score,
         config.BUTTON_COLORS_SCREEN: settings_screens.run_button_colors,
     }
     # --- Fin Mappage États ---
