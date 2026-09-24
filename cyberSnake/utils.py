@@ -214,6 +214,12 @@ def save_controls(controls, base_path=""):
     filename = getattr(config, "CONTROLS_FILE", "controls.json")
     file_path = os.path.join(base_path, filename)
     to_save = _deep_merge_dict(DEFAULT_CONTROLS, controls if isinstance(controls, dict) else {})
+    # Conserve l'identification des sticks (assistant J1/J2) si elle n'est pas fournie
+    existing = read_json_or_default(file_path, {})
+    if isinstance(existing, dict):
+        for key in ("sticks", "players"):
+            if key not in to_save and key in existing:
+                to_save[key] = existing[key]
     safe_write_json(file_path, to_save)
 
 

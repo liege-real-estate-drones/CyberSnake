@@ -11,6 +11,7 @@ Maintenir une direction (stick ou croix) répète le mouvement pour défiler.
 import pygame
 
 import config
+import joy_map
 
 REPEAT_INITIAL_DELAY_MS = 400
 # > 200 ms : les menus ignorent les mouvements plus rapprochés que 200 ms
@@ -65,17 +66,13 @@ class MenuInputTranslator:
             threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.5))
         except Exception:
             threshold = 0.5
-        axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-        axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-        inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-        inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-
         out = []
         for ev in events:
             if ev.type == pygame.JOYAXISMOTION:
                 inst = getattr(ev, 'instance_id', getattr(ev, 'joy', 0))
                 axis = int(getattr(ev, 'axis', -1))
                 value = float(getattr(ev, 'value', 0.0))
+                axis_h, axis_v, inv_h, inv_v = joy_map.axes_for(inst)  # Réglage propre à ce stick
                 st = self._state(inst, now)
                 if axis == axis_v:
                     v = -value if inv_v else value

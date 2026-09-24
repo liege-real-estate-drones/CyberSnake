@@ -14,6 +14,7 @@ import boss as boss_mod
 import enemies
 import bonuses
 import arenas
+import joy_map
 import progress
 from render import draw_game_elements_on_surface
 from ui_common import get_joystick_ids
@@ -589,10 +590,7 @@ def run_game(events, dt, screen, game_state):
                 axis = int(getattr(event, "axis", -1))
                 value = float(getattr(event, "value", 0.0))
                 threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
+                axis_h, axis_v, inv_h, inv_v = joy_map.axes_for(event.instance_id)  # Réglage propre à ce stick
 
                 if axis == axis_v:  # Vertical
                     v = (-value) if inv_v else value

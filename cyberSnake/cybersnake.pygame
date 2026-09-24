@@ -49,6 +49,8 @@ try:
     import screens
     import progress
     import arenas  # Enregistre les arènes animées dans config.MAPS
+    import joy_map
+    import stick_wizard
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -71,6 +73,7 @@ def _handle_joystick_added(game_state, device_index):
     joy = pygame.joystick.Joystick(device_index)
     joy.init()
     new_id = _joy_instance_id(joy)
+    joy_map.register(joy, device_index)
     for slot in ('p1', 'p2'):
         existing = game_state.get(f'joystick_{slot}')
         if existing is not None and _joy_instance_id(existing) == new_id:
@@ -81,6 +84,7 @@ def _handle_joystick_added(game_state, device_index):
             game_state[f'joystick_{slot}_name'] = joy.get_name()
             game_state[f'num_buttons_{slot}'] = joy.get_numbuttons()
             logging.info(f"Manette connectée -> {slot.upper()}: {joy.get_name()} (instance {new_id})")
+            joy_map.assign_players(game_state)
             return
 
 
@@ -151,6 +155,7 @@ def main():
         try:
             joystick_p1 = pygame.joystick.Joystick(0)
             joystick_p1.init()
+            joy_map.register(joystick_p1, 0)
             joystick_p1_name = joystick_p1.get_name()
             num_buttons_p1 = joystick_p1.get_numbuttons()
             logging.info(f"Joystick 1 (ID 0) initialisé: {joystick_p1_name} ({num_buttons_p1} boutons)")
@@ -164,6 +169,7 @@ def main():
         try:
             joystick_p2 = pygame.joystick.Joystick(1)
             joystick_p2.init()
+            joy_map.register(joystick_p2, 1)
             joystick_p2_name = joystick_p2.get_name()
             num_buttons_p2 = joystick_p2.get_numbuttons()
             logging.info(f"Joystick 2 (ID 1) initialisé: {joystick_p2_name} ({num_buttons_p2} boutons)")
@@ -264,6 +270,7 @@ def main():
         try:
             controls_cfg = utils.load_controls(base_path_assets)
             utils.apply_controls_to_config(controls_cfg)
+            joy_map.load_from_controls(controls_cfg)
         except Exception as e:
             logging.warning(f"Attention: Impossible de charger controls.json: {e}", exc_info=True)
 
@@ -392,6 +399,12 @@ def main():
         'last_input_time': pygame.time.get_ticks(),
     }
 
+    # J1 / J2 : chaque manette à sa place d'après les ports USB mémorisés
+    try:
+        joy_map.assign_players(game_state)
+    except Exception:
+        logging.warning("Attribution des manettes J1/J2 impossible", exc_info=True)
+
     # Check for update flag
     if os.path.exists("update_success.flag"):
         try:
@@ -421,6 +434,7 @@ def main():
         config.HALL_OF_FAME: screens.run_hall_of_fame,
         config.TITLE: screens.run_title,
         config.HOW_TO_PLAY: screens.run_how_to_play,
+        config.STICK_WIZARD: stick_wizard.run_stick_wizard,
         config.UPDATE: game_states.run_update,
         config.DEMO: game_states.run_demo,
     }
@@ -428,7 +442,7 @@ def main():
 
     # États où le stick est converti en croix directionnelle (navigation unifiée + répétition)
     menu_translator = menu_input.MenuInputTranslator()
-    raw_axis_states = {config.PLAYING, config.DEMO, config.CONTROLS}
+    raw_axis_states = {config.PLAYING, config.DEMO, config.CONTROLS, config.STICK_WIZARD}
 
     # --- Boucle Principale ---
     running = True
