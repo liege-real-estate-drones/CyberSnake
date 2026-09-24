@@ -20,10 +20,10 @@ PUSH_THRESHOLD = 0.6
 RELEASE_THRESHOLD = 0.3
 
 STEPS = [
-    ("p1", "up", "JOUEUR 1", "Pousse ton stick vers le HAUT"),
-    ("p1", "right", "JOUEUR 1", "Pousse ton stick vers la DROITE"),
-    ("p2", "up", "JOUEUR 2", "Pousse ton stick vers le HAUT"),
-    ("p2", "right", "JOUEUR 2", "Pousse ton stick vers la DROITE"),
+    ("p1", "up", "JOUEUR 1 (stick de GAUCHE)", "Pousse ton stick vers le HAUT"),
+    ("p1", "right", "JOUEUR 1 (stick de GAUCHE)", "Pousse ton stick vers la DROITE"),
+    ("p2", "up", "JOUEUR 2 (stick de DROITE)", "Pousse ton stick vers le HAUT"),
+    ("p2", "right", "JOUEUR 2 (stick de DROITE)", "Pousse ton stick vers la DROITE"),
 ]
 
 

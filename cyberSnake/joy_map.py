@@ -140,7 +140,9 @@ def load_from_controls(controls):
     sticks = controls.get("sticks")
     if isinstance(sticks, dict):
         for sid, prof in sticks.items():
-            if isinstance(prof, dict):
+            # Réglages des copies « borne-jN » : périmés (ancienne version du service qui
+            # redressait les axes). Les copies utilisent le réglage du stick d'origine.
+            if isinstance(prof, dict) and not _is_borne_virtual(str(sid)):
                 _profiles[str(sid)] = prof
     players = controls.get("players")
     if isinstance(players, dict):
@@ -152,7 +154,7 @@ def load_from_controls(controls):
 def axes_for(instance_id):
     """(axe horizontal, axe vertical, inverser H, inverser V) pour cette manette."""
     sid = _ids.get(instance_id)
-    prof = _profiles.get(sid) or _profiles.get(_aliases.get(sid))
+    prof = _profiles.get(_aliases.get(sid, sid))
     if prof:
         try:
             return (int(prof.get("axis_h", 0)), int(prof.get("axis_v", 1)),
@@ -228,10 +230,11 @@ def save_calibration(controls, p1_result, p2_result):
         if not sid:
             continue
         players[slot] = sid
+        sid = _aliases.get(sid, sid)  # Copie du service : on règle le stick d'origine
         if res.get("axis_v") is not None and res.get("axis_h") is not None:
             sticks[sid] = {"axis_h": res["axis_h"], "axis_v": res["axis_v"],
                            "invert_h": int(res["invert_h"]), "invert_v": int(res["invert_v"])}
-    controls["sticks"] = sticks
+    controls["sticks"] = {k: v for k, v in sticks.items() if not _is_borne_virtual(k)}
     controls["players"] = players
     load_from_controls(controls)
     return controls
