@@ -18,6 +18,10 @@ REPEAT_INITIAL_DELAY_MS = 400
 REPEAT_INTERVAL_MS = 230
 # Hystérésis : la direction est relâchée sous ce pourcentage du seuil (évite les rebonds)
 RELEASE_RATIO = 0.6
+# Stick d'arcade 8 directions : en poussant « bas », le contact gauche/droite se ferme
+# souvent quelques ms avant (ou se relâche après). Une direction doit rester stable ce
+# temps-là avant d'être envoyée au menu, sinon le menu reçoit un gauche/droite parasite.
+DEBOUNCE_MS = 45
 
 
 def _hat_event(instance_id, value):
@@ -34,7 +38,8 @@ class MenuInputTranslator:
     def _state(self, instance_id, now):
         st = self._sticks.get(instance_id)
         if st is None:
-            st = {'ax': 0, 'ay': 0, 'hx': 0, 'hy': 0, 'dir': (0, 0), 'since': now, 'last_repeat': now}
+            st = {'ax': 0, 'ay': 0, 'hx': 0, 'hy': 0, 'dir': (0, 0), 'since': now, 'last_repeat': now,
+                  'cand': (0, 0), 'cand_since': now}
             self._sticks[instance_id] = st
         return st
 
@@ -60,6 +65,14 @@ class MenuInputTranslator:
             return True
         return False
 
+    @staticmethod
+    def _stick_candidate(st, now):
+        x, y = st['ax'], st['ay']
+        cand = (0, y) if y else (x, 0)  # Le vertical passe avant l'horizontal
+        if cand != st['cand']:
+            st['cand'] = cand
+            st['cand_since'] = now
+
     def process(self, events, now):
         """Retourne la liste d'événements à transmettre au menu."""
         try:
@@ -83,8 +96,7 @@ class MenuInputTranslator:
                     st['ax'] = self._axis_dir(v, st['ax'], threshold)
                 else:
                     continue  # Autres axes (gâchettes...) ignorés dans les menus
-                if self._refresh_dir(st, now) and st['dir'] != (0, 0):
-                    out.append(_hat_event(inst, st['dir']))
+                self._stick_candidate(st, now)
                 continue
 
             if ev.type == pygame.JOYHATMOTION and getattr(ev, 'hat', 0) == 0:
@@ -99,6 +111,15 @@ class MenuInputTranslator:
                 continue
 
             out.append(ev)
+
+        # Direction du stick validée une fois stable (anti-contact parasite)
+        for inst, st in self._sticks.items():
+            if st['cand'] != st['dir'] and not (st['hx'] or st['hy']) and \
+                    (st['cand'] == (0, 0) or now - st['cand_since'] >= DEBOUNCE_MS):
+                st['dir'] = st['cand']
+                st['since'] = st['last_repeat'] = now
+                if st['dir'] != (0, 0):
+                    out.append(_hat_event(inst, st['dir']))
 
         # Répétition quand une direction est maintenue
         for inst, st in self._sticks.items():

@@ -66,14 +66,25 @@ class TestMenuInput(unittest.TestCase):
         return pygame.event.Event(pygame.JOYAXISMOTION, axis=a, value=v, instance_id=0, joy=0)
 
     def test_axis_becomes_hat_and_repeats(self):
-        out = self.t.process([self.axis(0, -1.0)], 0)
+        self.assertEqual(self.t.process([self.axis(0, -1.0)], 0), [])  # Attente anti-rebond
+        out = self.t.process([], 48)
         self.assertEqual([e.value for e in out], [(0, 1)])  # Haut
         repeats = sum(len(self.t.process([], now)) for now in range(16, 1000, 16))
         self.assertGreaterEqual(repeats, 2)
         self.assertEqual(self.t.process([self.axis(0, 0.0)], 1000), [])
 
+    def test_arcade_stick_side_contact_is_ignored(self):
+        # 8 directions : le contact « droite » se ferme juste avant « bas » et se relâche juste après
+        out = self.t.process([self.axis(1, -1.0)], 0)          # droite (axe H inversé)
+        out += self.t.process([self.axis(0, 1.0)], 16)         # bas
+        out += self.t.process([], 64)
+        out += self.t.process([self.axis(0, 0.0)], 150)        # bas relâché, droite encore fermé
+        out += self.t.process([self.axis(1, 0.0)], 166)        # droite relâché
+        out += self.t.process([], 300)
+        self.assertEqual([e.value for e in out], [(0, -1)])    # Un seul « bas », aucun gauche/droite
+
     def test_inverted_horizontal(self):
-        out = self.t.process([self.axis(1, 1.0)], 0)
+        out = self.t.process([self.axis(1, 1.0)], 0) + self.t.process([], 48)
         self.assertEqual([e.value for e in out], [(-1, 0)])
 
 
