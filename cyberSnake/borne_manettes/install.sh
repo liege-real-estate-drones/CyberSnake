@@ -19,11 +19,11 @@ fi
 
 python3 -c "import evdev" || { echo "ERREUR : python3-evdev absent de ce Batocera."; exit 1; }
 mkdir -p "$DIR" /userdata/system/services
-for f in borne_manettes.py borne_pistolets.py borne_pistolets_mame.sh borne_manettes.service.sh install.sh; do
+for f in borne_manettes.py borne_pistolets.py borne_pistolets_mame.sh borne_reglages.py borne_manettes.service.sh install.sh; do
     curl -fsSL "$RAW/$f" -o "$DIR/$f"
 done
 cp "$DIR/borne_manettes.service.sh" "$SERVICE"
-chmod +x "$SERVICE" "$DIR/borne_manettes.py" "$DIR/borne_pistolets.py" "$DIR/borne_pistolets_mame.sh" "$DIR/install.sh"
+chmod +x "$SERVICE" "$DIR/borne_manettes.py" "$DIR/borne_pistolets.py" "$DIR/borne_pistolets_mame.sh" "$DIR/borne_reglages.py" "$DIR/install.sh"
 "$SERVICE" stop || true
 
 echo

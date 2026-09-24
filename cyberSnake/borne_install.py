@@ -19,7 +19,7 @@ CONFIG_PATH = os.path.join(SYSTEM_DIR, "borne-manettes.json")
 DIAG_PATH = os.path.join(SYSTEM_DIR, "logs", "cybersnake_peripheriques.txt")
 HAT_CODES = range(0x10, 0x18)   # ABS_HAT0X .. ABS_HAT3Y : vus comme croix par SDL
 SERVICE_FILES = ("borne_manettes.py", "borne_pistolets.py", "borne_pistolets_mame.sh",
-                 "borne_manettes.service.sh", "install.sh", "README.md")
+                 "borne_reglages.py", "borne_manettes.service.sh", "install.sh", "README.md")
 
 
 def is_batocera():
