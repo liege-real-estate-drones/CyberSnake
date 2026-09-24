@@ -139,7 +139,7 @@ def install(base_path, slots):
         return False, f"Installation impossible : {e}"
 
 
-def dump_devices():
+def dump_devices(extra_lines=None, extra_files=()):
     """Écrit la liste des périphériques dans les logs (lisible depuis Windows :
     \\\\BATOCERA\\share\\system\\logs\\cybersnake_peripheriques.txt)."""
     if not is_batocera():
@@ -147,6 +147,14 @@ def dump_devices():
     try:
         os.makedirs(os.path.dirname(DIAG_PATH), exist_ok=True)
         with open(DIAG_PATH, "w") as out:
+            if extra_lines:
+                out.write("=== Manettes vues par CyberSnake ===\n")
+                out.write("\n".join(extra_lines) + "\n")
+            es_settings = os.path.join(SYSTEM_DIR, "configs", "emulationstation", "es_settings.cfg")
+            if os.path.exists(es_settings):
+                out.write("=== Joueurs dans EmulationStation (es_settings.cfg) ===\n")
+                with open(es_settings, "r", errors="replace") as f:
+                    out.write("".join(line for line in f if "INPUT" in line.upper()))
             for d in ("/dev/input/by-id", "/dev/input/by-path", "/dev/serial/by-id", "/dev/serial/by-path"):
                 out.write(f"=== {d} ===\n")
                 if os.path.isdir(d):
@@ -155,7 +163,7 @@ def dump_devices():
             out.write("=== /proc/bus/input/devices ===\n")
             with open("/proc/bus/input/devices", "r") as f:
                 out.write(f.read())
-            for path in (CONFIG_PATH, os.path.join(SYSTEM_DIR, "logs", "borne_manettes.log")):
+            for path in (CONFIG_PATH, os.path.join(SYSTEM_DIR, "logs", "borne_manettes.log")) + tuple(extra_files):
                 if os.path.exists(path):
                     out.write(f"=== {path} ===\n")
                     with open(path, "r") as f:
