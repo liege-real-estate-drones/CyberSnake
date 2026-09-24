@@ -43,6 +43,5 @@ sleep 2
 echo
 python3 "$DIR/borne_manettes.py" --list | grep -E "virtuelle|MANETTE" || true
 echo
-echo "Terminé ! Dans EmulationStation :"
-echo " 1. MENU > Réglages des manettes > Configurer une manette : configure « Borne J1 » puis « Borne J2 »."
-echo " 2. Même menu : Joueur 1 = « Borne J1 », Joueur 2 = « Borne J2 »."
+echo "Terminé ! Redémarre la borne. Rien à reconfigurer dans EmulationStation."
+echo "URGENCE : Select + Start tenus 5 secondes = correction désactivée."

@@ -139,9 +139,6 @@ def axes_for(instance_id):
     """(axe horizontal, axe vertical, inverser H, inverser V) pour cette manette."""
     sid = _ids.get(instance_id)
     prof = _profiles.get(sid)
-    if not prof and _is_borne_virtual(sid):
-        # Manette virtuelle du service « borne_manettes » : axes déjà corrigés
-        return (0, 1, False, False)
     if prof:
         try:
             return (int(prof.get("axis_h", 0)), int(prof.get("axis_v", 1)),
@@ -157,13 +154,13 @@ def _is_borne_virtual(sid):
 
 
 def borne_slot(joy):
-    """1 / 2 pour les manettes virtuelles « Borne J1 » / « Borne J2 », sinon None."""
-    try:
-        name = joy.get_name() or ""
-    except Exception:
-        return None
-    if name.startswith("Borne J") and name[7:8] in ("1", "2"):
-        return int(name[7])
+    """1 / 2 pour les manettes virtuelles J1 / J2 du service borne_manettes, sinon None.
+
+    Ce sont des copies conformes des encodeurs (même nom) : on les reconnaît à leur
+    « phys » borne-j1 / borne-j2."""
+    sid = _ids.get(_instance_id(joy)) or ""
+    if _is_borne_virtual(sid) and sid[-1:] in ("1", "2"):
+        return int(sid[-1])
     return None
 
 

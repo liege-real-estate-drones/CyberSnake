@@ -164,96 +164,36 @@ def dump_devices():
         logging.debug("dump_devices impossible", exc_info=True)
 
 
-# ------------------------------------------------------------------ EmulationStation
-ES_INPUT_PATH = os.path.join(SYSTEM_DIR, "configs", "emulationstation", "es_input.cfg")
-_DIRECTIONS = {"up": ("y", -1), "down": ("y", 1), "left": ("x", -1), "right": ("x", 1),
-               "joystick1up": ("y", -1), "joystick1left": ("x", -1)}
 
-
-def _norm_name(name):
-    return " ".join((name or "").split()).lower()
-
-
-def _load_slots():
-    try:
-        with open(CONFIG_PATH, "r") as f:
-            return {int(s["player"]): s for s in json.load(f).get("slots", [])}
-    except Exception:
-        return {}
-
-
-def standard_axis_indices(codes, axes):
-    """Index SDL (x, y) du stick corrigé par le service, ou None si pas d'axes."""
-    dests = sorted({int(v[0]) for v in (axes or {}).values()})
-    if len(dests) != 2:
-        return None
-    sdl_axes = [c for c in codes if c not in HAT_CODES]
-    try:
-        return sdl_axes.index(dests[0]), sdl_axes.index(dests[1])
-    except ValueError:
-        return None
-
-
-def build_es_entry(source, name, guid, xy):
-    """Copie le réglage EmulationStation d'origine pour la manette virtuelle."""
-    import copy
-    entry = copy.deepcopy(source)
-    entry.set("deviceName", name)
-    entry.set("deviceGUID", guid)
-    if xy is not None:
-        for inp in entry.findall("input"):
-            d = _DIRECTIONS.get(inp.get("name"))
-            if d is None or inp.get("type") != "axis":
-                continue  # Croix (hat) et boutons : inchangés
-            axis, value = d
-            inp.set("id", str(xy[0] if axis == "x" else xy[1]))
-            inp.set("value", str(value))
-    return entry
-
-
-def ensure_es_mapping(joy, event_path, es_path=None, slots=None):
-    """Donne à « Borne J1/J2 » le même réglage de boutons que l'encodeur d'origine
-    dans EmulationStation (évite de tout reconfigurer). Retourne True si ajouté."""
-    import xml.etree.ElementTree as ET
-    es_path = es_path or ES_INPUT_PATH
-    try:
-        name = joy.get_name() or ""
-        if not name.startswith("Borne J") or not os.path.exists(es_path):
-            return False
-        player = int(name[7])
-        slot = (slots if slots is not None else _load_slots()).get(player)
-        if not slot:
-            return False
-        tree = ET.parse(es_path)
-        root = tree.getroot()
-        configs = root.findall("inputConfig")
-        if any(c.get("deviceName") == name for c in configs):
-            return False  # Déjà configurée (par nous ou à la main) : on ne touche à rien
-        wanted = _norm_name(slot.get("name"))
-        sources = [c for c in configs if c.get("type") == "joystick" and _norm_name(c.get("deviceName")) == wanted]
-        if not sources:
-            logging.info(f"ES : aucun réglage d'origine trouvé pour {slot.get('name')!r}")
-            return False
-        source = max(sources, key=lambda c: len(c.findall("input")))
-        xy = None
-        if slot.get("axes") and event_path:
-            try:
-                xy = standard_axis_indices(abs_codes(event_path), slot["axes"])
-            except OSError:
-                xy = None
-        guid = joy.get_guid()
-        guids = [guid]
-        if len(guid) == 32 and guid[4:8] != "0000":
-            guids.append(guid[:4] + "0000" + guid[8:])  # Format des SDL plus anciennes
-        for g in guids:
-            root.append(build_es_entry(source, name, g, xy))
-        backup = es_path + ".avant-borne"
-        if not os.path.exists(backup):
-            shutil.copy2(es_path, backup)
-        tree.write(es_path + ".tmp", encoding="utf-8", xml_declaration=True)
-        os.replace(es_path + ".tmp", es_path)
-        logging.info(f"ES : réglage copié pour {name} (GUID {guid}, axes {xy})")
-        return True
-    except Exception:
-        logging.warning("ES : copie du réglage impossible", exc_info=True)
+def refresh_installed(base_path):
+    """Met à jour les fichiers du service déjà installé (appelé au lancement du jeu).
+    Prend effet au prochain démarrage de la borne."""
+    if not os.path.isdir(INSTALL_DIR):
         return False
+    src = os.path.join(base_path, "borne_manettes")
+    changed = False
+    targets = [("borne_manettes.py", os.path.join(INSTALL_DIR, "borne_manettes.py")),
+               ("borne_manettes.service.sh", os.path.join(INSTALL_DIR, "borne_manettes.service.sh")),
+               ("install.sh", os.path.join(INSTALL_DIR, "install.sh")),
+               ("README.md", os.path.join(INSTALL_DIR, "README.md"))]
+    if os.path.exists(SERVICE_PATH):
+        targets.append(("borne_manettes.service.sh", SERVICE_PATH))
+    for fname, dest in targets:
+        try:
+            with open(os.path.join(src, fname), "rb") as f:
+                new = f.read()
+            old = None
+            if os.path.exists(dest):
+                with open(dest, "rb") as f:
+                    old = f.read()
+            if new != old:
+                with open(dest + ".tmp", "wb") as f:
+                    f.write(new)
+                os.chmod(dest + ".tmp", 0o755)
+                os.replace(dest + ".tmp", dest)
+                changed = True
+        except OSError:
+            logging.debug(f"refresh_installed: {fname} non copié", exc_info=True)
+    if changed:
+        logging.info("borne_manettes : fichiers du service mis à jour (effet au prochain démarrage).")
+    return changed

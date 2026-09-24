@@ -169,9 +169,9 @@ def run_stick_wizard(events, dt, screen, game_state):
                                     (120, 255, 150) if ok else (255, 120, 120), config.COLOR_UI_SHADOW,
                                     (sw // 2, int(sh * 0.36)), "center")
         if ok:
-            lines = ["Dernière étape, dans EmulationStation (une seule fois) :",
-                     "1. Réglages des manettes > Configurer une manette : « Borne J1 », puis « Borne J2 »",
-                     "2. Même menu : Joueur 1 = Borne J1, Joueur 2 = Borne J2"]
+            lines = ["Tes réglages de boutons restent les mêmes, rien à configurer.",
+                     "Redémarre la borne pour que tous les jeux en profitent.",
+                     "URGENCE : Select + Start tenus 5 secondes = correction désactivée."]
         else:
             lines = ["Rien n'a été modifié pour les autres jeux."]
         for k, line in enumerate(lines):
