@@ -21,6 +21,10 @@ import game_objects  # noqa: E402
 import menu_input  # noqa: E402
 import progress  # noqa: E402
 import updater  # noqa: E402
+import joy_map  # noqa: E402
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "borne_manettes"))
+import borne_manettes  # noqa: E402
 
 
 class TestSnakeTurns(unittest.TestCase):
@@ -108,6 +112,44 @@ class TestUpdaterCleanup(unittest.TestCase):
                 self.assertTrue(os.path.exists(os.path.join(d, kept)), kept)
         finally:
             shutil.rmtree(d, ignore_errors=True)
+
+
+class _FakeJoy:
+    def __init__(self, name, inst):
+        self.name, self.inst = name, inst
+
+    def get_name(self):
+        return self.name
+
+    def get_instance_id(self):
+        return self.inst
+
+    def get_numbuttons(self):
+        return 10
+
+
+class TestBorneManettes(unittest.TestCase):
+    def test_learn_axes_rotated_stick(self):
+        # Stick monté de travers : HAUT bouge X vers le négatif, DROITE bouge Y vers le positif
+        axes = borne_manettes.learn_axes((0, -1), (1, 1))
+        self.assertEqual(axes, {"0": [1, False], "1": [0, False]})
+
+    def test_learn_axes_inverted_vertical(self):
+        axes = borne_manettes.learn_axes((1, 1), (0, 1))
+        self.assertEqual(axes, {"1": [1, True], "0": [0, False]})
+
+    def test_game_prefers_virtual_controllers(self):
+        orig_a, orig_b = _FakeJoy("Generic USB Joystick", 0), _FakeJoy("Generic USB Joystick", 1)
+        j2, j1 = _FakeJoy("Borne J2", 2), _FakeJoy("Borne J1", 3)
+        self.assertEqual(joy_map.pick_players([orig_a, orig_b, j2, j1]), (j1, j2))
+        self.assertEqual(joy_map.pick_players([orig_a, orig_b]), (orig_a, orig_b))
+
+    def test_virtual_controller_uses_standard_axes(self):
+        joy_map._ids[99] = "usb:borne-j1"
+        try:
+            self.assertEqual(joy_map.axes_for(99), (0, 1, False, False))
+        finally:
+            joy_map._ids.pop(99, None)
 
 
 if __name__ == "__main__":
