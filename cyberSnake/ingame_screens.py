@@ -2,7 +2,6 @@
 """Écrans Pause et Game Over."""
 import pygame
 import math
-import traceback
 import logging
 
 import config
@@ -24,7 +23,7 @@ def run_pause(events, dt, screen, game_state):
     font_large = game_state.get('font_large')
 
     if not all([font_small, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_pause")
+        logging.error("Erreur: Polices manquantes pour run_pause")
         return config.PAUSED  # Reste en pause
 
     menu_items = [
@@ -61,7 +60,7 @@ def run_pause(events, dt, screen, game_state):
             elif pygame.mixer.get_init() and (not pygame.mixer.music.get_busy()) and utils.selected_music_file:
                 utils.play_selected_music(base_path)
         except pygame.error as music_e:
-            print(f"Erreur musique en quittant la pause: {music_e}")
+            logging.error(f"Erreur musique en quittant la pause: {music_e}")
         previous_state = game_state.get('previous_state', config.PLAYING)
         return previous_state
 
@@ -77,8 +76,7 @@ def run_pause(events, dt, screen, game_state):
             game_state['pause_music_changed'] = False
             return config.PLAYING
         except Exception as e:
-            print(f"Erreur lors du reset depuis la pause: {e}")
-            traceback.print_exc()
+            logging.error(f"Erreur lors du reset depuis la pause: {e}", exc_info=True)
             return config.MENU
 
     def _open_options():
@@ -315,8 +313,7 @@ def run_pause(events, dt, screen, game_state):
         utils.draw_text(screen, l1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
         utils.draw_text(screen, l2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + gap), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_pause: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur majeure lors du dessin de run_pause: {e}", exc_info=True)
 
     return config.PAUSED  # Reste en pause sauf si une action change l'état
 
@@ -358,7 +355,7 @@ def run_game_over(events, dt, screen, game_state):
         gameover_menu_selection = 0
         game_state['gameover_menu_selection'] = 0
     if not all([font_default, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_game_over")
+        logging.error("Erreur: Polices manquantes pour run_game_over")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -403,8 +400,8 @@ def run_game_over(events, dt, screen, game_state):
         try:
             utils.save_high_score(name_for_hs, score_to_check, mode_key, base_path)
             game_state['game_over_hs_saved'] = True
-            print(f"Nouveau High Score ({mode_key}) enregistré pour {name_for_hs}: {score_to_check}")
-        except Exception as e: print(f"Erreur lors de la sauvegarde du high score: {e}")
+            logging.info(f"Nouveau High Score ({mode_key}) enregistré pour {name_for_hs}: {score_to_check}")
+        except Exception as e: logging.error(f"Erreur lors de la sauvegarde du high score: {e}")
 
     winner_text = "Fin de partie"
     PvpCondition = getattr(config, 'PvpCondition', None)
@@ -571,7 +568,7 @@ def run_game_over(events, dt, screen, game_state):
                         logging.info("run_game_over: Returning to MENU.")
                         return next_state
                 except Exception as e:
-                    print(f"Erreur en tentant d'exécuter l'option via joystick: {e}"); traceback.print_exc()
+                    logging.error(f"Erreur en tentant d'exécuter l'option via joystick: {e}", exc_info=True)
                     logging.error(f"run_game_over Exception: {e}", exc_info=True)
                     # Affiche l'erreur à l'écran pour le débogage utilisateur
                     try:
@@ -607,7 +604,7 @@ def run_game_over(events, dt, screen, game_state):
                         reset_game(game_state); next_state = config.PLAYING; game_state['current_state'] = next_state
                     return next_state
                 except Exception as e:
-                    print(f"Erreur en tentant de rejouer: {e}"); traceback.print_exc()
+                    logging.error(f"Erreur en tentant de rejouer: {e}", exc_info=True)
                     next_state = config.MENU; return next_state # Sécurité: retour menu
             elif key == pygame.K_m or key == pygame.K_ESCAPE: # Menu
                 game_state['game_over_hs_saved'] = False
@@ -660,6 +657,6 @@ def run_game_over(events, dt, screen, game_state):
             'lock_ratio': 1.0 if not inputs_locked else (current_time - game_over_start_time) / float(input_lock_duration),
         })
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_game_over: {e}"); traceback.print_exc(); return config.MENU
+        logging.error(f"Erreur majeure lors du dessin de run_game_over: {e}"); return config.MENU
 
     return next_state

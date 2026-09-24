@@ -3,7 +3,6 @@
 import pygame
 import random
 import math
-import traceback
 import logging
 
 import config
@@ -73,7 +72,7 @@ def run_menu(events, dt, screen, game_state):
 
     # Vérifie si les polices sont chargées
     if not all([font_small, font_medium, font_large, font_title]):
-        print("Erreur: Polices manquantes pour run_menu")
+        logging.error("Erreur: Polices manquantes pour run_menu")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -126,7 +125,7 @@ def run_menu(events, dt, screen, game_state):
         try:
             utils.play_selected_music(base_path)
         except pygame.error as e:
-            print(f"Erreur lecture musique menu: {e}")
+            logging.error(f"Erreur lecture musique menu: {e}")
 
     next_state = config.MENU # Par défaut, reste dans le menu
     current_time = pygame.time.get_ticks() # Temps actuel pour gérer le délai de l'axe
@@ -229,7 +228,7 @@ def run_menu(events, dt, screen, game_state):
             elif music_num is not None:
                 if utils.select_and_load_music(music_num, base_path):
                     try: utils.play_selected_music(base_path)
-                    except pygame.error as e: print(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
+                    except pygame.error as e: logging.error(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
             elif key == pygame.K_ESCAPE:
                 return False # Quitte le jeu depuis le menu
             # Contrôles volume
@@ -242,7 +241,7 @@ def run_menu(events, dt, screen, game_state):
     try:
         if menu_background_image:
             try: screen.blit(menu_background_image, (0, 0))
-            except Exception as e: print(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
+            except Exception as e: logging.error(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
         else: screen.fill(config.COLOR_BACKGROUND)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
         
@@ -386,7 +385,7 @@ def run_menu(events, dt, screen, game_state):
             utils.draw_text_with_shadow(screen, "Appuyez sur Bouton 1 pour fermer", font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (center_x, center_y + 80), "center")
 
     except Exception as e:
-        print(f"Erreur majeure lors du dessin du menu: {e}")
+        logging.error(f"Erreur majeure lors du dessin du menu: {e}")
         try:
             screen.fill((0,0,0))
             error_font = pygame.font.Font(None, 30)
@@ -413,7 +412,7 @@ def run_options(events, dt, screen, game_state):
     p1_id, p2_id = get_joystick_ids(game_state)
 
     if not all([font_small, font_default, font_medium]):
-        print("Erreur: Polices manquantes pour run_options")
+        logging.error("Erreur: Polices manquantes pour run_options")
         return config.MENU
 
     current_time = pygame.time.get_ticks()
@@ -1795,7 +1794,7 @@ def run_options(events, dt, screen, game_state):
                 hint = "Entrée/A: CONFIRMER réinitialisation | Echap/B: retour"
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception as e:
-        print(f"Erreur dessin run_options: {e}")
+        logging.error(f"Erreur dessin run_options: {e}")
 
     # Nettoyage simple si on quitte l'écran
     if next_state != config.OPTIONS:
@@ -1837,7 +1836,7 @@ def run_controls_remap(events, dt, screen, game_state):
     font_large = game_state.get('font_large') or font_medium
 
     if not all([font_small, font_default, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_controls_remap")
+        logging.error("Erreur: Polices manquantes pour run_controls_remap")
         return return_state
 
     # Init pending config
@@ -2249,8 +2248,7 @@ def run_controls_remap(events, dt, screen, game_state):
         utils.draw_text(screen, help_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y), "center")
         utils.draw_text(screen, help_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y + line_gap), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_controls_remap: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur majeure lors du dessin de run_controls_remap: {e}", exc_info=True)
         return return_state
 
     return config.CONTROLS

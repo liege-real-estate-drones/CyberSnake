@@ -274,7 +274,7 @@ def run_update(events, dt, screen, game_state):
             python = sys.executable
             script_path = sys.argv[0]
             logging.info(f"Restarting process: {python} {script_path}")
-            print(f"Restarting process: {python} {script_path}")
+            logging.info(f"Restarting process: {python} {script_path}")
             try:
                 os.execv(python, [python, script_path])
             except Exception as e:

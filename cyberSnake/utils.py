@@ -7,7 +7,6 @@ import random
 import math
 import os
 import json
-import traceback
 from collections import defaultdict, deque
 import logging
 
@@ -311,7 +310,7 @@ def load_assets(base_path):
             else:
                 optional_sounds = ["eat_special", "low_armor_warning", "skill_activate", "skill_ready", "dash_sound", "hit_wall"]
                 if name not in optional_sounds:
-                    print(f"Attention: son non trouvé: {full_path}")
+                    logging.warning(f"Attention: son non trouvé: {full_path}")
                 loaded_sounds[name] = None
         except Exception:
             loaded_sounds[name] = None
@@ -422,7 +421,7 @@ def update_sound_volume(change):
     global sound_volume # Modifie la globale
     # Met à jour le volume global
     sound_volume = max(0.0, min(1.0, sound_volume + change))
-    print(f"Volume Effets réglé à: {sound_volume:.1f}")
+    logging.info(f"Volume Effets réglé à: {sound_volume:.1f}")
     # Appelle la fonction interne pour appliquer le nouveau volume à tous les sons
     _apply_sound_volume_internal()
 
@@ -430,11 +429,11 @@ def update_music_volume(change):
     """Met à jour le volume global de la musique."""
     global music_volume # Modifie la globale
     music_volume = max(0.0, min(1.0, music_volume + change))
-    print(f"Volume Musique réglé à: {music_volume:.1f}")
+    logging.info(f"Volume Musique réglé à: {music_volume:.1f}")
     try:
         music_call("set_volume", music_volume)
     except pygame.error as e:
-        print(f"Erreur réglage volume musique: {e}")
+        logging.error(f"Erreur réglage volume musique: {e}")
 
 
 def set_sound_volume(value):
@@ -475,7 +474,7 @@ def load_high_scores(base_path):
                 file_content = f.read()
                 # Vérifie si le fichier n'est pas vide avant de décoder
                 if not file_content.strip():
-                     print(f"Fichier high scores ({file_path}) est vide. Utilisation scores défaut.")
+                     logging.info(f"Fichier high scores ({file_path}) est vide. Utilisation scores défaut.")
                      high_scores = default_scores
                      return
 
@@ -484,11 +483,11 @@ def load_high_scores(base_path):
                     raise json.JSONDecodeError("Root is not a dictionary", file_content, 0)
 
         except json.JSONDecodeError as json_e:
-            print(f"Erreur décodage JSON ({file_path}): {json_e}. Contenu: '{file_content[:100]}...' Utilisation scores défaut.")
+            logging.error(f"Erreur décodage JSON ({file_path}): {json_e}. Contenu: '{file_content[:100]}...' Utilisation scores défaut.")
             high_scores = default_scores
             return
         except (IOError, FileNotFoundError) as io_e:
-            print(f"Erreur lecture fichier high scores ({file_path}): {io_e}. Utilisation scores défaut.")
+            logging.error(f"Erreur lecture fichier high scores ({file_path}): {io_e}. Utilisation scores défaut.")
             high_scores = default_scores
             return
         except Exception as unexpected_error:
@@ -515,7 +514,7 @@ def load_high_scores(base_path):
             else:
                 loaded_high_scores[mode] = [] # Garde vide si clé absente ou type incorrect
     else:
-        print(f"Fichier high score non trouvé ({file_path}), initialisation.")
+        logging.warning(f"Fichier high score non trouvé ({file_path}), initialisation.")
 
     high_scores = loaded_high_scores # Met à jour la globale
 
@@ -523,7 +522,7 @@ def save_high_score(name, score, mode_key, base_path):
     """Sauvegarde un nouveau high score pour le mode spécifié."""
     global high_scores # Modifie la globale
     if mode_key not in high_scores:
-        print(f"Erreur: Tentative sauvegarde score pour mode invalide '{mode_key}'")
+        logging.error(f"Erreur: Tentative sauvegarde score pour mode invalide '{mode_key}'")
         return
     try:
         name_str = str(name).strip()[:15]
@@ -540,17 +539,16 @@ def save_high_score(name, score, mode_key, base_path):
         try:
             # Écriture atomique : un arrêt brutal de la borne ne peut pas corrompre les scores
             safe_write_json(file_path, high_scores)
-            print(f"High score pour '{mode_key}' mis à jour.")
+            logging.info(f"High score pour '{mode_key}' mis à jour.")
         except IOError as io_e:
-            print(f"Erreur écriture high scores ({file_path}): {io_e}")
+            logging.error(f"Erreur écriture high scores ({file_path}): {io_e}")
         except Exception as e:
-             print(f"Erreur inattendue écriture high scores ({file_path}): {e}")
+             logging.error(f"Erreur inattendue écriture high scores ({file_path}): {e}")
 
     except (ValueError, TypeError) as e:
-        print(f"Erreur: Données de score invalides - Nom: {name}, Score: {score}, Erreur: {e}")
+        logging.error(f"Erreur: Données de score invalides - Nom: {name}, Score: {score}, Erreur: {e}")
     except Exception as e:
-        print(f"Erreur inattendue sauvegarde high scores: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur inattendue sauvegarde high scores: {e}", exc_info=True)
 
 # --- NOUVEAU: Fonctions Favorite Maps ---
 def load_favorite_maps(base_path):
@@ -575,21 +573,20 @@ def load_favorite_maps(base_path):
                                     if name not in favorites: # Évite doublons de noms au chargement
                                         favorites[name] = [(int(p[0]), int(p[1])) for p in walls]
                                     else:
-                                        print(f"Attention: Nom de carte favori dupliqué trouvé et ignoré: {name}")
+                                        logging.warning(f"Attention: Nom de carte favori dupliqué trouvé et ignoré: {name}")
                                 else:
-                                    print(f"Attention: Format de murs invalide pour la carte favorite '{name}'")
+                                    logging.warning(f"Attention: Format de murs invalide pour la carte favorite '{name}'")
                             else:
-                                print(f"Attention: Entrée favorite invalide ignorée: {item}")
+                                logging.warning(f"Attention: Entrée favorite invalide ignorée: {item}")
                     else:
-                         print(f"Attention: Format racine invalide dans {config.FAVORITE_MAP_FILE} (attendu: liste)")
+                         logging.warning(f"Attention: Format racine invalide dans {config.FAVORITE_MAP_FILE} (attendu: liste)")
         except json.JSONDecodeError as e:
-            print(f"Erreur décodage JSON favoris ({file_path}): {e}")
+            logging.error(f"Erreur décodage JSON favoris ({file_path}): {e}")
         except (IOError, FileNotFoundError) as e:
-            print(f"Erreur lecture fichier favoris ({file_path}): {e}")
+            logging.error(f"Erreur lecture fichier favoris ({file_path}): {e}")
         except Exception as e:
-            print(f"Erreur inattendue chargement favoris: {e}")
-            traceback.print_exc()
-    print(f"{len(favorites)} cartes favorites chargées.")
+            logging.error(f"Erreur inattendue chargement favoris: {e}", exc_info=True)
+    logging.info(f"{len(favorites)} cartes favorites chargées.")
     return favorites
 
 def save_favorite_map(walls_list, base_path):
@@ -600,7 +597,7 @@ def save_favorite_map(walls_list, base_path):
         isinstance(p, (list, tuple)) and len(p) == 2 and all(isinstance(c, int) for c in p)
         for p in walls_list
     ):
-        print("Erreur sauvegarde favori: format de murs invalide.")
+        logging.error("Erreur sauvegarde favori: format de murs invalide.")
         return False, None
 
     favorites_dict = load_favorite_maps(base_path) # Charge les favoris existants
@@ -621,13 +618,12 @@ def save_favorite_map(walls_list, base_path):
     file_path = os.path.join(base_path, config.FAVORITE_MAP_FILE)
     try:
         safe_write_json(file_path, favorites_list_to_save)
-        print(f"Carte sauvegardée comme favori: '{new_map_name}'")
+        logging.info(f"Carte sauvegardée comme favori: '{new_map_name}'")
         return True, new_map_name # Retourne succès et le nom généré
     except IOError as e:
-        print(f"Erreur écriture fichier favoris ({file_path}): {e}")
+        logging.error(f"Erreur écriture fichier favoris ({file_path}): {e}")
     except Exception as e:
-        print(f"Erreur inattendue écriture favoris: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur inattendue écriture favoris: {e}", exc_info=True)
 
     return False, None # Échec de la sauvegarde
 
@@ -636,18 +632,18 @@ def delete_favorite_map(map_name_to_delete, base_path):
     if not base_path:
         base_path = os.path.dirname(os.path.abspath(__file__))
     if not map_name_to_delete:
-        print("Erreur suppression favori: Nom de carte vide.")
+        logging.error("Erreur suppression favori: Nom de carte vide.")
         return False
 
     favorites_dict = load_favorite_maps(base_path) # Charge les favoris existants
 
     if map_name_to_delete not in favorites_dict:
-        print(f"Erreur suppression favori: Carte '{map_name_to_delete}' non trouvée dans les favoris.")
+        logging.error(f"Erreur suppression favori: Carte '{map_name_to_delete}' non trouvée dans les favoris.")
         return False
 
     # Supprime la carte du dictionnaire
     del favorites_dict[map_name_to_delete]
-    print(f"Carte favorite '{map_name_to_delete}' supprimée localement.")
+    logging.info(f"Carte favorite '{map_name_to_delete}' supprimée localement.")
 
     # Convertit le dictionnaire mis à jour en liste pour la sauvegarde
     favorites_list_to_save = [{"name": name, "walls": walls} for name, walls in favorites_dict.items()]
@@ -655,13 +651,12 @@ def delete_favorite_map(map_name_to_delete, base_path):
     file_path = os.path.join(base_path, config.FAVORITE_MAP_FILE)
     try:
         safe_write_json(file_path, favorites_list_to_save)
-        print(f"Fichier favoris mis à jour après suppression de '{map_name_to_delete}'.")
+        logging.info(f"Fichier favoris mis à jour après suppression de '{map_name_to_delete}'.")
         return True # Succès
     except IOError as e:
-        print(f"Erreur écriture fichier favoris après suppression ({file_path}): {e}")
+        logging.error(f"Erreur écriture fichier favoris après suppression ({file_path}): {e}")
     except Exception as e:
-        print(f"Erreur inattendue écriture favoris après suppression: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur inattendue écriture favoris après suppression: {e}", exc_info=True)
 
     return False # Échec de la sauvegarde
 # --- FIN NOUVEAU ---
@@ -717,7 +712,7 @@ def emit_particles(x, y, count, color, speed_range=(1, 5), lifetime_range=(300, 
             # Crée l'instance de Particle DÉFINIE DANS game_objects.py
             particles.append(game_objects.Particle(x, y, vx, vy, p_color, size, lifetime, gravity, shrink_rate))
         except Exception as e:
-            print(f"Error creating particle: {e}")
+            logging.error(f"Error creating particle: {e}")
 
 def clear_particles():
     """Supprime toutes les particules actives."""
@@ -1086,11 +1081,11 @@ def play_selected_music(base_path):
                 music_call("play", -1) # Joue en boucle
                 success = True
             except pygame.error as e:
-                print(f"Erreur lecture musique ({selected_music_file}): {e}")
+                logging.error(f"Erreur lecture musique ({selected_music_file}): {e}")
         else:
-            print(f"Fichier musique non trouvé: {music_full_path}")
+            logging.warning(f"Fichier musique non trouvé: {music_full_path}")
     elif not pygame.mixer.get_init():
-        print("Erreur: Mixer non initialisé pour jouer musique.")
+        logging.error("Erreur: Mixer non initialisé pour jouer musique.")
     return success
 
 def select_and_load_music(number_key, base_path, persist=True):
@@ -1115,7 +1110,7 @@ def select_and_load_music(number_key, base_path, persist=True):
                 music_call("load", new_track_full_path) # Charge sans jouer
                 selected_music_file = new_track_file # Met à jour globale si succès
                 selected_music_index = new_index
-                print(f"Musique sélectionnée: {selected_music_file} (Index: {selected_music_index})")
+                logging.info(f"Musique sélectionnée: {selected_music_file} (Index: {selected_music_index})")
                 if persist:
                     try:
                         opts = load_game_options(base_path)
@@ -1125,10 +1120,10 @@ def select_and_load_music(number_key, base_path, persist=True):
                         logger.warning(f"Piste musicale non mémorisée: {e}")
                 return True
             except pygame.error as e:
-                print(f"Erreur chargement piste {number_key} ({new_track_file}): {e}")
+                logging.error(f"Erreur chargement piste {number_key} ({new_track_file}): {e}")
                 return False
         else:
-            print(f"Fichier piste {number_key} non trouvé: {new_track_full_path}")
+            logging.warning(f"Fichier piste {number_key} non trouvé: {new_track_full_path}")
             return False
     return False
 
@@ -1195,13 +1190,13 @@ def select_new_objective(current_game_mode, player_current_score):
 
     except (KeyError, IndexError, TypeError, ValueError) as format_e:
         display_text = f"Objectif Err ({obj_id})"
-        print(f"Error formatting objective text for {obj_id}: {format_e}")
+        logging.error(f"Error formatting objective text for {obj_id}: {format_e}")
         return None # Objectif invalide
 
     new_objective['display_text'] = display_text
     new_objective['start_score'] = start_score
 
-    print(f"Nouvel Objectif: {display_text} (Cible: {new_objective['target_value']})")
+    logging.info(f"Nouvel Objectif: {display_text} (Cible: {new_objective['target_value']})")
     return new_objective
 
 def check_objective_completion(action_key, current_objective, value=1):
@@ -1248,7 +1243,7 @@ def check_objective_completion(action_key, current_objective, value=1):
         else:
              bonus = 0
 
-        print(f"*** Objectif Complété: {current_objective.get('display_text', '???')} ***")
+        logging.info(f"*** Objectif Complété: {current_objective.get('display_text', '???')} ***")
         play_sound("objective_complete")
         return True, bonus
 

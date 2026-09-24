@@ -2,7 +2,6 @@
 """Logique d'une partie : initialisation (reset_game) et boucle de jeu (run_game)."""
 import pygame
 import random
-import traceback
 import logging
 import itertools
 
@@ -296,7 +295,7 @@ def _update_moving_mines(game_state, current_time, dt, players):
 def reset_game(game_state):
     """Réinitialise l'état du jeu dans game_state."""
 
-    print("Resetting game...")
+    logging.info("Resetting game...")
     current_time_reset = game_clock.ticks()
     fx.clear_popups()
     fx.clear_shockwaves()
@@ -347,7 +346,7 @@ def reset_game(game_state):
     game_state.pop('spawn_bounds', None)
     current_game_mode = game_state.get('current_game_mode')
     if current_game_mode is None:
-        print("current_game_mode manquant, utilisation du mode Solo par défaut pour le redémarrage.")
+        logging.warning("current_game_mode manquant, utilisation du mode Solo par défaut pour le redémarrage.")
         current_game_mode = config.MODE_SOLO
         game_state['current_game_mode'] = current_game_mode
     selected_map_key = game_state.get('selected_map_key', config.DEFAULT_MAP_KEY)
@@ -364,9 +363,9 @@ def reset_game(game_state):
     dynamic_walls_raw = game_state.get('current_random_map_walls', None)
     if dynamic_walls_raw is not None and selected_map_key not in config.MAPS:
         if selected_map_key == "Aléatoire":
-            print("Resetting game with generated random map.")
+            logging.info("Resetting game with generated random map.")
         else:
-            print(f"Resetting game with favorite map: {selected_map_key}")
+            logging.info(f"Resetting game with favorite map: {selected_map_key}")
 
         current_map_walls_list = []
         if isinstance(dynamic_walls_raw, list):
@@ -388,7 +387,7 @@ def reset_game(game_state):
         try:
             current_map_walls_list = list(walls_generator(config.GRID_WIDTH, config.GRID_HEIGHT))
         except Exception as e:
-            print(f"Erreur génération murs map '{selected_map_key}': {e}")
+            logging.error(f"Erreur génération murs map '{selected_map_key}': {e}")
             current_map_walls_list = [] # Fallback murs vides
 
         # Récupère les fonctions de démarrage spécifiques à la carte
@@ -405,7 +404,7 @@ def reset_game(game_state):
         p2_start = p2_start_func(config.GRID_WIDTH, config.GRID_HEIGHT)
         ai_start = ai_start_func(config.GRID_WIDTH, config.GRID_HEIGHT)
     except Exception as e:
-        print(f"Erreur calcul positions départ map '{selected_map_key}': {e}")
+        logging.error(f"Erreur calcul positions départ map '{selected_map_key}': {e}")
         # Garde les positions par défaut si erreur
     # --- Arène Classique (taille réglable via options) ---
     if current_game_mode == config.MODE_CLASSIC:
@@ -452,7 +451,7 @@ def reset_game(game_state):
     # --- NOUVEAU: Donne 10 munitions de départ au joueur en mode Vs AI ---
     if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SOLO:
         start_ammo_p1 = 10
-        print(f"Mode {current_game_mode.name} détecté, J1 commence avec {start_ammo_p1} munitions.")
+        logging.info(f"Mode {current_game_mode.name} détecté, J1 commence avec {start_ammo_p1} munitions.")
     # --- FIN NOUVEAU ---
     try:
         game_state['player_snake'] = game_objects.Snake(
@@ -463,7 +462,7 @@ def reset_game(game_state):
         if current_game_mode != config.MODE_CLASSIC:
             game_state['player_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
     except Exception as e:
-         print(f"ERREUR CRITIQUE création player_snake: {e}"); traceback.print_exc()
+         logging.error(f"ERREUR CRITIQUE création player_snake: {e}", exc_info=True)
     if current_game_mode == config.MODE_VS_AI:
         try:
             default_ai_armor = getattr(config, 'ENEMY_START_ARMOR', 0)
@@ -480,12 +479,12 @@ def reset_game(game_state):
             game_state['vs_ai_start_time'] = current_time_reset
             game_state['last_difficulty_update_time'] = current_time_reset
             # --- FIN AJOUT ---
-        except Exception as e: print(f"ERREUR CRITIQUE création enemy_snake: {e}"); traceback.print_exc()
+        except Exception as e: logging.error(f"ERREUR CRITIQUE création enemy_snake: {e}", exc_info=True)
     elif current_game_mode == config.MODE_SURVIVAL:
         game_state['survival_wave'] = 1
         game_state['survival_wave_start_time'] = current_time_reset
         game_state['current_survival_interval_factor'] = config.SURVIVAL_INITIAL_INTERVAL_FACTOR
-        print("Survival Mode Started - Wave 1")
+        logging.info("Survival Mode Started - Wave 1")
         if game_state.get('coop'):
             try:
                 game_state['player2_snake'] = game_objects.Snake(
@@ -502,20 +501,19 @@ def reset_game(game_state):
         # =======================================================
     elif current_game_mode == config.MODE_PVP:
         player2_name = game_state.get('player2_name_input', "Alex")
-        print(f"DEBUG PVP RESET: Tentative de création de player2_snake avec nom: {player2_name}, start_pos: {p2_start}")
+        logging.debug(f"DEBUG PVP RESET: Tentative de création de player2_snake avec nom: {player2_name}, start_pos: {p2_start}")
         try:
             game_state['player2_snake'] = game_objects.Snake(
                 player_num=2, name=player2_name, start_pos=p2_start,
                 current_game_mode=current_game_mode, walls=current_map_walls_list,
                 start_armor=pvp_start_armor, start_ammo=pvp_start_ammo
             )
-            print(f"DEBUG PVP RESET: player2_snake créé avec succès: {game_state['player2_snake']}")
+            logging.debug(f"DEBUG PVP RESET: player2_snake créé avec succès: {game_state['player2_snake']}")
             game_state['player2_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
         except Exception as e:
-            print(f"ERREUR CRITIQUE création player2_snake (PvP): {e}")
-            traceback.print_exc()
+            logging.error(f"ERREUR CRITIQUE création player2_snake (PvP): {e}", exc_info=True)
             game_state['player2_snake'] = None # Assurer que c'est None en cas d'erreur
-        print(f"DEBUG PVP RESET: player2_snake après try/except: {game_state.get('player2_snake')}")
+        logging.debug(f"DEBUG PVP RESET: player2_snake après try/except: {game_state.get('player2_snake')}")
         game_state['pvp_start_time'] = current_time_reset
         num_initial_nests = 0 # Pas de nids en PvP
     num_initial_nests = 0  # Initialisation par défaut à 0
@@ -533,7 +531,7 @@ def reset_game(game_state):
     # La logique de spawn des nids a été consolidée ci-dessus.
 
     if num_initial_nests > 0:
-        print(f"Initializing {num_initial_nests} nests for mode {current_game_mode.name}...")
+        logging.info(f"Initializing {num_initial_nests} nests for mode {current_game_mode.name}...")
         initial_occupied_for_nests = utils.get_all_occupied_positions(
             game_state.get('player_snake'), game_state.get('player2_snake'), game_state.get('enemy_snake'),
             [], [], [], current_map_walls_list, [], [], []
@@ -544,10 +542,10 @@ def reset_game(game_state):
                 try:
                     game_state['nests'].append(game_objects.Nest(nest_pos))
                     initial_occupied_for_nests.add(nest_pos)
-                    print(f"  Nest created at {nest_pos}")
-                except Exception as e: print(f"Erreur création nid initial à {nest_pos}: {e}")
+                    logging.info(f"  Nest created at {nest_pos}")
+                except Exception as e: logging.error(f"Erreur création nid initial à {nest_pos}: {e}")
             else:
-                print("  Warning: Could not find empty position for initial nest.")
+                logging.warning("  Warning: Could not find empty position for initial nest.")
     # === FIN MODIFICATION ===
 
     initial_occupied = utils.get_all_occupied_positions(
@@ -571,7 +569,7 @@ def reset_game(game_state):
                 game_state['foods'].append(game_objects.Food(pos, food_type))
                 initial_occupied.add(pos)
             except Exception as e:
-                print(f"Erreur création nourriture initiale à {pos}: {e}"); traceback.print_exc()
+                logging.error(f"Erreur création nourriture initiale à {pos}: {e}", exc_info=True)
     if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
         player_snake_obj = game_state.get('player_snake')
         player_score = player_snake_obj.score if player_snake_obj else 0
@@ -579,12 +577,12 @@ def reset_game(game_state):
         game_state['current_objective'] = new_objective
         if new_objective: game_state['objective_display_text'] = new_objective.get('display_text', "")
         else: game_state['objective_display_text'] = ""
-        print(f"Nouvel Objectif: {game_state.get('objective_display_text','N/A')} (Cible: {game_state.get('current_objective', {}).get('target_value','N/A')})")
+        logging.info(f"Nouvel Objectif: {game_state.get('objective_display_text','N/A')} (Cible: {game_state.get('current_objective', {}).get('target_value','N/A')})")
     if utils.selected_music_file and pygame.mixer.get_init():
         try:
             utils.music_call("stop")
             utils.play_selected_music(base_path)
-        except pygame.error as e: print(f"Erreur redémarrage musique pendant reset: {e}")
+        except pygame.error as e: logging.error(f"Erreur redémarrage musique pendant reset: {e}")
 
     # --- Arène animée (portails, portes laser, zone qui rétrécit) ---
     try:
@@ -608,7 +606,7 @@ def reset_game(game_state):
         game_state['countdown_until'] = 0
     else:
         game_state['countdown_until'] = pygame.time.get_ticks() + int(getattr(config, "TRANSITION_FADE_MS", 260)) + COUNTDOWN_MS
-    print("Game Reset Complete.")
+    logging.info("Game Reset Complete.")
 
 
 def _apply_daily_modifier(game_state, occupied):

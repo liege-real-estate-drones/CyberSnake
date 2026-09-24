@@ -2,7 +2,6 @@
 """Rendu d'une partie : arène, objets, serpents, effets et HUD."""
 import pygame
 import math
-import traceback
 import logging
 
 import config
@@ -223,10 +222,10 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
     font_default = game_state.get('font_default')
     font_medium = game_state.get('font_medium')
     if not font_small or not font_default or not font_medium:
-        print("ERREUR: Polices (small/default/medium) non disponibles pour draw_game_elements")
+        logging.error("ERREUR: Polices (small/default/medium) non disponibles pour draw_game_elements")
         try:
            font_small = pygame.font.Font(None, 22); font_default = pygame.font.Font(None, 30); font_medium = pygame.font.Font(None, 40)
-        except Exception: print("ERREUR FATALE: Impossible de charger les polices de secours."); return
+        except Exception: logging.error("ERREUR FATALE: Impossible de charger les polices de secours."); return
 
     # --- Dessin Fond & Grille (pré-calculé : dégradé + grille + vignettage) ---
     # --- Fond + murs (structures néon pré-dessinées, voir walls.py) ---
@@ -277,30 +276,30 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
     # --- Dessin Objets du Jeu ---
     for f in foods_copy:
         try: f.draw(target_surface, current_time, font_default) # Changed font_small to font_default
-        except Exception as e: print(f"Erreur dessin nourriture: {e}")
+        except Exception as e: logging.error(f"Erreur dessin nourriture: {e}")
     for m in mines_copy:
         try: m.draw(target_surface)
-        except Exception as e: print(f"Erreur dessin mine fixe: {e}")
+        except Exception as e: logging.error(f"Erreur dessin mine fixe: {e}")
     for mm in moving_mines_copy:
         try: mm.draw(target_surface)
-        except Exception as e: print(f"Erreur dessin mine mobile: {e}")
+        except Exception as e: logging.error(f"Erreur dessin mine mobile: {e}")
     for n in nests_copy:
          try: n.draw(target_surface, font_small) # Passe font_small
-         except Exception as e: print(f"Erreur dessin nid: {e}")
+         except Exception as e: logging.error(f"Erreur dessin nid: {e}")
     for pu in powerups_copy:
         try: pu.draw(target_surface, current_time, font_default)
-        except Exception as e: print(f"Erreur dessin powerup: {e}")
+        except Exception as e: logging.error(f"Erreur dessin powerup: {e}")
     for p in player_projectiles_copy:
         try: p.draw(target_surface)
-        except Exception as e: print(f"Erreur dessin projectile J1: {e}")
+        except Exception as e: logging.error(f"Erreur dessin projectile J1: {e}")
     if current_game_mode == config.MODE_PVP:
         for p in player2_projectiles_copy:
             try: p.draw(target_surface)
-            except Exception as e: print(f"Erreur dessin projectile J2: {e}")
+            except Exception as e: logging.error(f"Erreur dessin projectile J2: {e}")
     if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SURVIVAL:
         for p in enemy_projectiles_copy:
             try: p.draw(target_surface)
-            except Exception as e: print(f"Erreur dessin projectile IA/Ennemi: {e}")
+            except Exception as e: logging.error(f"Erreur dessin projectile IA/Ennemi: {e}")
 
     # --- Halos des projectiles ---
     for p in player_projectiles_copy + player2_projectiles_copy + enemy_projectiles_copy:
@@ -312,24 +311,24 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
     # --- Dessin Serpents ---
     if player_snake:
         try: player_snake.draw(target_surface, current_time, font_small, font_default)
-        except Exception as e: print(f"Erreur dessin serpent J1: {e}")
+        except Exception as e: logging.error(f"Erreur dessin serpent J1: {e}")
     if player2_snake:  # PvP ou Coop
         try: player2_snake.draw(target_surface, current_time, font_small, font_default)
-        except Exception as e: print(f"Erreur dessin serpent J2: {e}")
+        except Exception as e: logging.error(f"Erreur dessin serpent J2: {e}")
     if current_game_mode == config.MODE_VS_AI and enemy_snake and enemy_snake.alive:
         try: enemy_snake.draw(target_surface, current_time, font_small, font_default)
-        except Exception as e: print(f"Erreur dessin serpent IA principale: {e}")
+        except Exception as e: logging.error(f"Erreur dessin serpent IA principale: {e}")
     if current_game_mode in [config.MODE_VS_AI, config.MODE_SURVIVAL]:
         for enemy in active_enemies_copy:
             if enemy.alive:
                 try: enemy.draw(target_surface, current_time, font_small, font_default)
-                except Exception as e: print(f"Erreur dessin ennemi actif (bébé IA): {e}")
+                except Exception as e: logging.error(f"Erreur dessin ennemi actif (bébé IA): {e}")
 
     # --- Dessin Particules ---
     particles_copy = list(utils.particles)
     for p in particles_copy:
         try: p.draw(target_surface)
-        except Exception as e: print(f"Erreur dessin particule: {e}")
+        except Exception as e: logging.error(f"Erreur dessin particule: {e}")
 
     # --- Textes flottants (+points) et flash d'impact ---
     try:
@@ -720,8 +719,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                         x += icon_size + icon_gap
 
     except Exception as e:
-        print(f"Erreur dessin UI Joueur 1: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur dessin UI Joueur 1: {e}", exc_info=True)
 
     # --- ** Panneau UI Top-Right (Kill Feed, HS, Effects) ** ---
     
@@ -759,7 +757,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                         else:
                             break
                 except Exception as e:
-                    print(f"Erreur dessin message Kill Feed '{message}': {e}"); current_y_top_right += kf_line_height
+                    logging.error(f"Erreur dessin message Kill Feed '{message}': {e}"); current_y_top_right += kf_line_height
             current_y_top_right += 5
         mode_key_map = {config.MODE_SOLO: "solo", config.MODE_CLASSIC: "classic", config.MODE_VS_AI: "vs_ai",
                         config.MODE_PVP: "pvp", config.MODE_SURVIVAL: "survie"}
@@ -866,8 +864,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
     except StopIteration:
         pass
     except Exception as e:
-        print(f"Erreur dessin UI Top-Right: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur dessin UI Top-Right: {e}", exc_info=True)
 
     # --- ** Panneau UI Joueur 2 (Bottom-Right) ** ---
     
@@ -1123,8 +1120,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                             utils.draw_text(target_surface, fallback_text, font_default, fallback_color, (x, p2_icon_y), "topleft")
                         x += icon_size + icon_gap
         except Exception as e:
-            print(f"Erreur dessin UI Joueur 2: {e}")
-            traceback.print_exc()
+            logging.error(f"Erreur dessin UI Joueur 2: {e}", exc_info=True)
 
     # --- ** UI Bottom Center (Vague, Objectif, Timer) ** ---
     # === BLOC MODIFIÉ (Voir Point 1 pour détails) ===
@@ -1177,8 +1173,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
             utils.draw_text_with_shadow(target_surface, bottom_text, font_default, bottom_color, config.COLOR_UI_SHADOW,
                                         bottom_panel_rect.center, "center")
     except Exception as e:
-        print(f"Erreur dessin UI Bas-Centre: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur dessin UI Bas-Centre: {e}", exc_info=True)
 
     # --- FPS overlay (option) ---
     try:
