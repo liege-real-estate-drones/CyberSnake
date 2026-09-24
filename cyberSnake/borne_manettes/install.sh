@@ -1,9 +1,9 @@
 #!/bin/bash
 # Installe le service « borne_manettes » sur Batocera (à lancer en SSH sur la borne) :
-#   curl -L https://raw.githubusercontent.com/liege-real-estate-drones/CyberSnake/main/tools/borne_manettes/install.sh | bash
+#   curl -L https://raw.githubusercontent.com/liege-real-estate-drones/CyberSnake/main/cyberSnake/borne_manettes/install.sh | bash
 # Désinstaller :  bash /userdata/system/borne_manettes/install.sh --uninstall
 set -e
-RAW="https://raw.githubusercontent.com/liege-real-estate-drones/CyberSnake/main/tools/borne_manettes"
+RAW="https://raw.githubusercontent.com/liege-real-estate-drones/CyberSnake/main/cyberSnake/borne_manettes"
 DIR="/userdata/system/borne_manettes"
 SERVICE="/userdata/system/services/borne_manettes"
 

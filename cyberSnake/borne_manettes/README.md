@@ -8,10 +8,20 @@ dans l'ordre où ils répondent au démarrage, donc au hasard. Changer de port U
 le remplace par une manette virtuelle au nom unique (**Borne J1** / **Borne J2**). Le sens
 de chaque stick est corrigé au passage, pour tous les jeux.
 
-## Installation (en SSH sur la borne : `ssh root@batocera.local`, mot de passe `linux`)
+## Installation la plus simple : depuis CyberSnake
+
+Options > Contrôles > **Fixer J1 / J2 pour TOUS les jeux** : J1 puis J2 poussent leur stick
+vers le haut puis vers la droite, c'est installé.
+
+Le jeu écrit aussi la liste des périphériques dans
+`\\BATOCERA\share\system\logs\cybersnake_peripheriques.txt` (lisible depuis Windows).
+
+## Installation en SSH (alternative)
+
+Sur la borne : `ssh root@batocera.local`, mot de passe `linux` (rien ne s'affiche quand on tape le mot de passe, c'est normal).
 
 ```
-curl -L https://raw.githubusercontent.com/liege-real-estate-drones/CyberSnake/main/tools/borne_manettes/install.sh | bash
+curl -L https://raw.githubusercontent.com/liege-real-estate-drones/CyberSnake/main/cyberSnake/borne_manettes/install.sh | bash
 ```
 
 L'assistant demande à J1 puis à J2 de pousser son stick vers le haut puis vers la droite.
