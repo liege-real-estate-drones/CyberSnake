@@ -56,6 +56,7 @@ try:
     import es_media
     import game_clock
     import walls
+    import music
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -683,6 +684,10 @@ def main():
         screen = game_state.get('screen', screen)
 
         if running:
+            try:
+                music.update(game_state)  # Piste selon l'écran (menus / jeu / boss), fondu en pause
+            except Exception:
+                logging.warning("Musique : mise à jour impossible", exc_info=True)
             fx.apply_crt(screen)  # Effet écran d'arcade (option)
             try:
                 pygame.display.flip()

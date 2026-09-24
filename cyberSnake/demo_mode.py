@@ -50,10 +50,6 @@ def run_demo(events, dt, screen, game_state):
         game_state.pop('demo_mode', None)
         game_state.pop('_demo_initialized', None)
         game_state.pop('_demo_start_time', None)
-        try:
-            utils.music_call("stop")
-        except Exception:
-            pass
 
     if any(_is_demo_input(ev) for ev in events):
         # Sortie immédiate vers le menu

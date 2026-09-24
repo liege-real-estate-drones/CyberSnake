@@ -578,11 +578,6 @@ def reset_game(game_state):
         if new_objective: game_state['objective_display_text'] = new_objective.get('display_text', "")
         else: game_state['objective_display_text'] = ""
         logging.info(f"Nouvel Objectif: {game_state.get('objective_display_text','N/A')} (Cible: {game_state.get('current_objective', {}).get('target_value','N/A')})")
-    if utils.selected_music_file and pygame.mixer.get_init():
-        try:
-            utils.music_call("stop")
-            utils.play_selected_music(base_path)
-        except pygame.error as e: logging.error(f"Erreur redémarrage musique pendant reset: {e}")
 
     # --- Arène animée (portails, portes laser, zone qui rétrécit) ---
     try:
@@ -926,10 +921,6 @@ def run_game(events, dt, screen, game_state):
             pause_allowed = event.instance_id == p1_id or (two_players and event.instance_id == p2_id)
             if pause_allowed and event.button in (pause_button, menu_button):
                 logging.info(f"Joystick button {event.button} pressed, pausing game.")
-                try:
-                    utils.music_call("pause")
-                except Exception:
-                    pass
                 game_state['previous_state'] = config.PLAYING
                 game_state['pause_menu_selection'] = 0
                 game_state['current_state'] = config.PAUSED
@@ -1025,13 +1016,9 @@ def run_game(events, dt, screen, game_state):
                 key = event.key
                 if key == pygame.K_ESCAPE:
                     logging.info("Escape key pressed, returning to MENU.")
-                    try: utils.music_call("pause")
-                    except Exception: pass
                     game_state['current_state'] = config.MENU; return config.MENU
                 if key == pygame.K_p:
                     logging.info("P key pressed, pausing game.")
-                    try: utils.music_call("pause")
-                    except Exception: pass
                     game_state['previous_state'] = config.PLAYING
                     game_state['current_state'] = config.PAUSED; return config.PAUSED
 
@@ -2098,9 +2085,7 @@ def run_game(events, dt, screen, game_state):
 
     # --- Transition vers Game Over (après un court ralenti sur l'explosion) ---
     if game_over:
-        logging.info("Game Over sequence initiated.")
-        try: utils.music_call("fadeout", 1000 + DEATH_CAM_MS)
-        except pygame.error: pass
+        logging.info("Game Over sequence initiated.")  # La musique s'éteint en fondu (music.py)
         if game_state.get('demo_mode'):
             return _enter_game_over(game_state)
         game_state['death_cam_until'] = pygame.time.get_ticks() + DEATH_CAM_MS

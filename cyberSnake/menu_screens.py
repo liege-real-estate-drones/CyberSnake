@@ -8,6 +8,7 @@ import logging
 import config
 import utils
 import progress
+import music
 import borne_install
 import stick_wizard
 from setup_screens import invalidate_map_selection_cache
@@ -120,13 +121,6 @@ def run_menu(events, dt, screen, game_state):
     ]
     num_options = len(menu_options)
 
-    # Relance la musique du menu si elle s'est arrêtée
-    if utils.selected_music_file and pygame.mixer.get_init() and not pygame.mixer.music.get_busy():
-        try:
-            utils.play_selected_music(base_path)
-        except pygame.error as e:
-            logging.error(f"Erreur lecture musique menu: {e}")
-
     next_state = config.MENU # Par défaut, reste dans le menu
     current_time = pygame.time.get_ticks() # Temps actuel pour gérer le délai de l'axe
 
@@ -165,10 +159,7 @@ def run_menu(events, dt, screen, game_state):
                 elif event.button == 4: # Bouton 4 pour changer musique
                     music_num = (utils.selected_music_index % 9) + 1
                     if utils.select_and_load_music(music_num, base_path):
-                        try:
-                            utils.play_selected_music(base_path)
-                        except pygame.error as e:
-                            logging.warning(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
+                        music.preview_game_track()  # Musique de jeu choisie : on l'entend tout de suite
                     last_axis_move_time = current_time
                 elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
@@ -227,8 +218,7 @@ def run_menu(events, dt, screen, game_state):
                 return _activate_menu_option(game_state, menu_options, menu_selection_index)
             elif music_num is not None:
                 if utils.select_and_load_music(music_num, base_path):
-                    try: utils.play_selected_music(base_path)
-                    except pygame.error as e: logging.error(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
+                    music.preview_game_track()
             elif key == pygame.K_ESCAPE:
                 return False # Quitte le jeu depuis le menu
             # Contrôles volume
@@ -351,7 +341,7 @@ def run_menu(events, dt, screen, game_state):
 
         # Petit rappel musique
         try:
-            music_track_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
+            music_track_text = f"Musique de jeu : {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
             utils.draw_text(
                 screen,
                 music_track_text,

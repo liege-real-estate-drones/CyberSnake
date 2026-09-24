@@ -50,17 +50,7 @@ def run_pause(events, dt, screen, game_state):
                 utils.play_sound("menu_select")
             except Exception:
                 pass
-        try:
-            music_changed = bool(game_state.get('pause_music_changed', False))
-            if music_changed:
-                utils.play_selected_music(base_path)
-                game_state['pause_music_changed'] = False
-            elif pygame.mixer.get_init() and pygame.mixer.music.get_busy():
-                utils.music_call("unpause")
-            elif pygame.mixer.get_init() and (not pygame.mixer.music.get_busy()) and utils.selected_music_file:
-                utils.play_selected_music(base_path)
-        except pygame.error as music_e:
-            logging.error(f"Erreur musique en quittant la pause: {music_e}")
+        game_state['pause_music_changed'] = False  # La musique remonte en fondu (music.py)
         previous_state = game_state.get('previous_state', config.PLAYING)
         return previous_state
 
@@ -84,10 +74,6 @@ def run_pause(events, dt, screen, game_state):
         return config.OPTIONS
 
     def _quit_to_menu():
-        try:
-            utils.music_call("stop")
-        except pygame.error:
-            pass
         game_state['pause_music_changed'] = False
         return config.MENU
 
@@ -438,10 +424,6 @@ def run_game_over(events, dt, screen, game_state):
     # Son de fin de partie (une seule fois) : record > couleur débloquée > game over
     if not game_state.get('_go_sound_played'):
         game_state['_go_sound_played'] = True
-        try:
-            utils.music_call("fadeout", 800)
-        except Exception:
-            pass
         if is_high_score and not is_daily:
             utils.play_sound("new_record")
         elif game_state.get('new_unlocks'):
