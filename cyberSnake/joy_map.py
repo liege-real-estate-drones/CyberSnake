@@ -25,6 +25,20 @@ _ids = {}          # instance_id -> identifiant stable
 _profiles = {}     # identifiant stable -> {"axis_h", "axis_v", "invert_h", "invert_v"}
 _players = {}      # "p1"/"p2" -> identifiant stable
 _paths = {}        # instance_id -> /dev/input/eventN (si connu)
+_aliases = {}      # "usb:borne-j1" -> identifiant du stick d'origine (service borne_manettes)
+BORNE_CONFIG_PATH = "/userdata/system/borne-manettes.json"
+
+
+def load_borne_aliases(path=BORNE_CONFIG_PATH):
+    """Les copies J1 / J2 du service borne_manettes utilisent le réglage du stick d'origine."""
+    _aliases.clear()
+    try:
+        import json
+        with open(path, "r") as f:
+            for slot in json.load(f).get("slots", []):
+                _aliases[f"usb:borne-j{int(slot['player'])}"] = "usb:" + slot["phys"]
+    except Exception:
+        pass
 
 
 def _load_sdl():
@@ -138,7 +152,7 @@ def load_from_controls(controls):
 def axes_for(instance_id):
     """(axe horizontal, axe vertical, inverser H, inverser V) pour cette manette."""
     sid = _ids.get(instance_id)
-    prof = _profiles.get(sid)
+    prof = _profiles.get(sid) or _profiles.get(_aliases.get(sid))
     if prof:
         try:
             return (int(prof.get("axis_h", 0)), int(prof.get("axis_v", 1)),

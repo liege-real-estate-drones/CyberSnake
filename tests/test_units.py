@@ -160,6 +160,23 @@ class TestBorneManettes(unittest.TestCase):
             for k in (0, 1, 2, 3):
                 joy_map._ids.pop(k, None)
 
+    def test_virtual_copy_uses_original_stick_profile(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            cfg = os.path.join(tmp, "borne-manettes.json")
+            with open(cfg, "w") as f:
+                f.write('{"slots": [{"player": 1, "phys": "usb-0000:00:1a.0-1.5/input0"}]}')
+            joy_map.load_from_controls({"sticks": {"usb:usb-0000:00:1a.0-1.5/input0":
+                                                   {"axis_h": 1, "axis_v": 0, "invert_h": 1, "invert_v": 0}}})
+            joy_map.load_borne_aliases(cfg)
+            joy_map._ids[42] = "usb:borne-j1"
+            self.assertEqual(joy_map.axes_for(42), (1, 0, True, False))
+        finally:
+            joy_map._ids.pop(42, None)
+            joy_map._aliases.clear()
+            joy_map.load_from_controls({})
+            shutil.rmtree(tmp)
+
     def test_virtual_order_check(self):
         self.assertTrue(borne_manettes.in_sysfs_order([31, 32]))
         self.assertFalse(borne_manettes.in_sysfs_order([99, 100]))  # « input100 » < « input99 »

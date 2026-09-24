@@ -277,6 +277,7 @@ def main():
             controls_cfg = utils.load_controls(base_path_assets)
             utils.apply_controls_to_config(controls_cfg)
             joy_map.load_from_controls(controls_cfg)
+            joy_map.load_borne_aliases()
         except Exception as e:
             logging.warning(f"Attention: Impossible de charger controls.json: {e}", exc_info=True)
 
