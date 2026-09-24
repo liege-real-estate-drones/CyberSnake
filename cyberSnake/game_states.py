@@ -62,6 +62,7 @@ import itertools # Added for PvP collision logic
 import config
 import utils
 import game_objects
+import fx
 import subprocess
 import os
 import sys
@@ -542,17 +543,15 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
            font_small = pygame.font.Font(None, 22); font_default = pygame.font.Font(None, 30); font_medium = pygame.font.Font(None, 40)
         except Exception: print("ERREUR FATALE: Impossible de charger les polices de secours."); return
 
-    # --- Dessin Fond & Grille ---
+    # --- Dessin Fond & Grille (pré-calculé : dégradé + grille + vignettage) ---
     try:
-        target_surface.fill(config.COLOR_BACKGROUND)
-    except Exception as e: print(f"Erreur fill screen: {e}"); return
-    if getattr(config, "SHOW_GRID", True):
-        for x in range(0, config.SCREEN_WIDTH, config.GRID_SIZE):
-            try: pygame.draw.line(target_surface, config.COLOR_GRID, (x, 0), (x, config.SCREEN_HEIGHT))
-            except Exception: pass
-        for y in range(0, config.SCREEN_HEIGHT, config.GRID_SIZE):
-            try: pygame.draw.line(target_surface, config.COLOR_GRID, (0, y), (config.SCREEN_WIDTH, y))
-            except Exception: pass
+        target_surface.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, getattr(config, "SHOW_GRID", True)), (0, 0))
+    except Exception as e:
+        logging.warning(f"Erreur fond d'arène: {e}")
+        try:
+            target_surface.fill(config.COLOR_BACKGROUND)
+        except Exception:
+            return
 
     # --- Dessin Murs ---
     for wall_pos in current_map_walls:
@@ -566,6 +565,29 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     player_projectiles_copy = list(player_projectiles); player2_projectiles_copy = list(player2_projectiles)
     enemy_projectiles_copy = list(enemy_projectiles); nests_copy = list(nests)
     moving_mines_copy = list(moving_mines); active_enemies_copy = list(active_enemies)
+
+    # --- Halos néon sous la nourriture et les bonus (pulsation douce) ---
+    _g = config.GRID_SIZE
+    _pulse = 0.85 + 0.15 * math.sin(current_time * 0.006)
+    for f in foods_copy:
+        try:
+            if f.position:
+                col = (f.type_data or {}).get('color', config.COLOR_FOOD_NORMAL)
+                fx.draw_glow(target_surface, (f.position[0] * _g + _g // 2, f.position[1] * _g + _g // 2), col, _g * 1.5 * _pulse, 6)
+        except Exception:
+            pass
+    for pu in powerups_copy:
+        try:
+            if pu.position:
+                col = (pu.data or {}).get('color', config.COLOR_WHITE)
+                fx.draw_glow(target_surface, (pu.position[0] * _g + _g // 2, pu.position[1] * _g + _g // 2), col, _g * 1.8 * _pulse, 7)
+        except Exception:
+            pass
+    for m in mines_copy:
+        try:
+            fx.draw_glow(target_surface, (m.position[0] * _g + _g // 2, m.position[1] * _g + _g // 2), config.COLOR_MINE, _g * 1.3, 5)
+        except Exception:
+            pass
 
     # --- Dessin Objets du Jeu ---
     for f in foods_copy:
@@ -595,6 +617,13 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
             try: p.draw(target_surface)
             except Exception as e: print(f"Erreur dessin projectile IA/Ennemi: {e}")
 
+    # --- Halos des projectiles ---
+    for p in player_projectiles_copy + player2_projectiles_copy + enemy_projectiles_copy:
+        try:
+            fx.draw_glow(target_surface, (p.x, p.y), p.color, max(8, p.size * 3), 7)
+        except Exception:
+            pass
+
     # --- Dessin Serpents ---
     if player_snake:
         try: player_snake.draw(target_surface, current_time, font_small, font_default)
@@ -616,6 +645,13 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     for p in particles_copy:
         try: p.draw(target_surface)
         except Exception as e: print(f"Erreur dessin particule: {e}")
+
+    # --- Textes flottants (+points) et flash d'impact ---
+    try:
+        fx.draw_popups(target_surface, current_time, font_small, font_default)
+        fx.draw_flash(target_surface, current_time)
+    except Exception:
+        pass
 
     # --- Mise en valeur de l'arène (Classique) : assombrit l'extérieur ---
     if current_game_mode == config.MODE_CLASSIC:
@@ -1469,6 +1505,7 @@ def reset_game(game_state):
 
     print("Resetting game...")
     current_time_reset = pygame.time.get_ticks()
+    fx.clear_popups()
     game_state['player_projectiles'] = []
     game_state['player2_projectiles'] = []
     game_state['enemy_projectiles'] = []
@@ -2236,6 +2273,7 @@ def run_options(events, dt, screen, game_state):
          or 'pending_particle_density' not in game_state
          or 'pending_screen_shake' not in game_state
          or 'pending_show_fps' not in game_state
+         or 'pending_visual_fx' not in game_state
          or 'pending_hud_mode' not in game_state
          or 'pending_ui_scale' not in game_state
          or 'pending_music_volume' not in game_state
@@ -2269,6 +2307,7 @@ def run_options(events, dt, screen, game_state):
         pending_particle_density = str(opts.get("particle_density", getattr(config, "PARTICLE_DENSITY", "normal")))
         pending_screen_shake = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         pending_show_fps = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
+        pending_visual_fx = str(opts.get("visual_fx", getattr(config, "VISUAL_FX", "standard"))).strip().lower()
         pending_hud_mode = str(opts.get("hud_mode", getattr(config, "HUD_MODE", "normal"))).strip().lower()
         if pending_hud_mode not in ("normal", "minimal"):
             pending_hud_mode = "normal"
@@ -2298,6 +2337,7 @@ def run_options(events, dt, screen, game_state):
         game_state['pending_particle_density'] = pending_particle_density
         game_state['pending_screen_shake'] = pending_screen_shake
         game_state['pending_show_fps'] = pending_show_fps
+        game_state['pending_visual_fx'] = pending_visual_fx
         game_state['pending_hud_mode'] = pending_hud_mode
         game_state['pending_ui_scale'] = pending_ui_scale
         game_state['pending_music_volume'] = pending_music_volume
@@ -2329,6 +2369,11 @@ def run_options(events, dt, screen, game_state):
     pending_particle_density = str(game_state.get('pending_particle_density', getattr(config, "PARTICLE_DENSITY", "normal")))
     pending_screen_shake = bool(game_state.get('pending_screen_shake', getattr(config, "SCREEN_SHAKE_ENABLED", True)))
     pending_show_fps = bool(game_state.get('pending_show_fps', getattr(config, "SHOW_FPS", False)))
+    pending_visual_fx = str(game_state.get('pending_visual_fx', getattr(config, "VISUAL_FX", "standard"))).strip().lower()
+    if pending_visual_fx not in config.VISUAL_FX_PRESETS:
+        pending_visual_fx = "standard"
+    visual_fx_keys = list(config.VISUAL_FX_PRESETS.keys())
+    visual_fx_display = config.VISUAL_FX_LABELS.get(pending_visual_fx, pending_visual_fx)
     pending_hud_mode = str(game_state.get('pending_hud_mode', getattr(config, "HUD_MODE", "normal"))).strip().lower()
     if pending_hud_mode not in ("normal", "minimal"):
         pending_hud_mode = "normal"
@@ -2533,6 +2578,7 @@ def run_options(events, dt, screen, game_state):
         ("Échelle UI", ui_scale_display),
         ("HUD", hud_mode_display),
         ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
+        ("Effets visuels", visual_fx_display),
         ("Volume musique", music_volume_display),
         ("Volume effets", sound_volume_display),
         ("Contrôles", ""),
@@ -2556,12 +2602,21 @@ def run_options(events, dt, screen, game_state):
     IDX_UI_SCALE = 12
     IDX_HUD_MODE = 13
     IDX_SHOW_FPS = 14
-    IDX_MUSIC_VOL = 15
-    IDX_SOUND_VOL = 16
-    IDX_CONTROLS = 17
-    IDX_RESET = 18
-    IDX_APPLY = 19
-    IDX_BACK = 20
+    IDX_VISUAL_FX = 15
+    IDX_MUSIC_VOL = 16
+    IDX_SOUND_VOL = 17
+    IDX_CONTROLS = 18
+    IDX_RESET = 19
+    IDX_APPLY = 20
+    IDX_BACK = 21
+
+    def cycle_visual_fx(delta):
+        nonlocal pending_visual_fx
+        try:
+            idx = visual_fx_keys.index(pending_visual_fx)
+        except ValueError:
+            idx = 0
+        pending_visual_fx = visual_fx_keys[(idx + delta) % len(visual_fx_keys)]
 
     selection_index = max(0, min(selection_index, len(menu_items) - 1))
 
@@ -2725,6 +2780,7 @@ def run_options(events, dt, screen, game_state):
         opts["particle_density"] = str(pending_particle_density)
         opts["screen_shake"] = bool(pending_screen_shake)
         opts["show_fps"] = bool(pending_show_fps)
+        opts["visual_fx"] = str(pending_visual_fx)
         opts["hud_mode"] = str(pending_hud_mode)
         opts["ui_scale"] = str(pending_ui_scale)
         try:
@@ -2766,6 +2822,7 @@ def run_options(events, dt, screen, game_state):
 
         config.SCREEN_SHAKE_ENABLED = bool(pending_screen_shake)
         config.SHOW_FPS = bool(pending_show_fps)
+        config.apply_visual_fx(pending_visual_fx)
         try:
             hud_mode_key = str(pending_hud_mode).strip().lower()
         except Exception:
@@ -2841,7 +2898,7 @@ def run_options(events, dt, screen, game_state):
         nonlocal pending_show_grid, pending_grid_size
         nonlocal pending_snake_style_p1, pending_snake_style_p2, pending_snake_color_p1, pending_snake_color_p2
         nonlocal pending_wall_style, pending_wall_style_random_choice, pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
-        nonlocal pending_screen_shake, pending_show_fps, pending_hud_mode, pending_ui_scale, pending_music_volume, pending_sound_volume
+        nonlocal pending_screen_shake, pending_show_fps, pending_visual_fx, pending_hud_mode, pending_ui_scale, pending_music_volume, pending_sound_volume
 
         defaults = getattr(utils, "DEFAULT_GAME_OPTIONS", {}) if hasattr(utils, "DEFAULT_GAME_OPTIONS") else {}
 
@@ -2879,6 +2936,7 @@ def run_options(events, dt, screen, game_state):
 
         pending_screen_shake = bool(defaults.get("screen_shake", True))
         pending_show_fps = bool(defaults.get("show_fps", False))
+        pending_visual_fx = str(defaults.get("visual_fx", "standard"))
         pending_hud_mode = str(defaults.get("hud_mode", "normal")).strip().lower()
         if pending_hud_mode not in ("normal", "minimal"):
             pending_hud_mode = "normal"
@@ -2899,7 +2957,7 @@ def run_options(events, dt, screen, game_state):
         pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
 
     def adjust_current(delta):
-        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_ai_difficulty, pending_wall_style
+        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_visual_fx, pending_ai_difficulty, pending_wall_style
 
         if selection_index == IDX_SHOW_GRID:
             pending_show_grid = not pending_show_grid
@@ -2931,6 +2989,8 @@ def run_options(events, dt, screen, game_state):
             cycle_hud_mode(delta)
         elif selection_index == IDX_SHOW_FPS:
             pending_show_fps = not pending_show_fps
+        elif selection_index == IDX_VISUAL_FX:
+            cycle_visual_fx(delta)
         elif selection_index == IDX_MUSIC_VOL:
             adjust_music_volume(delta)
         elif selection_index == IDX_SOUND_VOL:
@@ -3089,6 +3149,7 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_particle_density'] = pending_particle_density
     game_state['pending_screen_shake'] = pending_screen_shake
     game_state['pending_show_fps'] = pending_show_fps
+    game_state['pending_visual_fx'] = pending_visual_fx
     game_state['pending_hud_mode'] = pending_hud_mode
     game_state['pending_ui_scale'] = pending_ui_scale
     game_state['pending_music_volume'] = pending_music_volume
@@ -3169,6 +3230,7 @@ def run_options(events, dt, screen, game_state):
             ("Échelle UI", ui_scale_display),
             ("HUD", hud_mode_display),
             ("Afficher FPS", "Oui" if pending_show_fps else "Non"),
+            ("Effets visuels", config.VISUAL_FX_LABELS.get(pending_visual_fx, pending_visual_fx)),
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
             ("Contrôles", ""),
@@ -3386,8 +3448,9 @@ def run_options(events, dt, screen, game_state):
             except Exception:
                 cell_px = 12
 
-            rel = [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (4, 1)]
-            start_x = area_rect.centerx - int(4.5 * cell_px)
+            # Serpent en ligne droite vers la droite : tête à droite, queue à gauche
+            rel = [(5, 0), (4, 0), (3, 0), (2, 0), (1, 0), (0, 0)]
+            start_x = area_rect.centerx - int(3.0 * cell_px)
             start_y = area_rect.centery - int(0.5 * cell_px)
             seg_rects = [pygame.Rect(start_x + rx * cell_px, start_y + ry * cell_px, cell_px, cell_px) for rx, ry in rel]
 
@@ -3594,6 +3657,7 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_particle_density', None)
         game_state.pop('pending_screen_shake', None)
         game_state.pop('pending_show_fps', None)
+        game_state.pop('pending_visual_fx', None)
         game_state.pop('pending_hud_mode', None)
         game_state.pop('pending_ui_scale', None)
         game_state.pop('pending_music_volume', None)

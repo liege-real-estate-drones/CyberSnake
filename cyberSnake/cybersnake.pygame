@@ -45,6 +45,7 @@ try:
     import game_objects
     import game_states
     import menu_input
+    import fx
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -237,6 +238,7 @@ def main():
 
         config.SCREEN_SHAKE_ENABLED = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         config.SHOW_FPS = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
+        config.apply_visual_fx(opts.get("visual_fx", "standard"))
 
         ui_scale_key = str(opts.get("ui_scale", getattr(config, "UI_SCALE", "normal"))).strip().lower()
         ui_scale_map = {"small": 0.9, "normal": 1.0, "large": 1.15}
@@ -621,6 +623,7 @@ def main():
         screen = game_state.get('screen', screen)
 
         if running:
+            fx.apply_crt(screen)  # Effet écran d'arcade (option)
             try:
                 pygame.display.flip()
             except pygame.error as flip_e:

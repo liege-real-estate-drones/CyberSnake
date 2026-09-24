@@ -60,6 +60,7 @@ DEFAULT_GAME_OPTIONS = {
     "sound_volume": 0.6,
     # UI
     "show_fps": False,
+    "visual_fx": "standard",
     "ui_scale": "normal",
     "hud_mode": "normal",
 }
