@@ -383,6 +383,25 @@ def _create_virtuals(slots, model):
             s.create_virtual(model)
 
 
+HOTKEYGEN_PIDFILE = "/var/run/hotkeygen.pid"
+
+
+def wait_for_hotkeygen(timeout=30.0):
+    """Attend que hotkeygen (touches Hotkey + Start = quitter le jeu) soit lancé.
+
+    hotkeygen ouvre tous les /dev/input/event* au démarrage et plante sur un nœud
+    manquant : il doit démarrer AVANT qu'on cache les encodeurs d'origine."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with open(HOTKEYGEN_PIDFILE, "r") as f:
+                os.kill(int(f.read().strip()), 0)
+            return True
+        except (OSError, ValueError):
+            time.sleep(0.5)
+    return False
+
+
 def disable_config():
     try:
         os.replace(CONFIG_PATH, CONFIG_PATH + ".off")
@@ -408,6 +427,8 @@ def cmd_run():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     log("Démarrage. URGENCE : Select + Start tenus 5 s = correction désactivée.")
+    if not wait_for_hotkeygen():
+        log("hotkeygen introuvable : on continue sans l'attendre.")
 
     # Un encodeur sert de modèle pour les copies (30 s max d'attente au démarrage)
     model = None

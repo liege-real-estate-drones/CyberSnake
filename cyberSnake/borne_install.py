@@ -19,10 +19,7 @@ CONFIG_PATH = os.path.join(SYSTEM_DIR, "borne-manettes.json")
 DIAG_PATH = os.path.join(SYSTEM_DIR, "logs", "cybersnake_peripheriques.txt")
 HAT_CODES = range(0x10, 0x18)   # ABS_HAT0X .. ABS_HAT3Y : vus comme croix par SDL
 SERVICE_FILES = ("borne_manettes.py", "borne_pistolets.py", "borne_manettes.service.sh",
-                 "boot-custom.sh", "install.sh", "README.md")
-BOOT_HOOK_PATH = "/boot/boot-custom.sh"
-BOOT_HOOK_BEGIN = "# >>> borne_manettes (CyberSnake) >>>"
-BOOT_HOOK_END = "# <<< borne_manettes (CyberSnake) <<<"
+                 "install.sh", "README.md")
 
 
 def is_batocera():
@@ -88,61 +85,6 @@ def _run(cmd, timeout=15):
         return -1
 
 
-def merge_boot_hook(current, template):
-    """Contenu de /boot/boot-custom.sh avec notre bloc (remplacé s'il y est déjà).
-
-    Les autres lignes éventuelles du fichier (autres réglages de l'utilisateur) sont gardées.
-    """
-    lines = template.replace("\r\n", "\n").split("\n")
-    try:
-        block = lines[lines.index(BOOT_HOOK_BEGIN):lines.index(BOOT_HOOK_END) + 1]
-    except ValueError:
-        raise ValueError("modèle boot-custom.sh sans marqueurs")
-    if not current.strip():
-        return template.replace("\r\n", "\n")
-    kept, inside = [], False
-    for line in current.replace("\r\n", "\n").split("\n"):
-        if line == BOOT_HOOK_BEGIN:
-            inside = True
-        elif line == BOOT_HOOK_END:
-            inside = False
-        elif not inside:
-            kept.append(line)
-    while kept and not kept[-1].strip():
-        kept.pop()
-    return "\n".join(kept + block) + "\n"
-
-
-def install_boot_hook(base_path):
-    """Démarrage anticipé du service (avant EmulationStation) via /boot/boot-custom.sh.
-
-    /boot est en lecture seule : on le remonte en écriture le temps de l'écrire.
-    Retourne True si le fichier a été modifié.
-    """
-    if not os.path.isdir("/boot"):
-        return False
-    with open(os.path.join(base_path, "borne_manettes", "boot-custom.sh"), "r") as f:
-        template = f.read()
-    current = ""
-    if os.path.exists(BOOT_HOOK_PATH):
-        with open(BOOT_HOOK_PATH, "r") as f:
-            current = f.read()
-    new = merge_boot_hook(current, template)
-    if new == current:
-        return False
-    if _run(["mount", "-o", "remount,rw", "/boot"]) != 0:
-        logging.warning("borne_install: /boot non modifiable, démarrage anticipé non installé.")
-        return False
-    try:
-        with open(BOOT_HOOK_PATH, "w", newline="\n") as f:
-            f.write(new)
-        os.sync()
-    finally:
-        _run(["mount", "-o", "remount,ro", "/boot"])
-    logging.info("borne_manettes : démarrage anticipé installé (/boot/boot-custom.sh).")
-    return True
-
-
 def stop_service():
     if os.path.exists(SERVICE_PATH):
         _run([SERVICE_PATH, "stop"])
@@ -190,7 +132,6 @@ def install(base_path, slots):
                         f.write("\n")
                     f.write(line)
                 os.chmod(custom, 0o755)
-        install_boot_hook(base_path)
         stop_service()
         start_service()
         logging.info(f"borne_manettes installé : {slots}")
@@ -260,11 +201,6 @@ def refresh_installed(base_path):
                 changed = True
         except OSError:
             logging.debug(f"refresh_installed: {fname} non copié", exc_info=True)
-    if os.path.exists(SERVICE_PATH):
-        try:
-            changed = install_boot_hook(base_path) or changed
-        except Exception:
-            logging.debug("refresh_installed: démarrage anticipé non installé", exc_info=True)
     if changed:
         logging.info("borne_manettes : fichiers du service mis à jour (effet au prochain démarrage).")
     return changed

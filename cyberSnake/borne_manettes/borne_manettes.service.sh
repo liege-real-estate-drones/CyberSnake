@@ -2,8 +2,8 @@
 # Service Batocera « borne_manettes » : J1 / J2 toujours à la même place
 # (manettes + pistolets Sinden si /userdata/system/borne-pistolets.json existe).
 # Installé dans /userdata/system/services/borne_manettes
-# Lancé tôt au démarrage par /boot/boot-custom.sh (avant EmulationStation), puis
-# par Batocera (S99) : le second lancement ne fait rien si tout tourne déjà.
+# Lancé par Batocera (S99, après hotkeygen) ; un second lancement ne fait rien si
+# tout tourne déjà.
 DIR="/userdata/system/borne_manettes"
 PIDFILE="/var/run/borne_manettes.pid"
 LOG="/userdata/system/logs/borne_manettes.log"

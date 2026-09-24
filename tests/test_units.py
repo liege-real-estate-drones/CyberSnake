@@ -236,19 +236,6 @@ class TestBorneManettes(unittest.TestCase):
         self.assertIsNone(borne_install.sdl_axis_to_code(codes, 5))
         self.assertEqual(borne_install.parse_abs_bitmask("1 0"), [])  # bit 64 hors plage
 
-    def test_boot_hook_merge_keeps_user_lines(self):
-        import borne_install
-        with open(os.path.join(GAME_DIR, "borne_manettes", "boot-custom.sh"), "r") as f:
-            template = f.read()
-        fresh = borne_install.merge_boot_hook("", template)
-        self.assertIn(borne_install.BOOT_HOOK_BEGIN, fresh)
-        self.assertEqual(borne_install.merge_boot_hook(fresh, template), fresh)  # Déjà à jour
-        user = "#!/bin/bash\necho perso\n"
-        merged = borne_install.merge_boot_hook(user, template)
-        self.assertTrue(merged.startswith(user))
-        self.assertEqual(merged.count(borne_install.BOOT_HOOK_BEGIN), 1)
-        self.assertEqual(borne_install.merge_boot_hook(merged, template), merged)
-
 
 class TestBornePistolets(unittest.TestCase):
     RED = "/sys/devices/pci0000:00/0000:00:1d.0/usb1/1-1/1-1.5/1-1.5.2"

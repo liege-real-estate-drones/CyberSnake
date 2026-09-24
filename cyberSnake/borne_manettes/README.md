@@ -12,10 +12,9 @@ reconfigurer.
 **URGENCE :** si les sticks ne répondent plus, tenir **Select + Start** (J1 ou J2) pendant
 **5 secondes** : la correction se désactive et les sticks d'origine reviennent.
 
-**Démarrage anticipé :** le service est lancé par `/boot/boot-custom.sh` dès que `/userdata`
-est monté, environ 10 s AVANT EmulationStation. Un jeu lancé au démarrage de la borne
-(`global.bootgame`) voit donc déjà les bons J1 / J2. Batocera le relance aussi plus tard
-(menu Services) : ce second lancement ne fait rien si tout tourne déjà.
+**hotkeygen :** le service attend que hotkeygen (Hotkey + Start = quitter le jeu) soit
+lancé avant de cacher les encodeurs d'origine : hotkeygen plante s'il démarre après.
+Ne pas lancer le service plus tôt que Batocera (S99).
 
 ## Pistolets Sinden J1 / J2
 
