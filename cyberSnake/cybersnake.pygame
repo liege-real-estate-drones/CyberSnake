@@ -463,6 +463,11 @@ def main():
                     return False
             return False
 
+        # Fermeture demandée (fenêtre, Batocera...) : on quitte quel que soit l'écran en cours
+        if any(ev.type == pygame.QUIT for ev in events):
+            logging.info("Événement QUIT reçu : fermeture du jeu.")
+            break
+
         # --- Manettes branchées / débranchées pendant le jeu (hotplug) ---
         for ev in events:
             try:

@@ -1522,7 +1522,7 @@ class Snake:
         """Dessine les effets de statut actifs près de la tête du serpent."""
         if not self.alive: return
 
-        head_px = self.get_head_center_px()
+        head_px = getattr(self, '_render_head_center_px', None) or self.get_head_center_px()
         if not head_px or head_px[0] is None: return
 
         hx, hy = head_px
@@ -1591,6 +1591,15 @@ class Snake:
         bar_height = 4
         spacing = 2
         current_y = hy - (config.GRID_SIZE // 2) - 10 # Start above head
+        try:
+            screen_rect = surface.get_rect()
+        except Exception:
+            screen_rect = None
+        # Pas assez de place au-dessus de la tête (bord haut) : on empile sous la tête
+        line_h = bar_height + spacing + int(font_small.get_height() * 0.7) + spacing
+        stack_down = current_y - line_h * len(effects_to_draw) < 0
+        if stack_down:
+            current_y = hy + (config.GRID_SIZE // 2) + 6
 
         for label, color, time_left, total_duration in effects_to_draw:
             if time_left <= 0: continue
@@ -1599,8 +1608,13 @@ class Snake:
             pct = max(0.0, min(1.0, time_left / max(1, total_duration)))
             bar_rect_bg = pygame.Rect(0, 0, bar_width, bar_height)
             bar_rect_bg.centerx = hx
-            bar_rect_bg.bottom = current_y
+            if stack_down:
+                bar_rect_bg.top = current_y
+            else:
+                bar_rect_bg.bottom = current_y
 
+            if screen_rect is not None:
+                bar_rect_bg.clamp_ip(screen_rect)  # Reste visible près des bords
             bar_rect_fill = pygame.Rect(bar_rect_bg.left, bar_rect_bg.top, int(bar_width * pct), bar_height)
 
             try:
@@ -1609,7 +1623,7 @@ class Snake:
                 pygame.draw.rect(surface, (0, 0, 0), bar_rect_bg, 1)
             except Exception: pass
 
-            current_y -= (bar_height + spacing)
+            current_y += (bar_height + spacing) * (1 if stack_down else -1)
 
             # Draw Text
             try:
@@ -1621,7 +1635,12 @@ class Snake:
                 h = int(text_surf.get_height() * 0.7)
                 text_surf = pygame.transform.smoothscale(text_surf, (w, h))
 
-                text_rect = text_surf.get_rect(centerx=hx, bottom=current_y)
+                if stack_down:
+                    text_rect = text_surf.get_rect(centerx=hx, top=current_y)
+                else:
+                    text_rect = text_surf.get_rect(centerx=hx, bottom=current_y)
+                if screen_rect is not None:
+                    text_rect.clamp_ip(screen_rect)
 
                 # Shadow
                 shadow_surf = font_small.render(text_str, True, (0, 0, 0))
@@ -1633,7 +1652,7 @@ class Snake:
 
                 surface.blit(text_surf, text_rect)
 
-                current_y -= (h + spacing)
+                current_y += (h + spacing) * (1 if stack_down else -1)
             except Exception: pass
 
     def get_render_positions_px(self, current_time, grid_px=None):
@@ -1671,6 +1690,8 @@ class Snake:
     def draw(self, surface, current_time, font_small, font_default):
         if not self.alive or not self.positions: return
         render_px = [(int(round(x)), int(round(y))) for (x, y) in self.get_render_positions_px(current_time)]
+        _g = int(getattr(config, "GRID_SIZE", 20))
+        self._render_head_center_px = (render_px[0][0] + _g // 2, render_px[0][1] + _g // 2)
 
         def _draw_armor_pips(head_rect):
             """Affiche l'armure restante (très lisible) près de la tête."""

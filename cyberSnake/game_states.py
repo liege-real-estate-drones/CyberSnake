@@ -7244,6 +7244,9 @@ def run_demo(events, dt, screen, game_state):
                 return False
         return False
 
+    if any(ev.type == pygame.QUIT for ev in events):
+        return False  # Fermeture du jeu (fenêtre / Batocera) : ne pas repasser par le menu
+
     if any(_is_demo_input(ev) for ev in events):
         # Sortie immédiate vers le menu
         saved = game_state.pop('_demo_saved', None)

@@ -111,16 +111,17 @@ def _deep_merge_dict(defaults, loaded):
 
 # --- Polices du jeu (fichiers inclus dans fonts/, licence OFL) ---
 FONT_FILES = {
-    "display": "Orbitron.ttf",          # Titres
-    "text": "Rajdhani-SemiBold.ttf",    # Menus / textes
+    "display": "Orbitron.ttf",               # Titres
+    "text": "ShareTechMono-Regular.ttf",     # Menus / textes
 }
-# (police, taille de base) par rôle ; Rajdhani est étroite -> tailles un peu plus grandes
+# (police, taille) par rôle : hauteurs de ligne identiques à l'ancienne police
+# pour conserver toutes les mises en page existantes.
 FONT_ROLES = {
-    "small": ("text", 21),
-    "default": ("text", 28),
-    "medium": ("text", 40),
-    "large": ("display", 62),
-    "title": ("display", 80),
+    "small": ("text", 15),
+    "default": ("text", 21),
+    "medium": ("text", 31),
+    "large": ("display", 57),
+    "title": ("display", 71),
 }
 LEGACY_FONT_SIZES = {"small": 18, "default": 24, "medium": 36, "large": 72, "title": 90}
 
