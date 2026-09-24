@@ -500,5 +500,43 @@ class TestDemo(unittest.TestCase):
                 gs['current_state'] = config.DEMO
 
 
+class TestNewScreensFuzz(unittest.TestCase):
+    """Événements aléatoires sur les nouveaux écrans : aucun ne doit planter."""
+
+    def _events(self, rng):
+        evs = []
+        r = rng.random()
+        if r < 0.4:
+            evs.append(pygame.event.Event(pygame.JOYHATMOTION, hat=0, instance_id=0, joy=0,
+                                          value=rng.choice([(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)])))
+        elif r < 0.6:
+            evs.append(pygame.event.Event(pygame.JOYBUTTONDOWN, button=rng.choice([0, 1, 2, 3, 8]), instance_id=0, joy=0))
+        elif r < 0.7:
+            evs.append(key(rng.choice([pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_UP, pygame.K_a])))
+        return evs
+
+    def test_fuzz(self):
+        import random as _random
+        import settings_screens
+        import screens as screens_mod
+        rng = _random.Random(3)
+        surf = pygame.Surface((800, 600))
+        with MemoryOptions():
+            for fn in (settings_screens.run_rules, settings_screens.run_button_colors, screens_mod.run_how_to_play):
+                gs = {'base_path': GAME_DIR, 'font_small': FONTS['small'], 'font_default': FONTS['default'],
+                      'font_medium': FONTS['medium'], 'font_large': FONTS['large'], 'font_title': FONTS['title']}
+                for _ in range(400):
+                    fn(self._events(rng), 16, surf, gs)
+            self.assertIsInstance(rules.saved_values(), dict)
+        gs = new_game(config.MODE_PVP, pvp_best_of=5)
+        gs['player_snake'].kills = gs['pvp_target_kills']
+        gameplay.run_game([], 16, surf, gs)
+        with FakeClock() as clock:
+            for _ in range(600):
+                if gs.get('current_state') == config.ROUND_SCORE or pvp_rounds.match(gs):
+                    pvp_rounds.run_round_score(self._events(rng), 16, surf, gs)
+                clock.tick()
+
+
 if __name__ == "__main__":
     unittest.main()
