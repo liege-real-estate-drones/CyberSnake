@@ -18,6 +18,8 @@ SERVICE_PATH = os.path.join(SYSTEM_DIR, "services", "borne_manettes")
 CONFIG_PATH = os.path.join(SYSTEM_DIR, "borne-manettes.json")
 DIAG_PATH = os.path.join(SYSTEM_DIR, "logs", "cybersnake_peripheriques.txt")
 HAT_CODES = range(0x10, 0x18)   # ABS_HAT0X .. ABS_HAT3Y : vus comme croix par SDL
+SERVICE_FILES = ("borne_manettes.py", "borne_pistolets.py", "borne_pistolets_mame.sh",
+                 "borne_manettes.service.sh", "install.sh", "README.md")
 
 
 def is_batocera():
@@ -108,7 +110,7 @@ def install(base_path, slots):
     try:
         os.makedirs(INSTALL_DIR, exist_ok=True)
         os.makedirs(os.path.dirname(SERVICE_PATH), exist_ok=True)
-        for fname in ("borne_manettes.py", "borne_manettes.service.sh", "install.sh", "README.md"):
+        for fname in SERVICE_FILES:
             shutil.copy2(os.path.join(src, fname), os.path.join(INSTALL_DIR, fname))
         shutil.copy2(os.path.join(src, "borne_manettes.service.sh"), SERVICE_PATH)
         os.chmod(SERVICE_PATH, 0o755)
@@ -180,10 +182,7 @@ def refresh_installed(base_path):
         return False
     src = os.path.join(base_path, "borne_manettes")
     changed = False
-    targets = [("borne_manettes.py", os.path.join(INSTALL_DIR, "borne_manettes.py")),
-               ("borne_manettes.service.sh", os.path.join(INSTALL_DIR, "borne_manettes.service.sh")),
-               ("install.sh", os.path.join(INSTALL_DIR, "install.sh")),
-               ("README.md", os.path.join(INSTALL_DIR, "README.md"))]
+    targets = [(fname, os.path.join(INSTALL_DIR, fname)) for fname in SERVICE_FILES]
     if os.path.exists(SERVICE_PATH):
         targets.append(("borne_manettes.service.sh", SERVICE_PATH))
     for fname, dest in targets:

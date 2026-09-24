@@ -237,5 +237,78 @@ class TestBorneManettes(unittest.TestCase):
         self.assertEqual(borne_install.parse_abs_bitmask("1 0"), [])  # bit 64 hors plage
 
 
+class TestBornePistolets(unittest.TestCase):
+    RED = "/sys/devices/pci0000:00/0000:00:1d.0/usb1/1-1/1-1.5/1-1.5.2"
+    BLUE = "/sys/devices/pci0000:00/0000:00:14.0/usb2/2-2/2-2.2"
+    # Les 4 caméras de la borne : même nom « SindenCamC », 2 nœuds par caméra
+    CAMERAS = [("/dev/video0", "/sys/devices/pci0000:00/0000:00:1d.0/usb1/1-1/1-1.5/1-1.5.1/1-1.5.1:1.0", "0"),
+               ("/dev/video1", "/sys/devices/pci0000:00/0000:00:1d.0/usb1/1-1/1-1.5/1-1.5.1/1-1.5.1:1.0", "1"),
+               ("/dev/video2", "/sys/devices/pci0000:00/0000:00:14.0/usb2/2-2/2-2.1/2-2.1:1.0", "0"),
+               ("/dev/video3", "/sys/devices/pci0000:00/0000:00:14.0/usb2/2-2/2-2.1/2-2.1:1.0", "1")]
+
+    def setUp(self):
+        import borne_pistolets
+        self.bp = borne_pistolets
+
+    def test_each_gun_gets_its_own_camera(self):
+        self.assertEqual(self.bp.pick_camera(self.RED, self.CAMERAS), "/dev/video0")
+        self.assertEqual(self.bp.pick_camera(self.BLUE, self.CAMERAS), "/dev/video2")
+        # Numéros inversés au démarrage suivant : la caméra suit toujours le pistolet
+        swapped = [("/dev/video%d" % ((int(d[-1]) + 2) % 4), p, i) for d, p, i in self.CAMERAS]
+        self.assertEqual(self.bp.pick_camera(self.RED, swapped), "/dev/video2")
+        self.assertIsNone(self.bp.pick_camera(self.RED, self.CAMERAS[2:]))
+
+    def test_each_driver_hides_only_the_other_guns_cameras(self):
+        red = {"camera_nodes": self.bp.camera_nodes(self.RED, self.CAMERAS)}
+        blue = {"camera_nodes": self.bp.camera_nodes(self.BLUE, self.CAMERAS)}
+        self.assertEqual(red["camera_nodes"], ["/dev/video0", "/dev/video1"])
+        self.assertEqual(self.bp.hidden_for(red, [red, blue]), ["/dev/video2", "/dev/video3"])
+        self.assertEqual(self.bp.hidden_for(blue, [red, blue]), ["/dev/video0", "/dev/video1"])
+        self.assertEqual(self.bp.hidden_for(red, [red]), [])
+
+    def test_mame_trigger_gets_gun_codes(self):
+        cfg = ('<port type="P1_BUTTON1">\n <newseq type="standard">\n  JOYCODE_1_BUTTON2\n </newseq>\n</port>\n'
+               '<port type="P2_BUTTON2">\n <newseq type="standard">\n  JOYCODE_2_BUTTON1\n </newseq>\n</port>\n'
+               '<port type="P1_BUTTON3">\n <newseq type="standard">\n  JOYCODE_1_BUTTON4\n </newseq>\n</port>\n')
+        new = self.bp.add_gun_codes(cfg)
+        self.assertIn("JOYCODE_1_BUTTON2 OR GUNCODE_1_BUTTON1", new)
+        self.assertIn("JOYCODE_2_BUTTON1 OR GUNCODE_2_BUTTON2", new)
+        self.assertIn("JOYCODE_1_BUTTON4\n", new)  # Bouton 3 : pas de pistolet
+        self.assertEqual(self.bp.add_gun_codes(new), new)  # Déjà fait : rien ne change
+
+    def test_gun_names(self):
+        self.assertEqual(self.bp.gun_id("Bleu"), "0f01")
+        self.assertEqual(self.bp.gun_id("rouge"), "0f02")
+        self.assertEqual(self.bp.gun_id("16C0:0F02"), "0f02")
+        self.assertIsNone(self.bp.gun_id("vert"))
+
+    def test_order_config_roundtrip(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            cfg = os.path.join(tmp, "borne-pistolets.json")
+            self.assertEqual(self.bp.load_order(cfg), [])
+            self.bp.save_order(["0f02", "0f01"], cfg)
+            self.assertEqual(self.bp.load_order(cfg), ["0f02", "0f01"])
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_evsieve_command_gets_link(self):
+        argv = ["evsieve", "--input", "/dev/input/event6", "/dev/input/event7", "persist=exit",
+                "--map", "key:1", "btn:1", "--output", "name=Sinden lightgun"]
+        cmd = self.bp.with_link(argv, "/dev/input/borne-pistolet-j1")
+        self.assertEqual(cmd[-3:], ["--output", "create-link=/dev/input/borne-pistolet-j1", "name=Sinden lightgun"])
+        self.assertEqual(self.bp.link_of(cmd), "/dev/input/borne-pistolet-j1")
+        again = self.bp.with_link(cmd, "/dev/input/borne-pistolet-j2")
+        self.assertEqual([a for a in again if a.startswith("create-link=")], ["create-link=/dev/input/borne-pistolet-j2"])
+        self.assertIsNone(self.bp.with_link(["evsieve", "--input", "x"], "l"))
+
+    def test_video_device_setting(self):
+        text = '<add key="SerialPortWrite" value="/dev/ttyACM1" />\n    <add key="VideoDevice" value="" />'
+        self.assertEqual(self.bp.video_device(text), "")
+        new = self.bp.set_video_device(text, "/dev/video2")
+        self.assertEqual(self.bp.video_device(new), "/dev/video2")
+        self.assertIn('value="/dev/ttyACM1"', new)
+
+
 if __name__ == "__main__":
     unittest.main()

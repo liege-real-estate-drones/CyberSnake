@@ -13,17 +13,17 @@ if [ "$1" = "--uninstall" ]; then
     sed -i '/borne_manettes/d' /userdata/system/custom.sh 2>/dev/null || true
     rm -f "$SERVICE"
     rm -rf "$DIR"
-    echo "Désinstallé. (La configuration /userdata/system/borne-manettes.json est conservée.)"
+    echo "Désinstallé. (Les configurations /userdata/system/borne-manettes.json et borne-pistolets.json sont conservées.)"
     exit 0
 fi
 
 python3 -c "import evdev" || { echo "ERREUR : python3-evdev absent de ce Batocera."; exit 1; }
 mkdir -p "$DIR" /userdata/system/services
-for f in borne_manettes.py borne_manettes.service.sh install.sh; do
+for f in borne_manettes.py borne_pistolets.py borne_pistolets_mame.sh borne_manettes.service.sh install.sh; do
     curl -fsSL "$RAW/$f" -o "$DIR/$f"
 done
 cp "$DIR/borne_manettes.service.sh" "$SERVICE"
-chmod +x "$SERVICE" "$DIR/borne_manettes.py" "$DIR/install.sh"
+chmod +x "$SERVICE" "$DIR/borne_manettes.py" "$DIR/borne_pistolets.py" "$DIR/borne_pistolets_mame.sh" "$DIR/install.sh"
 "$SERVICE" stop || true
 
 echo
@@ -45,3 +45,4 @@ python3 "$DIR/borne_manettes.py" --list | grep -E "virtuelle|MANETTE" || true
 echo
 echo "Terminé ! Redémarre la borne. Rien à reconfigurer dans EmulationStation."
 echo "URGENCE : Select + Start tenus 5 secondes = correction désactivée."
+echo "Pistolets Sinden : python3 $DIR/borne_pistolets.py --j1 bleu   (ou rouge) fixe J1 / J2."
