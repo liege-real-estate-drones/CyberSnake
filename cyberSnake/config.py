@@ -634,7 +634,9 @@ SOUND_PATHS = {
     "name_input_char": "menu_move.wav", "name_input_confirm": "menu_select.wav",
     "eat_special": "eat_special.mp3", "low_armor_warning": "low_armor.mp3",
     "skill_activate": "shield_up.wav",
-    "skill_ready": "objective_complete.wav", "dash_sound": "dash.wav",
+    "skill_ready": "skill_ping.wav", "dash_sound": "dash.wav",
+    "boss_charge": "boss_charge.wav", "boss_phase": "boss_phase.wav", "boss_fan": "boss_fan.wav",
+    "round_win": "round_win.wav",
     # Sons synthétiques (tools/generate_sounds.py)
     "boss_spawn": "boss_spawn.wav", "boss_defeat": "boss_defeat.wav", "kill": "kill.wav",
     "unlock": "unlock.wav", "game_over_sfx": "game_over.wav", "new_record": "new_record.wav",

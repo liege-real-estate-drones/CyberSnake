@@ -152,3 +152,18 @@ if __name__ == "__main__":
     # Palier de combo : note qui monte (hauteur choisie par le jeu via plusieurs fichiers)
     for i, n in enumerate((72, 74, 76, 79, 81, 84)):
         write(f"combo_{i + 1}.wav", tone(0.09, note(n), None, "square", 0.2, 0.002, 0.07))
+
+    # Compétence de nouveau prête (Dash / Bouclier) : « ping » discret
+    write("skill_ping.wav", seq(tone(0.05, note(88), None, "sine", 0.35, 0.002, 0.04),
+                                tone(0.12, note(95), None, "sine", 0.30, 0.002, 0.10)))
+    # Boss : charge (grondement qui monte), changement de phase (rugissement), tir en éventail
+    write("boss_charge.wav", mix(tone(0.7, 70, 260, "saw", 0.35, 0.02, 0.15, vibrato=0.05),
+                                 noise(0.7, 0.3, 0.2, 0.1, seed=13)))
+    write("boss_phase.wav", mix(tone(1.0, 330, 90, "saw", 0.35, 0.01, 0.5, vibrato=0.06),
+                                tone(1.0, 336, 92, "saw", 0.3, 0.01, 0.5, vibrato=0.06),
+                                noise(1.0, 0.35, 0.6, 0.12, seed=17)))
+    write("boss_fan.wav", mix(tone(0.25, 900, 300, "square", 0.25, 0.002, 0.15),
+                              tone(0.25, 1350, 450, "square", 0.18, 0.002, 0.15)))
+    # Manche gagnée (PvP) : trois notes montantes
+    write("round_win.wav", seq(*[tone(0.1, note(n), None, "square", 0.28, 0.003, 0.06) for n in (67, 71, 74)],
+                               tone(0.4, note(79), None, "square", 0.3, 0.003, 0.3)))

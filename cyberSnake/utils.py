@@ -404,7 +404,7 @@ def _apply_sound_volume_internal():
     base_volumes.update({
         "eat":0.85, "eat_special":0.9, "shoot_p1":0.6, "shoot_p2":0.6,
         "hit_p1":0.9, "hit_p2":0.9, "hit_enemy":0.8, "explode_mine":1.0,
-        "powerup_pickup":0.9, "dash_sound":0.8,
+        "powerup_pickup":0.9, "dash_sound":0.8, "skill_ready":0.45,
         # Sons d'interface plus discrets que les sons de jeu
         "menu_move":0.45, "menu_select":0.7, "menu_back":0.65, "denied":0.6, "countdown":0.7,
         "combo_1":0.5, "combo_2":0.5, "combo_3":0.5, "combo_4":0.55, "combo_5":0.55, "combo_6":0.6,
