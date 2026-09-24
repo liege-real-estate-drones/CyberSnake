@@ -519,6 +519,7 @@ class Snake:
         self.current_walls = walls if walls is not None else []
         self.current_direction = self._find_safe_initial_direction(self.start_pos, self.current_walls, self.initial_direction)
         self.next_direction = self.current_direction
+        self.direction_queue = []
 
         self.positions = [self.start_pos]
         desired_length = 1
@@ -715,12 +716,27 @@ class Snake:
         actual_direction = new_direction
         if self.reversed_controls_active:
             actual_direction = (-new_direction[0], -new_direction[1])
+        # File d'attente de virages : chaque virage est appliqué à un déplacement distinct.
+        # Évite de mourir en faisant 2 virages rapides (ex: droite -> haut -> gauche) avant
+        # que la tête n'ait avancé, et évite de perdre le 2e virage.
+        queue = getattr(self, 'direction_queue', None)
+        if queue is None:
+            queue = self.direction_queue = []
+        reference = queue[-1] if queue else self.current_direction
+        if actual_direction == reference:
+            return
         if self.length > 1:
-            if actual_direction[0] == -self.current_direction[0] and actual_direction[1] == -self.current_direction[1]:
+            if actual_direction[0] == -reference[0] and actual_direction[1] == -reference[1]:
                 return
-        self.next_direction = actual_direction
+        if len(queue) >= 2:
+            return
+        queue.append(actual_direction)
+        self.next_direction = queue[0]
 
     def _apply_direction_change(self):
+        queue = getattr(self, 'direction_queue', None)
+        if queue:
+            self.next_direction = queue.pop(0)
         if self.length > 1:
             if self.next_direction[0] == -self.current_direction[0] and self.next_direction[1] == -self.current_direction[1]:
                 self.next_direction = self.current_direction
@@ -860,7 +876,6 @@ class Snake:
         if not self.alive:
             return False, None, None # moved, new_head, death_cause_detail
 
-        self._apply_direction_change()
         self.update_effects(current_time)
         move_interval = self.get_current_move_interval()
 
@@ -872,6 +887,8 @@ class Snake:
         death_cause_detail = None # Initialiser la cause de mort
 
         if current_time - self.last_move_time >= move_interval:
+            # Le changement de direction n'est appliqué qu'au moment d'un vrai déplacement
+            self._apply_direction_change()
             self.last_move_time = current_time
             moved = True
             cur_pos = self.get_head_position()
@@ -1390,6 +1407,9 @@ class Snake:
 
         last_valid_head = head_pos
         collected_items_indices = set()
+
+        # Le dash part dans la direction demandée (virage en attente inclus)
+        self._apply_direction_change()
 
         for i in range(config.DASH_STEPS):
             dx, dy = self.current_direction

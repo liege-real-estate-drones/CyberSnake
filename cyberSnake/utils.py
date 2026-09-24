@@ -450,8 +450,8 @@ def save_high_score(name, score, mode_key, base_path):
         # Sauvegarde dans le fichier JSON
         file_path = os.path.join(base_path, config.HIGH_SCORE_FILE)
         try:
-            with open(file_path, 'w', encoding='utf-8') as f: # Spécifie l'encodage
-                json.dump(high_scores, f, indent=4, ensure_ascii=False) # Garde les caractères non-ASCII
+            # Écriture atomique : un arrêt brutal de la borne ne peut pas corrompre les scores
+            safe_write_json(file_path, high_scores)
             print(f"High score pour '{mode_key}' mis à jour.")
         except IOError as io_e:
             print(f"Erreur écriture high scores ({file_path}): {io_e}")
@@ -532,8 +532,7 @@ def save_favorite_map(walls_list, base_path):
 
     file_path = os.path.join(base_path, config.FAVORITE_MAP_FILE)
     try:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(favorites_list_to_save, f, indent=4, ensure_ascii=False)
+        safe_write_json(file_path, favorites_list_to_save)
         print(f"Carte sauvegardée comme favori: '{new_map_name}'")
         return True, new_map_name # Retourne succès et le nom généré
     except IOError as e:
@@ -567,8 +566,7 @@ def delete_favorite_map(map_name_to_delete, base_path):
 
     file_path = os.path.join(base_path, config.FAVORITE_MAP_FILE)
     try:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(favorites_list_to_save, f, indent=4, ensure_ascii=False)
+        safe_write_json(file_path, favorites_list_to_save)
         print(f"Fichier favoris mis à jour après suppression de '{map_name_to_delete}'.")
         return True # Succès
     except IOError as e:
