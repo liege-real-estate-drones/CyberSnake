@@ -381,6 +381,9 @@ def run_game_over(events, dt, screen, game_state):
     elif current_game_mode == config.MODE_SURVIVAL:
         # En Survie, le score est le numéro de la vague atteinte
         mode_key, mode_name = "survie", "Survie"; score_to_check = survival_wave; name_for_hs = p1_name
+        if game_state.get('coop') and player2_snake:
+            mode_name = "Survie Coop"
+            name_for_hs = f"{p1_name}&{p2_name}"[:15]
 
     hs_list = utils.high_scores.get(mode_key, [])
     is_high_score = False
@@ -618,8 +621,8 @@ def run_game_over(events, dt, screen, game_state):
             info_main_label, info_main_value = "SCORE", f"{p1_score}  -  {p2_score}"
             sub_lines = [f"{p1_name} : {p1_kills} kills   |   {p2_name} : {p2_kills} kills"]
         elif current_game_mode == config.MODE_SURVIVAL:
-            info_main_label, info_main_value = f"VAGUE ATTEINTE ({p1_name})", score_to_check
-            sub_lines = [f"Score : {p1_score}"]
+            info_main_label, info_main_value = f"VAGUE ATTEINTE ({name_for_hs})", score_to_check
+            sub_lines = [f"Score : {p1_score}"] if not game_state.get('coop') else [f"{p1_name} : {p1_score}   |   {p2_name} : {p2_score}"]
         else:
             info_main_label, info_main_value = f"SCORE ({p1_name})", p1_score
             sub_lines = []

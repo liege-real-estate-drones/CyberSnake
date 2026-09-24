@@ -670,6 +670,7 @@ CONTROLS = 104 # Remapping contrôles
 TITLE = 105 # Écran titre (borne d'arcade)
 DAILY_CHALLENGE = 106 # Entrée de menu : Défi du jour (partie Solo imposée)
 HOW_TO_PLAY = 107 # Écran « Comment jouer » (boucle d'attente)
+COOP_SURVIVAL = 108 # Entrée de menu : Survie à deux (Coop)
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)

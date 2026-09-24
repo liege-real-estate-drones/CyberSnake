@@ -49,7 +49,7 @@ def main():
     updater.update_worker = lambda gs: gs.update({'update_status': 'error', 'update_error_msg': 'test'})
 
     # Chaque passage au menu lance directement une partie dans le mode suivant
-    modes = [config.MODE_SOLO, config.MODE_CLASSIC, config.MODE_VS_AI, config.MODE_PVP, config.MODE_SURVIVAL, "daily"]
+    modes = [config.MODE_SOLO, config.MODE_CLASSIC, config.MODE_VS_AI, config.MODE_PVP, config.MODE_SURVIVAL, "daily", "coop"]
     played = []
     original_menu = game_states.run_menu
 
@@ -60,7 +60,8 @@ def main():
         mode = modes[len(played) % len(modes)]
         played.append(mode)
         game_state['daily_challenge'] = (mode == "daily")
-        game_state['current_game_mode'] = config.MODE_SOLO if mode == "daily" else mode
+        game_state['coop'] = (mode == "coop")
+        game_state['current_game_mode'] = {"daily": config.MODE_SOLO, "coop": config.MODE_SURVIVAL}.get(mode, mode)
         game_state['selected_map_key'] = rng.choice(list(config.MAPS.keys()))
         game_state['current_random_map_walls'] = None
         game_states.reset_game(game_state)

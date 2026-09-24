@@ -11,6 +11,7 @@ import utils
 import game_objects
 import fx
 import boss as boss_mod
+import enemies
 import progress
 from render import draw_game_elements_on_surface
 from ui_common import get_joystick_ids
@@ -207,6 +208,17 @@ def reset_game(game_state):
         game_state['survival_wave_start_time'] = current_time_reset
         game_state['current_survival_interval_factor'] = config.SURVIVAL_INITIAL_INTERVAL_FACTOR
         print("Survival Mode Started - Wave 1")
+        if game_state.get('coop'):
+            try:
+                game_state['player2_snake'] = game_objects.Snake(
+                    player_num=2, name=game_state.get('player2_name_input', "Alex"), start_pos=p2_start,
+                    current_game_mode=current_game_mode, walls=current_map_walls_list,
+                    start_armor=start_armor_p1, start_ammo=start_ammo_p1
+                )
+                game_state['player2_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
+            except Exception as e:
+                logging.error(f"Coop : création du Joueur 2 impossible: {e}", exc_info=True)
+                game_state['player2_snake'] = None
         # === NOUVEAU: Spawn le premier nid pour la vague 1 ===
         num_initial_nests = min(1, config.MAX_NESTS_SURVIVAL) # Vague 1 = 1 nid
         # =======================================================
@@ -411,6 +423,10 @@ def run_game(events, dt, screen, game_state):
         except Exception: pass
         game_state['current_state'] = config.MENU; return config.MENU
 
+    # --- Coop (Survie à deux) : le Joueur 2 joue avec le Joueur 1 contre l'IA ---
+    coop = bool(game_state.get('coop')) and current_game_mode == config.MODE_SURVIVAL
+    two_players = current_game_mode == config.MODE_PVP or coop
+
     # --- Logique Principale ---
     game_over = False
     p1_died_this_frame = False
@@ -478,6 +494,7 @@ def run_game(events, dt, screen, game_state):
                 game_state['survival_wave_start_time'] = current_time
                 try:
                     boss_mod.maybe_spawn_boss(game_state, current_time, survival_wave)
+                    enemies.spawn_wave_enemies(game_state, current_time, survival_wave)
                     active_enemies = game_state.get('active_enemies', active_enemies)
                 except Exception as e:
                     logging.error(f"Erreur apparition boss: {e}", exc_info=True)
@@ -539,7 +556,7 @@ def run_game(events, dt, screen, game_state):
             target_snake = None
             if event.instance_id == p1_id and player_snake and player_snake.alive:
                 target_snake = player_snake
-            elif event.instance_id == p2_id and current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
+            elif event.instance_id == p2_id and two_players and player2_snake and player2_snake.alive:
                 target_snake = player2_snake
 
             if target_snake:
@@ -572,7 +589,7 @@ def run_game(events, dt, screen, game_state):
             target_snake_hat = None
             if event.instance_id == p1_id and player_snake and player_snake.alive:
                 target_snake_hat = player_snake
-            elif event.instance_id == p2_id and current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
+            elif event.instance_id == p2_id and two_players and player2_snake and player2_snake.alive:
                 target_snake_hat = player2_snake
 
             if target_snake_hat and event.hat == 0:
@@ -600,7 +617,7 @@ def run_game(events, dt, screen, game_state):
             # de perdre une partie sur un appui accidentel. "Quitter" reste dans le menu Pause.
             pause_button = int(getattr(config, 'BUTTON_PAUSE', 7))
             menu_button = int(getattr(config, 'BUTTON_BACK', 8))
-            pause_allowed = event.instance_id == p1_id or (current_game_mode == config.MODE_PVP and event.instance_id == p2_id)
+            pause_allowed = event.instance_id == p1_id or (two_players and event.instance_id == p2_id)
             if pause_allowed and event.button in (pause_button, menu_button):
                 logging.info(f"Joystick button {event.button} pressed, pausing game.")
                 try:
@@ -658,7 +675,7 @@ def run_game(events, dt, screen, game_state):
                  # --- END NEW BUTTON MAPPING ---
 
              # --- START: Player 2 Joystick Button Handling (PvP) ---
-            elif current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and event.instance_id == p2_id:
+            elif two_players and player2_snake and player2_snake.alive and event.instance_id == p2_id:
                 button = event.button
                 dash_button = int(getattr(config, 'BUTTON_SECONDARY_ACTION', 2))
                 shoot_button = int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1))
@@ -667,7 +684,7 @@ def run_game(events, dt, screen, game_state):
                 if button == dash_button: # Dash
                     logging.debug(f"P2 Button {button} (Dash) pressed")
                     if player2_snake.dash_ready:
-                        p2_obstacles_for_dash = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, None, mines, current_map_walls, [])
+                        p2_obstacles_for_dash = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, enemy_snake if coop else None, mines, current_map_walls, active_enemies if coop else [])
                         dash_result_p2 = player2_snake.activate_dash(current_time, p2_obstacles_for_dash, foods, powerups, mines, wall_positions)
 
                         if dash_result_p2 and dash_result_p2.get('died'):
@@ -683,7 +700,8 @@ def run_game(events, dt, screen, game_state):
                     logging.debug(f"P2 Button {button} (Shoot) pressed")
                     new_projectiles_list_p2 = player2_snake.shoot(current_time)
                     if new_projectiles_list_p2:
-                        game_state['player2_projectiles'].extend(new_projectiles_list_p2)
+                        # Coop : les tirs du J2 sont ceux de l'équipe (touchent mines, nids et IA)
+                        game_state['player_projectiles' if coop else 'player2_projectiles'].extend(new_projectiles_list_p2)
                         utils.play_sound(player2_snake.shoot_sound)
                 elif button == shield_button: # Shield
                     logging.debug(f"P2 Button {button} (Shield) pressed")
@@ -846,8 +864,8 @@ def run_game(events, dt, screen, game_state):
 
         # Mouvement Joueur 2 (PvP)
         # Seulement si pas déjà mort CETTE FRAME
-        if current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and not p2_died_this_frame:
-            p2_obstacles = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, None, mines, current_map_walls, []) # Pas d'IA en PvP
+        if two_players and player2_snake and player2_snake.alive and not p2_died_this_frame:
+            p2_obstacles = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, enemy_snake if coop else None, mines, current_map_walls, active_enemies if coop else [])
             p2_moved_this_frame, p2_new_head, p2_death_cause_detail = player2_snake.move(p2_obstacles, current_time)
 
             if not player2_snake.alive and not p2_died_this_frame: # Si .move() a causé la mort
@@ -1284,8 +1302,8 @@ def run_game(events, dt, screen, game_state):
                              break # Sort boucle segments P1
                      if hit_something_en: continue
 
-                 # Collision avec Joueur 2 (PvP)
-                 if current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and not player2_snake.ghost_active:
+                 # Collision avec Joueur 2 (PvP / Coop)
+                 if two_players and player2_snake and player2_snake.alive and not player2_snake.ghost_active:
                     for seg_pos_p2 in player2_snake.positions:
                         seg_rect_p2 = pygame.Rect(seg_pos_p2[0]*config.GRID_SIZE, seg_pos_p2[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
                         if en_proj.rect.colliderect(seg_rect_p2): # en_proj est le projectile IA
@@ -1761,8 +1779,9 @@ def run_game(events, dt, screen, game_state):
          game_state['active_enemies'] = new_active_enemies
          enemies_died_this_frame.clear()
 
-    # --- Boss (Survie) : récompense à sa défaite ---
+    # --- Boss (Survie) : récompense à sa défaite ; poseurs de mines ---
     try:
+        enemies.update_special_enemies(game_state, current_time)
         boss_mod.update_boss(game_state, current_time)
     except Exception as e:
         logging.error(f"Erreur mise à jour boss: {e}", exc_info=True)
@@ -1866,6 +1885,13 @@ def run_game(events, dt, screen, game_state):
     except Exception as e:
          logging.error(f"Erreur lors de la vérification de fin de partie: {e}", exc_info=True); game_over = True
 
+
+    # Sécurité : J1 mort par une cause non suivie ci-dessus (ex : explosion) -> fin de partie
+    if current_game_mode != config.MODE_PVP and not coop and player_snake and not player_snake.alive:
+        game_over = True
+    # Coop : la partie continue tant qu'un des deux joueurs est en vie
+    if coop:
+        game_over = not ((player_snake and player_snake.alive) or (player2_snake and player2_snake.alive))
 
     # --- Transition vers Game Over ---
     if game_over:

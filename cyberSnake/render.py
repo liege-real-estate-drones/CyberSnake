@@ -309,7 +309,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
     if player_snake:
         try: player_snake.draw(target_surface, current_time, font_small, font_default)
         except Exception as e: print(f"Erreur dessin serpent J1: {e}")
-    if current_game_mode == config.MODE_PVP and player2_snake:
+    if player2_snake:  # PvP ou Coop
         try: player2_snake.draw(target_surface, current_time, font_small, font_default)
         except Exception as e: print(f"Erreur dessin serpent J2: {e}")
     if current_game_mode == config.MODE_VS_AI and enemy_snake and enemy_snake.alive:
@@ -862,7 +862,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
 
     # --- ** Panneau UI Joueur 2 (Bottom-Right) ** ---
     
-    if current_game_mode == config.MODE_PVP and player2_snake:
+    if player2_snake:  # PvP ou Coop
         try:
             p2_ui_elements_height = 0
             line_height_default = font_default.get_height()
@@ -1000,7 +1000,8 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
             kill_target_display_p2 = str(pvp_target_kills) if not is_timer_condition_p2 else '-'
             y_p2_ui -= gap
             y_p2_ui -= line_height_default
-            utils.draw_text_with_shadow(target_surface, f"Kills: {player2_snake.kills}/{kill_target_display_p2}",
+            kills_label_p2 = f"Kills: {player2_snake.kills}/{kill_target_display_p2}" if current_game_mode == config.MODE_PVP else "COOP"
+            utils.draw_text_with_shadow(target_surface, kills_label_p2,
                                         font_default, config.COLOR_KILLS_TEXT_P2, config.COLOR_UI_SHADOW,
                                         (x_p2_ui, y_p2_ui), "bottomleft")
             armor_color_p2 = config.COLOR_ARMOR_TEXT

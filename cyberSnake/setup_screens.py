@@ -610,7 +610,10 @@ def run_map_selection(events, dt, screen, game_state):
                     is_pvp = current_game_mode == config.MODE_PVP
                     logging.info(f"DEBUG MAP SELECTION: Transition - Mode PVP: {is_pvp}, État actuel: {next_state}")
                     
-                    if is_pvp:
+                    if game_state.get('coop') and current_game_mode == config.MODE_SURVIVAL:
+                        next_state = config.NAME_ENTRY_PVP  # Coop : saisie des deux noms, puis partie
+                        game_state['pvp_name_entry_stage'] = 1
+                    elif is_pvp:
                         next_state = config.PVP_SETUP
                         logging.info(f"DEBUG MAP SELECTION: Transition vers PVP_SETUP (état {config.PVP_SETUP})")
                     else:
@@ -729,7 +732,10 @@ def run_map_selection(events, dt, screen, game_state):
                     _map_selection_needs_update = True # Force rechargement au prochain affichage
 
                     # Redirection après sélection de carte
-                    if current_game_mode == config.MODE_PVP:
+                    if game_state.get('coop') and current_game_mode == config.MODE_SURVIVAL:
+                        next_state = config.NAME_ENTRY_PVP
+                        game_state['pvp_name_entry_stage'] = 1
+                    elif current_game_mode == config.MODE_PVP:
                         next_state = config.PVP_SETUP
                     else:
                         reset_game(game_state) # Prépare le jeu
@@ -2273,7 +2279,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 game_state.pop('name_entry_stage', None)
                 game_state.pop('name_entry_start_time_pvp', None)
 
-                next_state = config.PVP_SETUP
+                next_state = config.MAP_SELECTION if game_state.get('coop') else config.PVP_SETUP
                 game_state['pvp_name_entry_stage'] = 1
                 game_state['current_state'] = next_state
                 return next_state
@@ -2367,7 +2373,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             # Toujours autoriser la touche Escape
             if key == pygame.K_ESCAPE:
                 game_state['pvp_name_entry_stage'] = 1 # Réinitialise l'étape
-                next_state = config.PVP_SETUP
+                next_state = config.MAP_SELECTION if game_state.get('coop') else config.PVP_SETUP
                 utils.play_sound("combo_break")
                 return next_state
             # Pour toutes les autres touches, vérifier si l'entrée est active

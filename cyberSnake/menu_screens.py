@@ -25,6 +25,13 @@ def _activate_menu_option(game_state, menu_options, menu_selection_index):
     game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
     if selected_option == config.DAILY_CHALLENGE:
         selected_option = config.MODE_SOLO
+    # Coop = Survie avec deux joueurs (choix d'arène, puis les deux noms)
+    game_state['coop'] = (selected_option == config.COOP_SURVIVAL)
+    if selected_option == config.COOP_SURVIVAL:
+        game_state['current_game_mode'] = config.MODE_SURVIVAL
+        game_state['current_state'] = config.MAP_SELECTION
+        game_state['menu_selection_index'] = menu_selection_index
+        return config.MAP_SELECTION
 
     if selected_option in (config.HALL_OF_FAME, config.UPDATE, config.OPTIONS):
         next_state = selected_option
@@ -104,6 +111,7 @@ def run_menu(events, dt, screen, game_state):
         (config.MODE_VS_AI, "Joueur vs IA", top_vsai_hs),
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),
         (config.MODE_SURVIVAL, "Mode Survie", top_surv_hs),
+        (config.COOP_SURVIVAL, "Survie à deux (Coop)", "Deux joueurs ensemble contre les vagues et les boss"),
         (config.OPTIONS, "Options", ""),
         (config.HALL_OF_FAME, "Hall of Fame", ""),
         (config.UPDATE, "Mise à jour", "")

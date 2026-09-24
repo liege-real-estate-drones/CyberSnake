@@ -1770,18 +1770,6 @@ class Snake:
         _g = int(getattr(config, "GRID_SIZE", 20))
         self._render_head_center_px = (render_px[0][0] + _g // 2, render_px[0][1] + _g // 2)
 
-        # Halo néon sous le serpent (tête plus lumineuse)
-        if getattr(config, "NEON_GLOW", True):
-            try:
-                glow_col = self.color
-                boss_k = 1.5 if getattr(self, 'is_boss', False) else 1.0
-                for i, (gx, gy) in enumerate(render_px):
-                    if i == 0:
-                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.7 * boss_k, 8)
-                    elif i % 2 == 0 or len(render_px) < 12 or boss_k > 1.0:
-                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.3 * boss_k, 5)
-            except Exception:
-                pass
 
         def _draw_armor_pips(head_rect):
             """Affiche l'armure restante (très lisible) près de la tête."""
@@ -1927,6 +1915,19 @@ class Snake:
             if flash: # Si un des flashs doit rendre invisible
                 return
 
+        # Halo néon sous le serpent (tête plus lumineuse)
+        if getattr(config, "NEON_GLOW", True):
+            try:
+                glow_col = self.color
+                boss_k = 1.5 if getattr(self, 'is_boss', False) else 1.0
+                for i, (gx, gy) in enumerate(render_px):
+                    if i == 0:
+                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.7 * boss_k, 8)
+                    elif i % 2 == 0 or len(render_px) < 12 or boss_k > 1.0:
+                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.3 * boss_k, 5)
+            except Exception:
+                pass
+
         # --- Détermination Couleur de Base ---
         base_color = self.color
         if current_time < getattr(self, '_hit_flash_until', 0): # Flash d'impact
@@ -1953,8 +1954,8 @@ class Snake:
         if current_time < getattr(self, '_hit_flash_until', 0):
              tint_color_to_use = config.COLOR_WHITE
              tint_alpha = 170
-        elif getattr(self, 'is_boss', False):
-             tint_color_to_use = self.color  # Boss : teinte violette permanente
+        elif getattr(self, 'is_boss', False) or getattr(self, 'special_tint', None):
+             tint_color_to_use = getattr(self, 'special_tint', None) or self.color  # Boss / ennemis spéciaux
              tint_alpha = 130
         # 1. Effect Tint (Si une couleur d'effet est active et différente de la couleur de base)
         elif base_color != self.color:
