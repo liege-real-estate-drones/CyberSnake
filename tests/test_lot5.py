@@ -30,6 +30,7 @@ import menu_input  # noqa: E402
 import game_objects  # noqa: E402
 import pvp_rounds  # noqa: E402
 import maps_extra  # noqa: E402
+import boss  # noqa: E402
 
 utils.load_assets(GAME_DIR)
 FONTS = utils.load_fonts(GAME_DIR, 1.0)
@@ -349,6 +350,113 @@ class TestNewMaps(unittest.TestCase):
             self.assertTrue(gs['player_snake'].alive, key)
         gs = new_game(config.MODE_SOLO, "Labyrinthe Mouvant")
         self.assertTrue(gs['arena']['lasers'])
+
+
+class FakeClock:
+    """Horloge factice : pygame.time.get_ticks avance de 16 ms par image."""
+
+    def __enter__(self):
+        self.now = [pygame.time.get_ticks() + 100000]
+        self._orig = pygame.time.get_ticks
+        pygame.time.get_ticks = lambda: self.now[0]
+        return self
+
+    def tick(self, ms=16):
+        self.now[0] += ms
+
+    def __exit__(self, *exc):
+        pygame.time.get_ticks = self._orig
+
+
+class TestBoss(unittest.TestCase):
+    def _boss_game(self):
+        gs = new_game(config.MODE_SURVIVAL)
+        gs['player_snake'].invincible_timer = 10 ** 12
+        now = game_clock.ticks()
+        b = boss.maybe_spawn_boss(gs, now, 5)
+        self.assertIsInstance(b, boss.BossSnake)
+        b.invincible_timer = 0
+        return gs, b, now
+
+    def test_fan_attack_fires_spread_shots(self):
+        gs, b, now = self._boss_game()
+        b.attack, b.attack_start = 'fan', now - boss.FAN_WARN_MS
+        boss.update_boss(gs, now)
+        self.assertEqual(len(gs['enemy_projectiles']), 5)
+        dirs = {tuple(round(v, 2) for v in p.direction) for p in gs['enemy_projectiles']}
+        self.assertEqual(len(dirs), 5)
+
+    def test_mines_attack_drops_mines_on_body(self):
+        gs, b, now = self._boss_game()
+        b.positions = [(10 + i, 5) for i in range(12)]
+        b.next_attack_time = now
+        b.last_attack = None
+        import random as _r
+        orig = _r.choice
+        _r.choice = lambda seq: 'mines' if 'mines' in seq else orig(seq)
+        try:
+            boss.update_boss(gs, now)
+        finally:
+            _r.choice = orig
+        self.assertTrue(gs['mines'])
+        self.assertTrue(all(m.position in b.positions for m in gs['mines']))
+
+    def test_charge_is_announced_then_fast_then_stuns_on_wall(self):
+        gs, b, now = self._boss_game()
+        b.positions = [(10, 10), (9, 10), (8, 10)]
+        b.current_direction = b.next_direction = config.RIGHT
+        gs['player_snake'].positions = [(30, 10), (29, 10)]
+        self.assertTrue(boss._start_charge(gs, b, now))
+        self.assertEqual(b.charge_dir, config.RIGHT)
+        slow = b.get_current_move_interval()
+        self.assertFalse(b.is_charging(now))
+        later = now + boss.CHARGE_WARN_MS + 10
+        with FakeClock() as clock:
+            game_clock.set_running(True)
+            clock.now[0] = later + game_clock._paused_total
+            self.assertTrue(b.is_charging(game_clock.ticks()))
+            self.assertLess(b.get_current_move_interval(), slow)
+        armor = b.armor
+        b.current_walls.append((11, 10))
+        b.choose_direction(gs['player_snake'], None, [], [], [], [], set(), current_time=later)
+        self.assertGreater(b.stunned_until, later)
+        self.assertEqual(b.armor, armor - 1)
+        self.assertIsNone(b.attack)
+        b.current_walls.remove((11, 10))
+
+    def test_phase_two_at_half_life(self):
+        gs, b, now = self._boss_game()
+        b.armor = (b.boss_max_armor + 1) // 2 - 1
+        boss.update_boss(gs, now)
+        self.assertEqual(b.phase, 2)
+        self.assertIn("PHASE 2", gs['boss_banner_text'])
+        boss.draw_boss_ui(pygame.Surface((800, 600)), gs, now, FONTS['default'], FONTS['medium'])
+
+    def test_boss_fight_runs_and_boss_can_be_beaten(self):
+        with FakeClock() as clock:
+            gs = new_game(config.MODE_SURVIVAL)
+            p = gs['player_snake']
+            gs['survival_wave'] = 4
+            gs['survival_wave_start_time'] = game_clock.ticks() - config.SURVIVAL_WAVE_DURATION - 1
+            surf = pygame.Surface((800, 600))
+            attacks = set()
+            for _ in range(1500):
+                p.invincible_timer = game_clock.ticks() + 10 ** 6
+                p.alive = True
+                gameplay.run_game([], 16, surf, gs)
+                b = gs.get('boss')
+                if b is not None and b.attack:
+                    attacks.add(b.attack)
+                if b is not None and b.last_attack:
+                    attacks.add(b.last_attack)
+                clock.tick()
+            self.assertIsNotNone(gs.get('boss'))
+            self.assertGreaterEqual(len(attacks), 2, attacks)
+            gs['boss'].armor = 0
+            gs['boss'].handle_damage(game_clock.ticks(), p)
+            boss.update_boss(gs, game_clock.ticks())
+            self.assertIsNone(gs.get('boss'))
+            self.assertIn("BOSS VAINCU", gs['boss_banner_text'])
 
 
 if __name__ == "__main__":
