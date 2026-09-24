@@ -24,6 +24,10 @@ import game_clock  # noqa: E402
 import gameplay  # noqa: E402
 import music  # noqa: E402
 import hud  # noqa: E402
+import rules  # noqa: E402
+import keyboard_controls  # noqa: E402
+import menu_input  # noqa: E402
+import game_objects  # noqa: E402
 
 utils.load_assets(GAME_DIR)
 FONTS = utils.load_fonts(GAME_DIR, 1.0)
@@ -135,6 +139,121 @@ class TestImages(unittest.TestCase):
     def test_new_sounds_exist(self):
         for key in ("skill_ready", "boss_charge", "boss_phase", "boss_fan", "round_win"):
             self.assertTrue(os.path.exists(os.path.join(GAME_DIR, config.SOUND_PATHS[key])), key)
+
+
+class MemoryOptions:
+    """Remplace game_options.json par un dictionnaire (les tests n'écrivent rien sur disque)."""
+
+    def __enter__(self):
+        import copy
+        self.data = copy.deepcopy(utils.DEFAULT_GAME_OPTIONS)
+        self._load, self._save = utils.load_game_options, utils.save_game_options
+        utils.load_game_options = lambda base_path="": copy.deepcopy(self.data)
+        utils.save_game_options = lambda opts, base_path="": self.data.update(copy.deepcopy(opts))
+        rules._saved.clear()
+        return self
+
+    def __exit__(self, *exc):
+        utils.load_game_options, utils.save_game_options = self._load, self._save
+        rules._saved.clear()
+        rules.begin({'current_game_mode': config.MODE_CLASSIC})
+
+
+def key(k, t=None):
+    return pygame.event.Event(t or pygame.KEYDOWN, key=k, mod=0, unicode="", scancode=0)
+
+
+class TestKeyboard(unittest.TestCase):
+    def test_mapping_solo_and_two_players(self):
+        self.assertEqual(keyboard_controls.game_action(pygame.K_z, False), (1, 'up'))
+        self.assertEqual(keyboard_controls.game_action(pygame.K_UP, False), (1, 'up'))
+        self.assertEqual(keyboard_controls.game_action(pygame.K_UP, True), (2, 'up'))
+        self.assertEqual(keyboard_controls.game_action(pygame.K_RCTRL, True), (2, 'shoot'))
+        self.assertIsNone(keyboard_controls.game_action(pygame.K_F1, True))
+
+    def test_keyboard_shoots_and_pauses_in_game(self):
+        gs = new_game(config.MODE_SOLO)
+        gs['player_snake'].ammo = 5
+        gs['player_snake'].last_shot_time = -10 ** 6
+        gameplay.run_game([key(pygame.K_SPACE)], 16, pygame.Surface((800, 600)), gs)
+        self.assertEqual(len(gs['player_projectiles']), 1)
+        self.assertEqual(gameplay.run_game([key(pygame.K_ESCAPE)], 16, pygame.Surface((800, 600)), gs), config.PAUSED)
+
+    def test_keyboard_dash_uses_shared_action(self):
+        gs = new_game(config.MODE_SOLO)
+        p = gs['player_snake']
+        gameplay.run_game([key(pygame.K_LSHIFT)], 16, pygame.Surface((800, 600)), gs)
+        self.assertFalse(p.dash_ready)
+
+    def test_echo_filter_drops_game_keys_next_to_joystick(self):
+        f = menu_input.KeyboardEchoFilter()
+        joy = pygame.event.Event(pygame.JOYBUTTONDOWN, button=1, instance_id=0, joy=0)
+        out = f.process([joy, key(pygame.K_SPACE), key(pygame.K_LSHIFT)], 1000, True)
+        out += f.process([], 1016, True)
+        self.assertEqual([e.type for e in out], [pygame.JOYBUTTONDOWN])
+        out = f.process([key(pygame.K_e)], 5000, True) + f.process([], 5016, True)
+        self.assertEqual(len(out), 1)  # Sans action manette proche : touche gardée
+
+    def test_menu_arrows_become_hat_and_enter_confirm(self):
+        out = keyboard_controls.translate_menu_keys([key(pygame.K_DOWN), key(pygame.K_RETURN), key(pygame.K_a)], 7)
+        self.assertEqual(out[0].type, pygame.JOYHATMOTION)
+        self.assertEqual((out[0].instance_id, out[0].value), (7, (0, -1)))
+        self.assertEqual((out[1].type, out[1].button), (pygame.JOYBUTTONDOWN, config.BUTTON_PRIMARY_ACTION))
+        self.assertEqual(out[2].key, pygame.K_a)
+
+
+class TestRules(unittest.TestCase):
+    def test_disabled_food_never_spawns(self):
+        with MemoryOptions():
+            for k in ("powerups.poison", "powerups.ghost"):
+                rules.set_value(k, False)
+            rules.begin({'current_game_mode': config.MODE_SOLO})
+            kinds = {utils.choose_food_type(config.MODE_SOLO, None) for _ in range(600)}
+            self.assertNotIn("poison", kinds)
+            self.assertNotIn("ghost", kinds)
+            self.assertFalse(rules.powerup_allowed("emp") is False)
+
+    def test_growth_per_food(self):
+        with MemoryOptions():
+            rules.set_value("growth_per_food", 3)
+            gs = new_game(config.MODE_SOLO)
+            p = gs['player_snake']
+            before = p.length
+            food = game_objects.Food((1, 1), 'normal')
+            gameplay._eat_food(gs, p, food, game_clock.ticks())
+            self.assertEqual(p.length, before + 3)
+
+    def test_classic_and_daily_ignore_rules(self):
+        with MemoryOptions():
+            rules.set_value("growth_per_food", 0)
+            self.assertFalse(rules.begin({'current_game_mode': config.MODE_CLASSIC}))
+            self.assertEqual(rules.growth_per_food(), 1)
+            self.assertFalse(rules.begin({'current_game_mode': config.MODE_SOLO, 'daily_challenge': True}))
+            self.assertTrue(rules.begin({'current_game_mode': config.MODE_SOLO}))
+            self.assertEqual(rules.growth_per_food(), 0)
+
+    def test_no_mines_rule(self):
+        with MemoryOptions():
+            rules.set_value("mine_density", "none")
+            gs = new_game(config.MODE_SOLO)
+            gs['player_snake'].invincible_timer = 10 ** 9
+            gs['last_mine_spawn_time'] = -10 ** 6
+            gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+            self.assertEqual(gs['mines'], [])
+
+    def test_friendly_fire_in_coop(self):
+        with MemoryOptions():
+            rules.set_value("pvp.friendly_fire", True)
+            gs = new_game(config.MODE_SURVIVAL, coop=True)
+            p1, p2 = gs['player_snake'], gs['player2_snake']
+            p2.invincible_timer = 0
+            p2.armor = 1
+            g = config.GRID_SIZE
+            hx, hy = p2.positions[0]
+            shot = game_objects.Projectile(hx * g + g // 2, hy * g + g // 2, (1, 0), 0, (255, 255, 0), 5, p1)
+            gs['player_projectiles'].append(shot)
+            gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+            self.assertEqual(p2.armor, 0)
 
 
 if __name__ == "__main__":

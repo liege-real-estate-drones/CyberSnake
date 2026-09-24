@@ -685,6 +685,9 @@ DAILY_CHALLENGE = 106 # Entrée de menu : Défi du jour (partie Solo imposée)
 HOW_TO_PLAY = 107 # Écran « Comment jouer » (boucle d'attente)
 COOP_SURVIVAL = 108 # Entrée de menu : Survie à deux (Coop)
 STICK_WIZARD = 109 # Assistant sticks J1 / J2 (Options > Contrôles)
+RULES = 110 # Règles personnalisées (mutateurs), menu principal
+BUTTON_COLORS_SCREEN = 111 # Couleur de chaque bouton de la borne (Options)
+ROUND_SCORE = 112 # Score entre deux manches (PvP en manches)
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)

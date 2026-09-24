@@ -12,6 +12,7 @@ import pygame
 
 import config
 import joy_map
+import keyboard_controls
 
 REPEAT_INITIAL_DELAY_MS = 400
 # > 200 ms : les menus ignorent les mouvements plus rapprochés que 200 ms
@@ -140,6 +141,8 @@ def _echo_keys():
     if _ECHO_KEYS is None:
         _ECHO_KEYS = {pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT,
                       pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE}
+        # Touches de jeu au clavier (keyboard_controls) : evmapy peut aussi les produire
+        _ECHO_KEYS |= keyboard_controls.game_keys()
     return _ECHO_KEYS
 
 

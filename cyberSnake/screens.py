@@ -13,6 +13,8 @@ import pygame
 import config
 import utils
 import fx
+import keyboard_controls
+import settings_screens
 
 ATTRACT_TITLE_MS = 12000   # Durée de l'écran titre avant la démo
 ATTRACT_DEMO_MS = 45000    # Durée de la démo dans la boucle d'attente
@@ -469,33 +471,34 @@ def run_how_to_play(events, dt, screen, game_state):
     title = _glow_text(font_large, "COMMENT JOUER", (230, 255, 240), (0, 255, 150), 10)
     screen.blit(title, title.get_rect(center=(sw // 2, int(sh * 0.09))))
 
-    # Commandes (boutons configurés)
+    # Commandes : stick et boutons dessinés à la couleur des boutons de la borne
+    # (Options > Couleurs des boutons), puis rappel des touches du clavier
     ctrl = pygame.Rect(int(sw * 0.04), int(sh * 0.18), int(sw * 0.34), int(sh * 0.68))
     _draw_panel(screen, ctrl)
     utils.draw_text(screen, "COMMANDES", font_medium, config.COLOR_HOF_CATEGORY, (ctrl.centerx, ctrl.top + 14), "midtop")
-    lines = [
-        ("Stick", "Diriger le serpent"),
-        (f"Bouton {getattr(config, 'BUTTON_PRIMARY_ACTION', 1)}", "Tirer"),
-        (f"Bouton {getattr(config, 'BUTTON_SECONDARY_ACTION', 0)}", "Dash (ruée)"),
-        (f"Bouton {getattr(config, 'BUTTON_TERTIARY_ACTION', 3)}", "Bouclier"),
-        (f"Bouton {getattr(config, 'BUTTON_PAUSE', 7)}", "Pause"),
-        (f"Bouton {getattr(config, 'BUTTON_BACK', 8)}", "Pause / quitter"),
-    ]
     y = ctrl.top + 24 + font_medium.get_height()
-    row_h = max(font_default.get_linesize() + 14, int(ctrl.height * 0.1))
-    for key, action in lines:
-        key_rect = pygame.Rect(ctrl.left + 20, y, int(ctrl.width * 0.36), row_h - 10)
-        pygame.draw.rect(screen, (20, 40, 70), key_rect, border_radius=8)
-        pygame.draw.rect(screen, (0, 200, 255), key_rect, 2, border_radius=8)
-        utils.draw_text(screen, key, font_default, (220, 245, 255), key_rect.center, "center")
-        utils.draw_text(screen, action, font_default, config.COLOR_TEXT_MENU, (key_rect.right + 16, key_rect.centery), "midleft")
+    row_h = max(font_default.get_linesize() + 12, int(ctrl.height * 0.095))
+    radius = max(10, int(row_h * 0.36))
+    cx = ctrl.left + 20 + radius + 4
+    # Stick d'arcade
+    pygame.draw.ellipse(screen, (40, 44, 60), pygame.Rect(cx - radius - 2, y + row_h // 2, 2 * radius + 4, radius))
+    pygame.draw.line(screen, (160, 165, 180), (cx, y + row_h // 2 + 4), (cx, y + row_h // 2 - radius // 2), max(3, radius // 3))
+    pygame.draw.circle(screen, (220, 40, 50), (cx, y + row_h // 2 - radius // 2), max(5, int(radius * 0.7)))
+    utils.draw_text(screen, "Diriger le serpent", font_default, config.COLOR_TEXT_MENU, (cx + radius + 16, y + row_h // 2), "midleft")
+    y += row_h
+    for action, label in (("PRIMARY", "Tirer"), ("SECONDARY", "Dash (ruée)"), ("TERTIARY", "Bouclier"),
+                          ("PAUSE", "Pause"), ("BACK", "Pause / quitter")):
+        settings_screens.draw_arcade_button(screen, (cx, y + row_h // 2), radius, action)
+        utils.draw_text(screen, label, font_default, config.COLOR_TEXT_MENU, (cx + radius + 16, y + row_h // 2), "midleft")
         y += row_h
-    tips = ["Manger fait grandir et rapporte des points.", "Évite les murs, les mines et ton corps.",
-            "Enchaîne vite pour faire des combos !"]
-    y += 6
-    for tip in tips:
-        utils.draw_text(screen, tip, font_small, (150, 180, 210), (ctrl.left + 20, y), "topleft")
+    y += 4
+    utils.draw_text(screen, "Au clavier :", font_small, config.COLOR_TEXT_HIGHLIGHT, (ctrl.left + 20, y), "topleft")
+    y += font_small.get_linesize()
+    for who, keys in keyboard_controls.HELP:
+        line = f"{who} : {keys[0][0]} + " + " / ".join(k for k, _a in keys[1:])
+        utils.draw_text(screen, line, font_small, (150, 180, 210), (ctrl.left + 20, y), "topleft")
         y += font_small.get_linesize()
+    utils.draw_text(screen, "(tir / dash / bouclier)   Échap ou P : pause", font_small, (150, 180, 210), (ctrl.left + 20, y), "topleft")
 
     # Objets
     items = pygame.Rect(ctrl.right + int(sw * 0.02), ctrl.top, sw - ctrl.right - int(sw * 0.06), ctrl.height)

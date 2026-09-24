@@ -9,6 +9,7 @@ import config
 import utils
 import progress
 import music
+import rules
 import borne_install
 import stick_wizard
 from setup_screens import invalidate_map_selection_cache
@@ -36,7 +37,7 @@ def _activate_menu_option(game_state, menu_options, menu_selection_index):
         game_state['menu_selection_index'] = menu_selection_index
         return config.MAP_SELECTION
 
-    if selected_option in (config.HALL_OF_FAME, config.UPDATE, config.OPTIONS):
+    if selected_option in (config.HALL_OF_FAME, config.UPDATE, config.OPTIONS, config.RULES):
         next_state = selected_option
     elif isinstance(selected_option, config.GameMode):
         game_state['current_game_mode'] = selected_option
@@ -107,6 +108,11 @@ def run_menu(events, dt, screen, game_state):
         daily_info = f"Aujourd'hui : {_dm_name} | Meilleur du jour : {_daily_best}"
     except Exception:
         daily_info = "Une partie Solo imposée, la même pour tous aujourd'hui"
+    try:
+        rules_info = "ACTIVES : poison, fantôme, gel, bouclier, croissance, mines..." if rules.is_custom() else \
+            "Mutateurs : poison, fantôme, gel, bouclier, croissance, mines, tirs alliés"
+    except Exception:
+        rules_info = ""
     menu_options = [
         (config.MODE_SOLO, "Joueur Seul", top_solo_hs),
         (config.DAILY_CHALLENGE, "Défi du jour", daily_info),
@@ -115,6 +121,7 @@ def run_menu(events, dt, screen, game_state):
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),
         (config.MODE_SURVIVAL, "Mode Survie", top_surv_hs),
         (config.COOP_SURVIVAL, "Survie à deux (Coop)", "Deux joueurs ensemble contre les vagues et les boss"),
+        (config.RULES, "Règles personnalisées", rules_info),
         (config.OPTIONS, "Options", ""),
         (config.HALL_OF_FAME, "Hall of Fame", ""),
         (config.UPDATE, "Mise à jour", "")
@@ -729,6 +736,7 @@ def run_options(events, dt, screen, game_state):
         ("Volume musique", music_volume_display),
         ("Volume effets", sound_volume_display),
         ("Contrôles", ""),
+        ("Couleurs des boutons", ""),
         ("Réinitialiser", ""),
         ("Appliquer", ""),
         ("Retour", ""),
@@ -753,9 +761,10 @@ def run_options(events, dt, screen, game_state):
     IDX_MUSIC_VOL = 16
     IDX_SOUND_VOL = 17
     IDX_CONTROLS = 18
-    IDX_RESET = 19
-    IDX_APPLY = 20
-    IDX_BACK = 21
+    IDX_BUTTON_COLORS = 19
+    IDX_RESET = 20
+    IDX_APPLY = 21
+    IDX_BACK = 22
 
     def cycle_visual_fx(delta):
         nonlocal pending_visual_fx
@@ -1161,6 +1170,12 @@ def run_options(events, dt, screen, game_state):
             utils.play_sound("menu_select")
             game_state['controls_return_state'] = config.OPTIONS
             next_state = config.CONTROLS
+            return True
+
+        if selection_index == IDX_BUTTON_COLORS:
+            utils.play_sound("menu_select")
+            game_state['button_colors_return_state'] = config.OPTIONS
+            next_state = config.BUTTON_COLORS_SCREEN
             return True
 
         if selection_index == IDX_RESET:

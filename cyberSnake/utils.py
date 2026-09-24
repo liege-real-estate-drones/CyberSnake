@@ -737,6 +737,12 @@ def choose_food_type(current_game_mode, current_objective):
         current_probs.pop('freeze_opponent', None)
     # --- FIN MODIFICATION ---
 
+    # Règles personnalisées : Poison / Fantôme / Gel désactivables
+    import rules
+    for type_key in list(current_probs):
+        if not rules.food_allowed(type_key):
+            current_probs.pop(type_key, None)
+
     valid_types = list(current_probs.keys())
     total_prob = sum(current_probs.values())
 
