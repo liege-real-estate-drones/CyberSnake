@@ -129,3 +129,65 @@ class MenuInputTranslator:
                 st['last_repeat'] = now
                 out.append(_hat_event(inst, st['dir']))
         return out
+
+
+# Touches que Batocera (evmapy) fabrique à partir du stick et des boutons pendant un jeu.
+_ECHO_KEYS = None
+
+
+def _echo_keys():
+    global _ECHO_KEYS
+    if _ECHO_KEYS is None:
+        _ECHO_KEYS = {pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT,
+                      pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE}
+    return _ECHO_KEYS
+
+
+class KeyboardEchoFilter:
+    """Supprime les « échos clavier » des manettes.
+
+    Sur Batocera, evmapy convertit les mouvements du stick et les boutons en touches
+    clavier (flèches, Entrée, Échap...). Le jeu recevait donc chaque action deux fois,
+    parfois dans un sens différent : navigation qui « s'annule » dans les menus.
+    Une touche de navigation arrivée à moins de ECHO_WINDOW_MS d'une action manette est
+    ignorée. Les touches sont retenues une image pour voir si l'action manette arrive
+    juste après. Sans manette branchée, le clavier fonctionne normalement.
+    """
+
+    ECHO_WINDOW_MS = 150
+
+    def __init__(self):
+        self._pending = []      # (événement, instant)
+        self._last_joy = -10 ** 9
+        self._echo_held = set()  # Touches reconnues comme écho, encore enfoncées
+        self.dropped = 0
+
+    def _drop(self, ev):
+        self.dropped += 1
+        if ev.type == pygame.KEYDOWN:
+            self._echo_held.add(ev.key)
+        else:
+            self._echo_held.discard(ev.key)
+
+    def process(self, events, now, joystick_present):
+        joy_types = (pygame.JOYAXISMOTION, pygame.JOYHATMOTION, pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP)
+        if any(ev.type in joy_types for ev in events):
+            self._last_joy = now
+        out = []
+        # Touches retenues à l'image précédente : écho si une action manette est proche
+        for ev, t in self._pending:
+            if abs(self._last_joy - t) <= self.ECHO_WINDOW_MS:
+                self._drop(ev)
+            else:
+                out.append(ev)
+        self._pending = []
+        for ev in events:
+            if joystick_present and ev.type in (pygame.KEYDOWN, pygame.KEYUP) and \
+                    getattr(ev, 'key', None) in _echo_keys():
+                if ev.key in self._echo_held or abs(now - self._last_joy) <= self.ECHO_WINDOW_MS:
+                    self._drop(ev)  # Écho (ou répétition automatique d'un écho)
+                else:
+                    self._pending.append((ev, now))
+                continue
+            out.append(ev)
+        return out
