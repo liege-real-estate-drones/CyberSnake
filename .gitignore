@@ -18,3 +18,8 @@ Thumbs.db
 
 # Progression du joueur (créée par le jeu)
 cyberSnake/progress.json
+
+# Données du joueur (créées par le jeu, conservées lors des mises à jour)
+cyberSnake/highscores.json
+cyberSnake/favorite_maps.json
+cyberSnake/.cybersnake_manifest.txt

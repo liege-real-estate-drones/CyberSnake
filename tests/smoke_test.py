@@ -44,7 +44,9 @@ def main():
 
     pygame.time.Clock = FakeClock
     pygame.time.wait = lambda ms: None
-    game_states.update_worker = lambda gs: gs.update({'update_status': 'error', 'update_error_msg': 'test'})
+    import updater
+    # Pas de vraie mise à jour pendant les tests
+    updater.update_worker = lambda gs: gs.update({'update_status': 'error', 'update_error_msg': 'test'})
 
     # Chaque passage au menu lance directement une partie dans le mode suivant
     modes = [config.MODE_SOLO, config.MODE_CLASSIC, config.MODE_VS_AI, config.MODE_PVP, config.MODE_SURVIVAL, "daily"]
