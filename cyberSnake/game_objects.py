@@ -2,8 +2,6 @@
 
 # -*- coding: utf-8 -*-
 import pygame
-
-import game_clock
 import random
 import math
 import colorsys
@@ -11,6 +9,7 @@ from collections import defaultdict, OrderedDict, deque
 
 # Importe toutes les constantes depuis config.py
 import config
+import game_clock
 # Importe le module utils pour accéder aux fonctions utilitaires
 import utils
 import fx
@@ -386,6 +385,7 @@ class MovingMine:
         self.y = float(spawn_pixel_y)
         self.speed = config.MOVING_MINE_SPEED * config.GRID_SIZE / 20.0
         self.spawn_time = game_clock.ticks()
+        self.warn_until = self.spawn_time + config.MOVING_MINE_WARN_MS  # Alerte avant d'entrer
         self.is_active = True
         self.size = config.GRID_SIZE
         self.rect = pygame.Rect(int(self.x - self.size // 2), int(self.y - self.size // 2), self.size, self.size)
@@ -412,7 +412,9 @@ class MovingMine:
             return False
         if current_time is None:
             current_time = game_clock.ticks()
-        if current_time - self.spawn_time > config.MOVING_MINE_LIFETIME:
+        if current_time < getattr(self, 'warn_until', 0):
+            return False  # Encore au bord : le joueur voit l'alerte
+        if current_time - self.spawn_time > config.MOVING_MINE_LIFETIME + config.MOVING_MINE_WARN_MS:
             self.is_active = False  # S'éteint (pas de dégâts)
             cx, cy = self.get_center_pos_px()
             utils.emit_particles(cx, cy, 8, [config.COLOR_MINE_ALT, (90, 90, 110)], (1, 3), (200, 500), (1, 3))
@@ -471,6 +473,9 @@ class MovingMine:
             return
 
         current_time = game_clock.ticks()
+        if current_time < getattr(self, 'warn_until', 0):
+            self._draw_warning(surface, current_time)
+            return
         flash_state = (current_time // 120) % 2 == 0  # Clignote vite : elle fonce sur toi
         try:
             # Traînée derrière la mine
@@ -483,6 +488,27 @@ class MovingMine:
             surface.blit(sprite, sprite.get_rect(center=self.rect.center))
         except (TypeError, ValueError, pygame.error) as draw_err:
             logger.warning("Échec du dessin de la mine mobile %s : %s", self.rect, draw_err)
+
+    def _draw_warning(self, surface, now):
+        """Flèche rouge clignotante au bord de l'écran, là où la mine va entrer."""
+        if (now // 150) % 2:
+            return
+        g = config.GRID_SIZE
+        w, h = surface.get_size()
+        x = max(g, min(w - g, self.x))
+        y = max(g, min(h - g, self.y))
+        speed = math.hypot(self.vx, self.vy) or 1.0
+        ux, uy = self.vx / speed, self.vy / speed
+        px, py = -uy, ux
+        tip = (x + ux * g * 0.9, y + uy * g * 0.9)
+        back = (x - ux * g * 0.3, y - uy * g * 0.3)
+        pts = [tip, (back[0] + px * g * 0.6, back[1] + py * g * 0.6), (back[0] - px * g * 0.6, back[1] - py * g * 0.6)]
+        try:
+            fx.draw_glow(surface, (int(x), int(y)), config.COLOR_MINE, g * 1.6, 7)
+            pygame.draw.polygon(surface, (255, 60, 80), pts)
+            pygame.draw.polygon(surface, (255, 220, 220), pts, max(1, g // 12))
+        except Exception:
+            pass
 
     def get_center_pos_px(self):
         """Retourne le centre actuel en pixels."""

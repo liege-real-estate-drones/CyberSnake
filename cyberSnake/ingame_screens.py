@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 """Écrans Pause et Game Over."""
 import pygame
-
-import game_clock
 import math
 import traceback
 import logging
 
 import config
+import game_clock
 import utils
 import progress
 import screens

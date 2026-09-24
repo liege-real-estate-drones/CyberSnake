@@ -43,7 +43,7 @@ DEFAULT_GAME_OPTIONS = {
     # Si null/absent: comportement auto (calcul dynamique existant)
     "grid_size": None,
     "snake_style": "sprites",
-    "wall_style": "panel",
+    "wall_style": "neon",
     # Styles séparés (si null: utilise snake_style)
     "snake_style_p1": None,
     "snake_style_p2": None,
@@ -343,6 +343,7 @@ def load_assets(base_path):
     for who in ("p1", "p2", "enemy"):
         for part in ("head", "body", "tail"):
             files_to_load.append(f"snake_{who}_{part}.png")
+    files_to_load += ["mine.png", "mine_lit.png"]
 
     for filename in files_to_load:
         full_path = os.path.join(base_path, filename)

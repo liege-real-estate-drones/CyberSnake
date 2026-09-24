@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 """Logique d'une partie : initialisation (reset_game) et boucle de jeu (run_game)."""
 import pygame
-
-import game_clock
 import random
 import traceback
 import logging
 import itertools
 
 import config
+import game_clock
 import utils
 import game_objects
 import fx
@@ -1358,10 +1357,12 @@ def run_game(events, dt, screen, game_state):
                     game_state['last_mine_wave_spawn_time'] = current_time
                     wave_targets = [s for s in (player_snake, player2_snake if coop else None) if s and s.alive]
                     player_pos_target = random.choice(wave_targets).get_head_position() if wave_targets else (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
-                    utils.play_sound("mine_wave")
                     spawned_mine_count = 0
-                    # 1 mine en vague 1, puis une de plus toutes les 2 vagues (max MINE_WAVE_COUNT)
-                    for _ in range(min(config.MINE_WAVE_COUNT, 1 + survival_wave // 2)):
+                    # Aucune en vague 1, puis 1 mine et une de plus toutes les 3 vagues (max 4)
+                    mine_count = 0 if survival_wave < 2 else min(4, config.MINE_WAVE_COUNT, 1 + (survival_wave - 2) // 3)
+                    if mine_count:
+                        utils.play_sound("mine_wave")
+                    for _ in range(mine_count):
                         spawn_edge = random.choice(['top', 'bottom', 'left', 'right']); sx_grid, sy_grid = 0, 0; grid_margin = 2
                         if spawn_edge == 'top': sx_grid, sy_grid = random.randint(0, config.GRID_WIDTH - 1), -grid_margin
                         elif spawn_edge == 'bottom': sx_grid, sy_grid = random.randint(0, config.GRID_WIDTH - 1), config.GRID_HEIGHT + grid_margin -1

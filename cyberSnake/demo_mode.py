@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 """Mode démo (l'IA joue seule dans la boucle d'attente)."""
 import pygame
-
-import game_clock
 import random
 import logging
 from collections import deque
 
 import config
+import game_clock
 import utils
 import game_objects
 import screens

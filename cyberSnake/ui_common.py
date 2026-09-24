@@ -5,6 +5,7 @@ import pygame
 import config
 import utils
 import fx
+import walls
 
 
 def is_confirm_button(button):
@@ -229,163 +230,9 @@ def _darken_rgb(color, amount):
 
 
 def draw_wall_tile(surface, rect, grid_pos=None, current_time=0, style=None):
-    """Dessine un mur (tuile) avec un style visuel plus cyber."""
+    """Case de mur isolée (aperçus des menus), dans le style des murs du jeu (walls.py)."""
     try:
-        style_key = str(style if style is not None else getattr(config, "WALL_STYLE", "classic") or "classic").strip().lower()
-    except Exception:
-        style_key = "classic"
-
-    base = _clamp_color_rgb(getattr(config, "COLOR_WALL", (100, 110, 120)))
-    accent = _clamp_color_rgb(getattr(config, "COLOR_SNAKE_P1", (0, 255, 150)))
-
-    # Légère variation pour casser l'effet "mur plat"
-    try:
-        if isinstance(grid_pos, tuple) and len(grid_pos) == 2:
-            parity = (int(grid_pos[0]) + int(grid_pos[1])) & 1
-            if parity:
-                base = _darken_rgb(base, 8)
-            else:
-                base = _lighten_rgb(base, 6)
-    except Exception:
-        pass
-
-    w = int(rect.width)
-    h = int(rect.height)
-    if w <= 0 or h <= 0:
-        return
-
-    # Styles simplifiés si très petit (aperçus)
-    if min(w, h) < 6:
-        try:
-            pygame.draw.rect(surface, base, rect)
-        except Exception:
-            pass
-        return
-
-    try:
-        if style_key == "classic":
-            pygame.draw.rect(surface, base, rect)
-            pygame.draw.rect(surface, _darken_rgb(base, 30), rect, 1)
-            return
-
-        if style_key == "panel":
-            pygame.draw.rect(surface, _darken_rgb(base, 10), rect, border_radius=2)
-            # Biseaux (haut/gauche clair, bas/droite sombre)
-            pygame.draw.line(surface, _lighten_rgb(base, 32), rect.topleft, (rect.right - 1, rect.top), 1)
-            pygame.draw.line(surface, _lighten_rgb(base, 18), rect.topleft, (rect.left, rect.bottom - 1), 1)
-            pygame.draw.line(surface, _darken_rgb(base, 40), (rect.left, rect.bottom - 1), (rect.right - 1, rect.bottom - 1), 1)
-            pygame.draw.line(surface, _darken_rgb(base, 28), (rect.right - 1, rect.top), (rect.right - 1, rect.bottom - 1), 1)
-
-            inset = rect.inflate(-max(2, w // 6), -max(2, h // 6))
-            if inset.width > 0 and inset.height > 0:
-                pygame.draw.rect(surface, _darken_rgb(base, 18), inset, 1, border_radius=2)
-            return
-
-        if style_key == "neon":
-            # Base sombre + double bordure accent
-            pygame.draw.rect(surface, _darken_rgb(base, 55), rect, border_radius=3)
-            pygame.draw.rect(surface, _darken_rgb(accent, 90), rect, 3, border_radius=3)
-            pygame.draw.rect(surface, accent, rect, 1, border_radius=3)
-
-            # Petit pulse (sans alpha) sur une arrête
-            try:
-                pulse = 0 if int(current_time // 300) % 2 == 0 else 12
-            except Exception:
-                pulse = 0
-            edge_col = _lighten_rgb(accent, pulse)
-            pygame.draw.line(surface, edge_col, (rect.left + 2, rect.top + 2), (rect.right - 3, rect.top + 2), 1)
-            return
-
-        if style_key == "circuit":
-            pygame.draw.rect(surface, _darken_rgb(base, 22), rect, border_radius=2)
-            pygame.draw.rect(surface, _darken_rgb(base, 40), rect, 1, border_radius=2)
-
-            # Traces internes (dépend de la case)
-            try:
-                gx, gy = grid_pos if isinstance(grid_pos, tuple) else (0, 0)
-                s = (int(gx) * 31 + int(gy) * 17) & 3
-            except Exception:
-                s = 0
-
-            midy = rect.centery
-            midx = rect.centerx
-            line_col = _darken_rgb(accent, 30)
-            if s in (0, 2):
-                pygame.draw.line(surface, line_col, (rect.left + 3, midy), (rect.right - 4, midy), 1)
-            if s in (1, 2):
-                pygame.draw.line(surface, line_col, (midx, rect.top + 3), (midx, rect.bottom - 4), 1)
-            # Nœuds
-            node_r = max(1, min(w, h) // 8)
-            pygame.draw.circle(surface, accent, (rect.left + 4, rect.top + 4), node_r)
-            pygame.draw.circle(surface, accent, (rect.right - 5, rect.bottom - 5), node_r)
-            return
-
-        if style_key == "glass":
-            # Base sombre + reflets type "verre"
-            pygame.draw.rect(surface, _darken_rgb(base, 35), rect, border_radius=3)
-            pygame.draw.rect(surface, _darken_rgb(base, 55), rect, 1, border_radius=3)
-
-            hi = _lighten_rgb(base, 40)
-            mid = _lighten_rgb(base, 18)
-            pygame.draw.line(surface, hi, (rect.left + 2, rect.top + 2), (rect.right - 3, rect.top + 2), 1)
-            pygame.draw.line(surface, mid, (rect.left + 2, rect.top + 2), (rect.left + 2, rect.bottom - 3), 1)
-
-            try:
-                sparkle = 0 if int(current_time // 220) % 3 else 18
-            except Exception:
-                sparkle = 0
-            sp_col = _lighten_rgb(accent, sparkle)
-            pygame.draw.circle(surface, sp_col, (rect.left + 5, rect.top + 5), max(1, min(w, h) // 10))
-            return
-
-        if style_key == "grid":
-            pygame.draw.rect(surface, _darken_rgb(base, 26), rect, border_radius=2)
-            pygame.draw.rect(surface, _darken_rgb(base, 48), rect, 1, border_radius=2)
-
-            step = max(4, min(w, h) // 3)
-            grid_col = _darken_rgb(accent, 70)
-            x = rect.left + step
-            while x < rect.right - 2:
-                pygame.draw.line(surface, grid_col, (x, rect.top + 2), (x, rect.bottom - 3), 1)
-                x += step
-            y = rect.top + step
-            while y < rect.bottom - 2:
-                pygame.draw.line(surface, grid_col, (rect.left + 2, y), (rect.right - 3, y), 1)
-                y += step
-            return
-
-        if style_key == "hazard":
-            # Rayures diagonales type "warning"
-            pygame.draw.rect(surface, _darken_rgb(base, 62), rect, border_radius=2)
-            pygame.draw.rect(surface, _darken_rgb(base, 82), rect, 1, border_radius=2)
-
-            stripe_w = max(3, min(w, h) // 5)
-            col_a = (246, 210, 52)
-            col_b = (18, 18, 22)
-            try:
-                gx, gy = grid_pos if isinstance(grid_pos, tuple) else (0, 0)
-                toggle = ((int(gx) + int(gy)) & 1) == 1
-            except Exception:
-                toggle = False
-
-            start = rect.left - h
-            end = rect.right + w
-            x = start
-            while x < end:
-                pygame.draw.line(
-                    surface,
-                    col_a if toggle else col_b,
-                    (x, rect.bottom - 2),
-                    (x + w + h, rect.top + 1),
-                    stripe_w,
-                )
-                toggle = not toggle
-                x += stripe_w
-            return
-
-        # Fallback
-        pygame.draw.rect(surface, base, rect)
-        pygame.draw.rect(surface, _darken_rgb(base, 30), rect, 1)
+        walls.draw_tile(surface, rect, style)
     except Exception:
         pass
 

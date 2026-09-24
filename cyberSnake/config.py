@@ -18,8 +18,8 @@ SNAKE_STYLE = "sprites"
 # Styles par joueur (si None: utilise SNAKE_STYLE)
 SNAKE_STYLE_P1 = None
 SNAKE_STYLE_P2 = None
-# Style de rendu des murs: "classic", "panel", "neon", "circuit", "glass", "grid", "hazard"
-WALL_STYLE = "panel"
+# Couleur des murs (walls.THEMES) : "neon", "violet", "ambre", "vert", "blanc"
+WALL_STYLE = "neon"
 # Taille de l'arène en mode Classique: "full", "large", "medium", "small"
 CLASSIC_ARENA = "full"
 
@@ -612,11 +612,12 @@ BABY_AI_START_AMMO = 5          # Munitions de départ du bébé IA
 
 
 # --- Constantes Mines Mobiles (Mode Survie) ---
-MOVING_MINE_SPEED = 2.5         # Vitesse (pixels par image pour une grille de 20 px, ajustée à la grille réelle)
-MOVING_MINE_PROXIMITY_CELLS = 1.1  # Explose quand elle arrive à cette distance (en cases) d'une tête
-MOVING_MINE_DAMAGE_CELLS = 1.6     # Blesse tout serpent joueur dont un anneau est à cette distance (en cases)
-MOVING_MINE_TURN_DEG = 2.0      # Guidage : virage maximal par image (degrés), assez doux pour être esquivé
-MOVING_MINE_LIFETIME = 9000     # ms : au-delà, la mine s'éteint d'elle-même
+MOVING_MINE_SPEED = 2.0         # Vitesse (pixels par image pour une grille de 20 px, ajustée à la grille réelle)
+MOVING_MINE_PROXIMITY_CELLS = 0.9  # Explose quand elle arrive à cette distance (en cases) d'une tête
+MOVING_MINE_DAMAGE_CELLS = 1.3     # Blesse tout serpent joueur dont un anneau est à cette distance (en cases)
+MOVING_MINE_TURN_DEG = 1.2      # Guidage : virage maximal par image (degrés), assez doux pour être esquivé
+MOVING_MINE_LIFETIME = 8000     # ms (après l'alerte) : au-delà, la mine s'éteint d'elle-même
+MOVING_MINE_WARN_MS = 1000      # Alerte au bord de l'écran avant que la mine n'entre
 MINE_WAVE_INTERVAL = 15000      # Intervalle (ms) entre les vagues de mines mobiles
 MINE_WAVE_COUNT = 5             # Nombre de mines par vague mobile
 
