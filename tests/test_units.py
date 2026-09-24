@@ -266,6 +266,16 @@ class TestBornePistolets(unittest.TestCase):
         self.assertEqual(self.bp.hidden_for(blue, [red, blue]), ["/dev/video0", "/dev/video1"])
         self.assertEqual(self.bp.hidden_for(red, [red]), [])
 
+    def test_mame_trigger_gets_gun_codes(self):
+        cfg = ('<port type="P1_BUTTON1">\n <newseq type="standard">\n  JOYCODE_1_BUTTON2\n </newseq>\n</port>\n'
+               '<port type="P2_BUTTON2">\n <newseq type="standard">\n  JOYCODE_2_BUTTON1\n </newseq>\n</port>\n'
+               '<port type="P1_BUTTON3">\n <newseq type="standard">\n  JOYCODE_1_BUTTON4\n </newseq>\n</port>\n')
+        new = self.bp.add_gun_codes(cfg)
+        self.assertIn("JOYCODE_1_BUTTON2 OR GUNCODE_1_BUTTON1", new)
+        self.assertIn("JOYCODE_2_BUTTON1 OR GUNCODE_2_BUTTON2", new)
+        self.assertIn("JOYCODE_1_BUTTON4\n", new)  # Bouton 3 : pas de pistolet
+        self.assertEqual(self.bp.add_gun_codes(new), new)  # Déjà fait : rien ne change
+
     def test_gun_names(self):
         self.assertEqual(self.bp.gun_id("Bleu"), "0f01")
         self.assertEqual(self.bp.gun_id("rouge"), "0f02")

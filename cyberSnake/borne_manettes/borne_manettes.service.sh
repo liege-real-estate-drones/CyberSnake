@@ -28,6 +28,12 @@ start() {
         nohup python3 "$DIR/borne_pistolets.py" --run >>"$GUNS_LOG" 2>&1 9>&- &
         echo $! >"$GUNS_PIDFILE"
     fi
+    # Gâchette des pistolets dans les jeux MAME (script lancé par Batocera avant chaque jeu)
+    if [ -f "$GUNS_CONFIG" ] && [ -f "$DIR/borne_pistolets_mame.sh" ]; then
+        mkdir -p /userdata/system/scripts
+        cp "$DIR/borne_pistolets_mame.sh" /userdata/system/scripts/borne_pistolets_mame.sh
+        chmod +x /userdata/system/scripts/borne_pistolets_mame.sh
+    fi
 }
 
 stop() {

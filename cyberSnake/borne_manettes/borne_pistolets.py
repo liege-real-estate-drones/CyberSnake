@@ -152,6 +152,34 @@ def set_video_device(config_text, dev):
     return re.sub(r'(key="VideoDevice"\s*value=")[^"]*"', lambda m: m.group(1) + dev + '"', config_text)
 
 
+MAME_DEFAULT_CFG = "/userdata/saves/mame/mame/cfg/default.cfg"
+_MAME_BUTTON = re.compile(r'(<port type="P([12])_BUTTON([12])">\s*<newseq type="standard">\s*)([^<]*?)(\s*</newseq>)')
+
+
+def add_gun_codes(cfg_text):
+    """MAME : la gâchette (GUNCODE_n_BUTTON1) et le 2e bouton du pistolet s'ajoutent aux
+    boutons 1 / 2 des joueurs 1 / 2. Batocera écrit dans default.cfg les boutons des
+    MANETTES seules (jeux normaux) et n'y touche plus dans les jeux de tir : sans ça, la
+    gâchette ne tire pas, seuls les boutons de la borne tirent."""
+    def fix(m):
+        seq, code = m.group(4).strip(), f"GUNCODE_{m.group(2)}_BUTTON{m.group(3)}"
+        return m.group(0) if code in seq else f"{m.group(1)}{seq} OR {code}{m.group(5)}"
+    return _MAME_BUTTON.sub(fix, cfg_text)
+
+
+def cmd_mame_gun_codes(path=MAME_DEFAULT_CFG):
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            text = f.read()
+    except OSError:
+        return 0  # Pas encore de default.cfg : MAME utilise ses réglages d'origine (pistolet compris)
+    new = add_gun_codes(text)
+    if new != text:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
+    return 0
+
+
 def event_number(path):
     m = re.search(r"event(\d+)$", os.path.realpath(path) if path else "")
     return int(m.group(1)) if m else None
@@ -433,7 +461,10 @@ def main(argv=None):
     g.add_argument("--run", action="store_true")
     g.add_argument("--j1", metavar="PISTOLET")
     g.add_argument("--pilote", nargs="+", metavar="ARG", help=argparse.SUPPRESS)  # usage interne
+    g.add_argument("--mame-gachette", action="store_true", help=argparse.SUPPRESS)  # script gameStart
     a = p.parse_args(argv)
+    if a.mame_gachette:
+        return cmd_mame_gun_codes()
     if a.pilote:
         return run_isolated_driver(a.pilote[0], a.pilote[1], a.pilote[2:])
     if a.list:
