@@ -65,6 +65,7 @@ import game_objects
 import fx
 import boss as boss_mod
 import progress
+import screens
 import subprocess
 import os
 import sys
@@ -100,8 +101,60 @@ def draw_screen_background(screen, game_state, darken=0):
 
 
 # --- Fonction Helper pour Dessiner les Panneaux UI (avec correction alpha) ---
+_hud_state = {'recording': False, 'rects': [], 'under': []}
+
+
+def _hud_begin(target_surface, game_state):
+    """Juste avant le HUD : mémorise la zone de jeu sous les panneaux où passe un serpent."""
+    _hud_state['recording'] = True
+    _hud_state['rects'] = []
+    _hud_state['under'] = []
+    g = config.GRID_SIZE
+    snakes = [game_state.get('player_snake'), game_state.get('player2_snake'), game_state.get('enemy_snake')]
+    snakes += list(game_state.get('active_enemies', []) or [])
+    try:
+        screen_rect = target_surface.get_rect()
+        for r in utils.HUD_EXCLUSION_RECTS:
+            hit = False
+            for sn in snakes:
+                if sn is None or not getattr(sn, 'alive', False):
+                    continue
+                for p in sn.positions:
+                    if r.colliderect(pygame.Rect(p[0] * g, p[1] * g, g, g)):
+                        hit = True
+                        break
+                if hit:
+                    break
+            if hit:
+                clip = r.clip(screen_rect)
+                if clip.width > 0 and clip.height > 0:
+                    _hud_state['under'].append((clip, target_surface.subsurface(clip).copy()))
+    except Exception:
+        _hud_state['under'] = []
+
+
+def _hud_end(target_surface):
+    """Après le HUD : panneaux translucides au-dessus des serpents + zones interdites aux apparitions."""
+    if not _hud_state['recording']:
+        return
+    _hud_state['recording'] = False
+    utils.HUD_EXCLUSION_RECTS[:] = _hud_state['rects']
+    for clip, img in _hud_state['under']:
+        try:
+            img.set_alpha(175)
+            target_surface.blit(img, clip.topleft)
+        except Exception:
+            pass
+    _hud_state['under'] = []
+
+
 def draw_ui_panel(surface, rect):
     """Dessine un panneau UI semi-transparent avec bordure."""
+    if _hud_state['recording']:
+        try:
+            _hud_state['rects'].append(pygame.Rect(rect))
+        except Exception:
+            pass
     try:
         if rect.width <= 0 or rect.height <= 0:
             return
@@ -523,6 +576,14 @@ def _draw_minimal_hud(surface, game_state, current_time, font_small, font_defaul
 
 
 def draw_game_elements_on_surface(target_surface, game_state, current_time=None):
+    """Dessine tous les éléments du jeu (puis le HUD, translucide au-dessus des serpents)."""
+    try:
+        _draw_game_elements_inner(target_surface, game_state, current_time)
+    finally:
+        _hud_end(target_surface)
+
+
+def _draw_game_elements_inner(target_surface, game_state, current_time=None):
     """Dessine tous les éléments du jeu sur la surface cible avec améliorations UX."""
     if current_time is None:
         current_time = pygame.time.get_ticks()
@@ -703,6 +764,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     # --- Mode Démo : rendu "clean" (sans HUD) ---
     if bool(game_state.get('demo_mode', False)):
         return
+
+    _hud_begin(target_surface, game_state)
 
     # --- HUD minimal ---
     try:
@@ -1534,9 +1597,12 @@ def reset_game(game_state):
     print("Resetting game...")
     current_time_reset = pygame.time.get_ticks()
     fx.clear_popups()
+    game_state['game_start_time'] = current_time_reset
+    game_state.pop('game_end_time', None)
     game_state['boss'] = None
     game_state['boss_banner_until'] = 0
     game_state['progress_recorded'] = False
+    game_state['_go_sound_played'] = False
     game_state['new_unlocks'] = []
     game_state['daily_rank'] = None
     if game_state.get('daily_challenge'):
@@ -4257,7 +4323,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
         logging.debug("run_name_entry_solo: First entry, setting input_active_solo to True.")
     
     # Période d'initialisation (1.5 secondes) - ignorer les entrées initiales
-    entry_delay = 1500 # ms
+    entry_delay = 500 # ms (évite de valider par accident avec le bouton du menu précédent)
     init_period = current_time - game_state.get('name_entry_start_time_solo', 0) < entry_delay
     
     # Initialisation des animations si nécessaire
@@ -5975,7 +6041,7 @@ def run_pvp_setup(events, dt, screen, game_state):
     if 'pvp_setup_start_time' not in game_state:
         game_state['pvp_setup_start_time'] = current_time
         game_state['pvp_setup_index'] = 0  # Réinitialise l'index au démarrage
-    input_lock_duration = 1500  # 1.5 secondes
+    input_lock_duration = 500
     inputs_locked = (current_time - pvp_setup_start_time < input_lock_duration)
 
     # Verrouillage des entrées pendant 1.5 secondes au démarrage
@@ -5983,7 +6049,7 @@ def run_pvp_setup(events, dt, screen, game_state):
     if 'pvp_setup_start_time' not in game_state:
         game_state['pvp_setup_start_time'] = current_time
         game_state['pvp_setup_index'] = 0  # Réinitialise l'index au démarrage
-    input_lock_duration = 1500  # 1.5 secondes
+    input_lock_duration = 500
     inputs_locked = (current_time - pvp_setup_start_time < input_lock_duration)
 
     if not all([font_small, font_medium]):
@@ -6281,7 +6347,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                  game_state['player2_name_input'] = ""
             
     # Période d'initialisation (1.5 secondes) - ignorer les entrées initiales
-    entry_delay = 1500
+    entry_delay = 500
     init_period = current_time - game_state.get('name_entry_start_time_pvp', 0) < entry_delay
     
     # Initialisation des animations si nécessaire
@@ -6957,34 +7023,38 @@ def run_pause(events, dt, screen, game_state):
         overlay.fill((0, 0, 0, 180))
         screen.blit(overlay, (0, 0))
 
-        utils.draw_text_with_shadow(
-            screen,
-            "PAUSE",
-            font_large,
-            config.COLOR_TEXT_MENU,
-            config.COLOR_UI_SHADOW,
-            (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.16),
-            "center",
-        )
+        try:
+            pause_title = screens._glow_text(font_large, "PAUSE", (235, 250, 255), (0, 200, 255), 10)
+            screen.blit(pause_title, pause_title.get_rect(center=(config.SCREEN_WIDTH // 2, int(config.SCREEN_HEIGHT * 0.16))))
+        except Exception:
+            utils.draw_text_with_shadow(screen, "PAUSE", font_large, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW,
+                                        (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.16), "center")
 
-        panel_w = int(config.SCREEN_WIDTH * 0.48)
-        panel_h = int(config.SCREEN_HEIGHT * 0.42)
+        line_h = max(int(font_medium.get_linesize() * 1.6), 50)
+        panel_w = int(config.SCREEN_WIDTH * 0.40)
+        panel_h = len(menu_items) * line_h + line_h
         panel_x = (config.SCREEN_WIDTH - panel_w) // 2
         panel_y = int(config.SCREEN_HEIGHT * 0.27)
         menu_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
         draw_ui_panel(screen, menu_rect)
 
-        line_h = max(int(font_medium.get_linesize() * 1.15), 44)
-        start_y = menu_rect.top + int(menu_rect.height * 0.20)
+        start_y = menu_rect.top + line_h
 
+        pulse = 0.55 + 0.45 * math.sin(current_time * 0.008)
         for idx, (_opt_id, label, _desc) in enumerate(menu_items):
             y = start_y + idx * line_h
             is_sel = idx == selection_index
             color = config.COLOR_TEXT_HIGHLIGHT if is_sel else config.COLOR_TEXT_MENU
-            prefix = "> " if is_sel else "  "
+            if is_sel:
+                row = pygame.Rect(0, 0, int(menu_rect.width * 0.8), line_h - 6)
+                row.center = (menu_rect.centerx, y)
+                hl = pygame.Surface(row.size, pygame.SRCALPHA)
+                hl.fill((255, 255, 255, int(40 + 50 * pulse)))
+                screen.blit(hl, row.topleft)
+                pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT, row, 2, border_radius=10)
             utils.draw_text_with_shadow(
                 screen,
-                f"{prefix}{label}",
+                label,
                 font_medium,
                 color,
                 config.COLOR_UI_SHADOW,
@@ -6993,7 +7063,7 @@ def run_pause(events, dt, screen, game_state):
             )
 
         # Description contextuelle + infos audio
-        desc_h = int(config.SCREEN_HEIGHT * 0.16)
+        desc_h = font_small.get_linesize() * 3 + 24
         desc_rect = pygame.Rect(menu_rect.left, menu_rect.bottom + 12, menu_rect.width, desc_h)
         draw_ui_panel(screen, desc_rect)
 
@@ -7024,8 +7094,8 @@ def run_pause(events, dt, screen, game_state):
         # Légendes contrôles (uniformisées)
         instruction_y = config.SCREEN_HEIGHT * 0.90
         gap = max(18, int(font_small.get_linesize() * 1.05))
-        l1 = "Haut/Bas ou Stick: Naviguer | Entrée/A: Valider | P/Start: Reprendre | H/Bouclier: HUD"
-        l2 = "R: Recommencer | O: Options | M/Bouton Menu: Menu | 0-9: Musique | +/- et [ ]: Volumes"
+        l1 = "Stick : choisir  |  Bouton : valider  |  Start : reprendre  |  Back : quitter la partie"
+        l2 = "Bouton Bouclier : HUD normal/minimal  |  Bouton 4 : changer de musique"
         utils.draw_text(screen, l1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
         utils.draw_text(screen, l2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + gap), "center")
     except Exception as e:
@@ -7064,7 +7134,7 @@ def run_game_over(events, dt, screen, game_state):
         game_state['game_over_start_time'] = current_time
         # Réinitialiser la sélection du menu à chaque nouvelle game over
         game_state['gameover_menu_selection'] = 0
-    input_lock_duration = 2000  # 2 secondes
+    input_lock_duration = 900  # Évite de passer l'écran en tirant au moment de mourir
     inputs_locked = (current_time - game_over_start_time < input_lock_duration)
 
     # Forcer la sélection à 0 pendant le verrouillage
@@ -7148,6 +7218,20 @@ def run_game_over(events, dt, screen, game_state):
                 game_state['daily_rank'] = progress.record_daily(p1_name, p1_score)
         except Exception as e:
             logging.error(f"Erreur enregistrement progression: {e}", exc_info=True)
+
+    # Son de fin de partie (une seule fois) : record > couleur débloquée > game over
+    if not game_state.get('_go_sound_played'):
+        game_state['_go_sound_played'] = True
+        try:
+            pygame.mixer.music.fadeout(800)
+        except Exception:
+            pass
+        if is_high_score and not is_daily:
+            utils.play_sound("new_record")
+        elif game_state.get('new_unlocks'):
+            utils.play_sound("unlock")
+        else:
+            utils.play_sound("game_over_sfx")
 
     next_state = config.GAME_OVER
     for event in events:
@@ -7310,70 +7394,49 @@ def run_game_over(events, dt, screen, game_state):
 
     # Dessin
     try:
-        draw_screen_background(screen, game_state); overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 180)); screen.blit(overlay, (0, 0))
-        utils.draw_text_with_shadow(screen, "GAME OVER", font_large, config.COLOR_MINE, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.20), "center")
-        
-        # Afficher le décompte si les entrées sont verrouillées
-        if inputs_locked:
-            time_left = (input_lock_duration - (current_time - game_over_start_time)) // 1000 + 1
-            lock_text = f"Commandes verrouillées ({time_left}s)"
-            utils.draw_text_with_shadow(screen, lock_text, font_medium, config.COLOR_TEXT_HIGHLIGHT, 
-                                      config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.28), "center")
-        
-        y_disp, gap, hs_gap = config.SCREEN_HEIGHT * 0.35, 40, 50
-        utils.draw_text_with_shadow(screen, winner_text, font_medium, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center"); y_disp += gap + 10
-        # Affichage des scores finaux
+        if 'game_end_time' not in game_state:
+            game_state['game_end_time'] = current_time
+        duration_ms = game_state['game_end_time'] - int(game_state.get('game_start_time', game_state['game_end_time']) or 0)
+        ps = player_snake
+        stats = [("Durée", screens._fmt_duration(duration_ms))]
         if current_game_mode == config.MODE_PVP:
-            utils.draw_text_with_shadow(screen, f"{p1_name} Score: {p1_score} | Kills: {p1_kills}", font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center"); y_disp += gap
-            utils.draw_text_with_shadow(screen, f"{p2_name} Score: {p2_score} | Kills: {p2_kills}", font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center")
+            info_main_label, info_main_value = "SCORE", f"{p1_score}  -  {p2_score}"
+            sub_lines = [f"{p1_name} : {p1_kills} kills   |   {p2_name} : {p2_kills} kills"]
         elif current_game_mode == config.MODE_SURVIVAL:
-            utils.draw_text_with_shadow(screen, f"Vague Atteinte ({p1_name}): {score_to_check}", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center")
-        else: # Solo ou Vs AI
-            utils.draw_text_with_shadow(screen, f"Score final ({p1_name}): {p1_score}", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_disp), "center")
-        y_disp += hs_gap
-        # Affichage du record pour ce mode
-        top_score_disp = f"Record ({mode_name}): ---"
+            info_main_label, info_main_value = f"VAGUE ATTEINTE ({p1_name})", score_to_check
+            sub_lines = [f"Score : {p1_score}"]
+        else:
+            info_main_label, info_main_value = f"SCORE ({p1_name})", p1_score
+            sub_lines = []
+        if ps is not None and current_game_mode != config.MODE_PVP:
+            stats += [("Nourriture", getattr(ps, 'foods_eaten', 0)), ("Bonus", getattr(ps, 'powerups_collected', 0)),
+                      ("Combo max", getattr(ps, 'max_combo', 0))]
+            if current_game_mode != config.MODE_CLASSIC:
+                stats.append(("Kills", p1_kills))
+        record_text = f"Record ({mode_name}) : ---"
         if hs_list:
-            try: prefix = "Vague Max" if mode_key == "survie" else "Meilleur"; top_score_disp = f"{prefix} ({mode_name}): {hs_list[0]['name']} {hs_list[0]['score']}"
-            except: pass # Ignore si erreur format HS
-        utils.draw_text(screen, top_score_disp, font_default, config.COLOR_TEXT_HIGHLIGHT, (config.SCREEN_WIDTH / 2, y_disp), "center")
-        
-        # Message si nouveau high score
-        y_menu = config.SCREEN_HEIGHT * 0.75
-        if is_high_score: 
-            utils.draw_text(screen, "High Score Enregistré!", font_default, config.COLOR_TEXT_HIGHLIGHT, 
-                          (config.SCREEN_WIDTH / 2, y_menu - 40), "center")
+            try:
+                prefix = "Vague max" if mode_key == "survie" else "Record"
+                record_text = f"{prefix} ({mode_name}) : {hs_list[0]['name']} {hs_list[0]['score']}"
+            except Exception:
+                pass
+        daily_text = None
         if is_daily:
             rank = game_state.get('daily_rank')
             board = progress.daily_scores()
             best = f"{board[0]['name']} {board[0]['score']}" if board else "---"
-            daily_txt = f"Défi du jour : {'#' + str(rank) if rank else 'hors classement'}  (meilleur du jour : {best})"
-            utils.draw_text(screen, daily_txt, font_default, (120, 230, 255), (config.SCREEN_WIDTH / 2, y_menu - 40), "center")
-        new_unlocks = game_state.get('new_unlocks') or []
-        if new_unlocks and (current_time // 400) % 4 != 0:
-            utils.draw_text_with_shadow(screen, "NOUVELLE COULEUR DÉBLOQUÉE : " + ", ".join(new_unlocks) + " (Options)",
-                                        font_default, (255, 210, 60), config.COLOR_UI_SHADOW,
-                                        (config.SCREEN_WIDTH / 2, y_menu - 80), "center")
-        
-        # Menu options de fin de partie
-        menu_spacing = 40
-        for i, option in enumerate(gameover_menu_options):
-            # --- FIX VISUEL: Force "Rejouer" comme option par défaut (index 0) si aucune sélection n'est active ---
-            # (Note: gameover_menu_selection est déjà géré par la logique, mais on s'assure visuellement)
-            is_selected = (i == gameover_menu_selection)
-            option_color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT_MENU
-            prefix = "> " if is_selected else "  "
-            utils.draw_text_with_shadow(screen, f"{prefix}{option}", font_default, option_color, 
-                                     config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, y_menu), "center")
-            y_menu += menu_spacing
-        
-        # Instructions
-        if inputs_locked:
-            utils.draw_text(screen, "Veuillez patienter...", 
-                          font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_menu + 20), "center")
-        else:
-            utils.draw_text(screen, "HAUT/BAS: Naviguer | BOUTON: Confirmer | ECHAP: Menu", 
-                          font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, y_menu + 20), "center")
+            daily_text = f"Défi du jour : {'#' + str(rank) if rank else 'hors classement'}  (meilleur du jour : {best})"
+            record_text = None
+        pvp_title = current_game_mode == config.MODE_PVP
+        screens.draw_game_over(screen, game_state, {
+            'title': winner_text.upper() if pvp_title else "GAME OVER",
+            'title_color': (0, 200, 255) if pvp_title else (255, 60, 80),
+            'main_label': info_main_label, 'main_value': info_main_value, 'sub_lines': sub_lines,
+            'record_text': record_text, 'is_high_score': is_high_score and not is_daily,
+            'daily_text': daily_text, 'unlocks': game_state.get('new_unlocks') or [],
+            'stats': stats, 'options': gameover_menu_options, 'selection': gameover_menu_selection,
+            'lock_ratio': 1.0 if not inputs_locked else (current_time - game_over_start_time) / float(input_lock_duration),
+        })
     except Exception as e:
         print(f"Erreur majeure lors du dessin de run_game_over: {e}"); traceback.print_exc(); return config.MENU
 
@@ -7493,7 +7556,7 @@ def run_demo(events, dt, screen, game_state):
     _now_demo = pygame.time.get_ticks()
     if not game_state.get('_demo_start_time'):
         game_state['_demo_start_time'] = _now_demo
-    if game_state.get('attract_mode') and _now_demo - int(game_state.get('_demo_start_time') or _now_demo) >= 45000:
+    if game_state.get('attract_mode') and _now_demo - int(game_state.get('_demo_start_time') or _now_demo) >= screens.ATTRACT_DEMO_MS:
         _exit_demo()
         return config.HALL_OF_FAME
 
@@ -9539,6 +9602,32 @@ USER_DATA_FILES = {
     "progress.json",
 }
 
+UPDATE_MANIFEST_FILE = ".cybersnake_manifest.txt"
+
+
+def _cleanup_obsolete_files(install_dir, installed_files):
+    """Supprime les fichiers listés lors de la mise à jour précédente mais absents de la nouvelle."""
+    manifest_path = os.path.join(install_dir, UPDATE_MANIFEST_FILE)
+    previous = set()
+    if os.path.exists(manifest_path):
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            previous = {line.strip() for line in f if line.strip()}
+    for rel in sorted(previous - set(installed_files)):
+        if rel in USER_DATA_FILES or rel.startswith('/') or '..' in rel.split('/'):
+            continue
+        path = os.path.join(install_dir, rel)
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+                logging.info(f"Update: ancien fichier supprimé: {rel}")
+            except Exception as e:
+                logging.warning(f"Update: suppression impossible de {rel}: {e}")
+    tmp = manifest_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("\n".join(sorted(installed_files)))
+    os.replace(tmp, manifest_path)
+
+
 def update_worker(game_state):
     """Tâche de fond pour la mise à jour."""
     try:
@@ -9641,6 +9730,7 @@ def update_worker(game_state):
                              game_root_in_zip = zip_ref.namelist()[0].split('/')[0] + "/"
                              logging.warning(f"Main script not found in zip, using first folder as root: {game_root_in_zip}")
 
+                        installed_files = set()
                         for member in zip_ref.namelist():
                             if member.endswith('/'): continue
                             if not member.startswith(game_root_in_zip): continue # Skip files outside game root
@@ -9648,6 +9738,9 @@ def update_worker(game_state):
                             # Strip the prefix to get relative path for install_dir
                             relative_path = member[len(game_root_in_zip):]
                             if not relative_path: continue
+                            if relative_path.startswith('/') or '..' in relative_path.split('/'):
+                                continue  # Chemin suspect : ignoré
+                            installed_files.add(relative_path)
 
                             target_path = os.path.join(install_dir, relative_path)
 
@@ -9664,6 +9757,13 @@ def update_worker(game_state):
                             with open(tmp_path, "wb") as f:
                                 f.write(zip_ref.read(member))
                             os.replace(tmp_path, target_path)
+
+                    # Nettoyage : supprime les fichiers d'une version précédente qui n'existent plus
+                    # (liste mémorisée à chaque mise à jour ; jamais les données du joueur).
+                    try:
+                        _cleanup_obsolete_files(install_dir, installed_files)
+                    except Exception as e:
+                        logging.warning(f"Update: nettoyage des anciens fichiers impossible: {e}")
 
                     game_state['update_message'] = "Extraction terminée !"
                     game_state['update_status'] = 'success'

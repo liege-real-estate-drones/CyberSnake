@@ -623,11 +623,14 @@ SOUND_PATHS = {
     "powerup_pickup": "powerup_pickup.mp3",
     "powerup_spawn": "powerup_spawn.mp3", "shield_absorb": "shield_absorb.mp3", "effect_poison": "effect_poison.mp3",
     "effect_speed": "effect_speed.mp3", "effect_ghost": "effect_ghost.mp3", "effect_freeze": "effect_freeze.mp3",
-    "combo_increase": "powerup_pickup.mp3", "combo_break": "hit_player.mp3", "objective_complete": "powerup_pickup.mp3",
+    "combo_increase": "powerup_pickup.mp3", "combo_break": "hit_player.mp3", "objective_complete": "objective_complete.wav",
     "name_input_char": "shoot_player.mp3", "name_input_confirm": "powerup_pickup.mp3",
     "eat_special": "eat_special.mp3", "low_armor_warning": "low_armor.mp3",
     "skill_activate": "powerup_pickup.mp3",
-    "skill_ready": "objective_complete.mp3", "dash_sound": "effect_speed.mp3",
+    "skill_ready": "objective_complete.wav", "dash_sound": "effect_speed.mp3",
+    # Sons synthétiques (tools/generate_sounds.py)
+    "boss_spawn": "boss_spawn.wav", "boss_defeat": "boss_defeat.wav", "kill": "kill.wav",
+    "unlock": "unlock.wav", "game_over_sfx": "game_over.wav", "new_record": "new_record.wav",
     "hit_wall": "hit_enemy.mp3",
     # Ajouter sons pour Nids/Mines Mobiles si besoin
     # "nest_hit": "hit_enemy.mp3", "nest_destroyed": "die_enemy.mp3", "nest_spawn": "???",
@@ -666,6 +669,7 @@ CLASSIC_SETUP = 103 # Options rapides avant Classique
 CONTROLS = 104 # Remapping contrôles
 TITLE = 105 # Écran titre (borne d'arcade)
 DAILY_CHALLENGE = 106 # Entrée de menu : Défi du jour (partie Solo imposée)
+HOW_TO_PLAY = 107 # Écran « Comment jouer » (boucle d'attente)
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)

@@ -31,17 +31,18 @@ _title_glow_cache = {}
 _big_font_cache = {}
 
 
-def _big_font(game_state, size):
-    """Police Orbitron à une taille donnée (logo), repli sur la police titre."""
-    font = _big_font_cache.get(size)
+def _big_font(game_state, size, family="Orbitron.ttf"):
+    """Police à une taille donnée (logo, gros chiffres), repli sur la police titre."""
+    key = (family, size)
+    font = _big_font_cache.get(key)
     if font is None:
         try:
             import os
-            path = os.path.join(game_state.get('base_path', ''), 'fonts', 'Orbitron.ttf')
+            path = os.path.join(game_state.get('base_path', ''), 'fonts', family)
             font = pygame.font.Font(path, size)
         except Exception:
             font = game_state.get('font_title')
-        _big_font_cache[size] = font
+        _big_font_cache[key] = font
     return font
 
 
@@ -224,7 +225,7 @@ def run_hall_of_fame(events, dt, screen, game_state):
 
     if attract:
         if _state_elapsed(game_state, 'hof', now) >= ATTRACT_HOF_MS:
-            return config.TITLE
+            return config.HOW_TO_PLAY
 
     font_large = game_state.get('font_large')
     font_medium = game_state.get('font_medium')
@@ -288,3 +289,235 @@ def run_hall_of_fame(events, dt, screen, game_state):
         utils.draw_text_with_shadow(screen, hint, font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW,
                                     (sw // 2, int(sh * 0.95)), "center")
     return config.HALL_OF_FAME
+
+
+# ---------------------------------------------------------------------------
+# Écran Game Over
+# ---------------------------------------------------------------------------
+def _fmt_duration(ms):
+    s = max(0, int(ms // 1000))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def _draw_panel(screen, rect, border=(40, 90, 140), alpha=200):
+    panel = pygame.Surface(rect.size, pygame.SRCALPHA)
+    panel.fill((6, 10, 24, alpha))
+    screen.blit(panel, rect.topleft)
+    pygame.draw.rect(screen, border, rect, 2, border_radius=10)
+
+
+def draw_game_over(screen, game_state, info):
+    """Dessine l'écran de fin de partie.
+
+    info : dict avec title, title_color, main_value, main_label, sub_lines, record_text,
+    is_high_score, daily_text, unlocks, stats [(label, valeur)], options, selection,
+    lock_ratio (0..1, 1 = commandes actives).
+    """
+    now = pygame.time.get_ticks()
+    sw, sh = screen.get_size()
+    font_large = game_state.get('font_large')
+    font_medium = game_state.get('font_medium')
+    font_default = game_state.get('font_default')
+    font_small = game_state.get('font_small')
+
+    _draw_background(screen, game_state, now, darken=190)
+
+    title_color = info.get('title_color', (255, 60, 80))
+    title = _glow_text(font_large, info.get('title', "GAME OVER"), (255, 235, 235), title_color, 12)
+    screen.blit(title, title.get_rect(center=(sw // 2, int(sh * 0.12))))
+
+    # Panneau central : hauteur calculée d'après son contenu
+    big = _big_font(game_state, max(40, int(sh * 0.10)), "ShareTechMono-Regular.ttf")
+    stats = info.get('stats', [])
+    tile_h = font_medium.get_height() + font_small.get_height() + 22
+    content_h = 18 + font_default.get_height() + big.get_height() + 6
+    if info.get('is_high_score'):
+        content_h += font_medium.get_height() + 12
+    content_h += font_default.get_linesize() * len(info.get('sub_lines', []))
+    if stats:
+        content_h += 20 + tile_h
+    content_h += 20 + (font_small.get_height() + 16 if info.get('record_text') else 0)
+    panel = pygame.Rect(0, 0, int(sw * 0.62), content_h)
+    panel.midtop = (sw // 2, int(sh * 0.22))
+    _draw_panel(screen, panel, border=(255, 200, 60) if info.get('is_high_score') else (40, 90, 140))
+
+    y = panel.top + 18
+    utils.draw_text(screen, info.get('main_label', "SCORE"), font_default, (160, 190, 230), (sw // 2, y), "midtop")
+    y += font_default.get_height() + 4
+    big = _big_font(game_state, max(40, int(sh * 0.09)))
+    val = _glow_text(big, str(info.get('main_value', 0)), (255, 255, 255), (0, 200, 255), 8)
+    screen.blit(val, val.get_rect(midtop=(sw // 2, y - 14)))
+    y += big.get_height() + 6
+
+    if info.get('is_high_score'):
+        pulse = 0.75 + 0.25 * math.sin(now * 0.008)
+        badge = _glow_text(font_medium, "NOUVEAU RECORD !", (255, 230, 120), (255, 160, 0), 6)
+        badge = badge.copy()
+        badge.set_alpha(int(255 * pulse))
+        screen.blit(badge, badge.get_rect(midtop=(sw // 2, y - 6)))
+        y += font_medium.get_height() + 12
+
+    for line in info.get('sub_lines', []):
+        utils.draw_text(screen, line, font_default, config.COLOR_TEXT_MENU, (sw // 2, y), "midtop")
+        y += font_default.get_linesize()
+
+    # Tuiles de statistiques
+    if stats:
+        tile_gap = 10
+        tile_w = min(int((panel.width - 40 - tile_gap * (len(stats) - 1)) / len(stats)), int(sw * 0.13))
+        total_w = tile_w * len(stats) + tile_gap * (len(stats) - 1)
+        tx = sw // 2 - total_w // 2
+        ty = y + 20
+        for label, value in stats:
+            r = pygame.Rect(tx, ty, tile_w, tile_h)
+            _draw_panel(screen, r, border=(50, 110, 170), alpha=150)
+            utils.draw_text(screen, str(value), font_medium, (240, 250, 255), (r.centerx, r.top + 8), "midtop")
+            utils.draw_text(screen, label, font_small, (140, 170, 210), (r.centerx, r.bottom - 8), "midbottom")
+            tx += tile_w + tile_gap
+
+    rec = info.get('record_text')
+    if rec:
+        utils.draw_text(screen, rec, font_small, config.COLOR_TEXT_HIGHLIGHT, (sw // 2, panel.bottom - 14), "midbottom")
+
+    # Lignes spéciales (défi du jour, couleurs débloquées)
+    y2 = panel.bottom + 18
+    if info.get('daily_text'):
+        utils.draw_text(screen, info['daily_text'], font_default, (120, 230, 255), (sw // 2, y2), "midtop")
+        y2 += font_default.get_linesize()
+    unlocks = info.get('unlocks') or []
+    if unlocks and (now // 400) % 4 != 0:
+        utils.draw_text_with_shadow(screen, "NOUVELLE COULEUR DÉBLOQUÉE : " + ", ".join(unlocks) + " (Options)",
+                                    font_default, (255, 210, 60), config.COLOR_UI_SHADOW, (sw // 2, y2), "midtop")
+        y2 += font_default.get_linesize()
+
+    # Boutons
+    options = info.get('options', [])
+    sel = info.get('selection', 0)
+    btn_w = int(sw * 0.2)
+    btn_h = font_medium.get_height() + 16
+    gap = int(sw * 0.02)
+    total = btn_w * len(options) + gap * (len(options) - 1)
+    bx = sw // 2 - total // 2
+    by = max(y2 + 30, panel.bottom + int(sh * 0.08))
+    ratio = max(0.0, min(1.0, float(info.get('lock_ratio', 1.0))))
+    for i, opt in enumerate(options):
+        r = pygame.Rect(bx, by, btn_w, btn_h)
+        selected = (i == sel)
+        fill = pygame.Surface(r.size, pygame.SRCALPHA)
+        fill.fill((255, 230, 80, 60) if selected else (10, 16, 32, 200))
+        screen.blit(fill, r.topleft)
+        pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT if selected else (60, 90, 130), r, 2, border_radius=8)
+        if selected:
+            fx.draw_glow(screen, r.center, config.COLOR_TEXT_HIGHLIGHT, btn_w * 0.35, 2)
+        utils.draw_text(screen, opt, font_medium, config.COLOR_TEXT_HIGHLIGHT if selected else config.COLOR_TEXT_MENU, r.center, "center")
+        bx += btn_w + gap
+
+    # Barre d'attente avant que les commandes soient actives
+    if ratio < 1.0:
+        bar = pygame.Rect(0, 0, total, 6)
+        bar.midtop = (sw // 2, by + btn_h + 10)
+        pygame.draw.rect(screen, (30, 40, 60), bar, border_radius=3)
+        bar.width = int(bar.width * ratio)
+        pygame.draw.rect(screen, (0, 200, 255), bar, border_radius=3)
+    else:
+        utils.draw_text(screen, "Stick : choisir  |  Bouton : valider", font_small, (150, 170, 200),
+                        (sw // 2, by + btn_h + 12), "midtop")
+
+
+# ---------------------------------------------------------------------------
+# Comment jouer (boucle d'attente)
+# ---------------------------------------------------------------------------
+ATTRACT_HOWTO_MS = 16000
+
+HOWTO_ITEMS = [
+    ("food_energy.png", "Énergie", "Grandir, +1 munition"),
+    ("food_ammo.png", "Munitions", "+10 munitions"),
+    ("food_armor.png", "Armure", "+1 armure (encaisse un coup)"),
+    ("food_speed.png", "Vitesse", "Accélère le serpent"),
+    ("food_multiplier.png", "x2", "Points doublés"),
+    ("food_bonus.png", "Bonus $", "Multiplicateur de score permanent"),
+    ("food_ghost.png", "Fantôme", "Traverse ton propre corps"),
+    ("food_freeze.png", "Gel", "Gèle l'adversaire"),
+    ("food_poison.png", "Poison", "À éviter : commandes inversées"),
+    ("icon_shield.png", "Bouclier", "Bloque un coup"),
+    ("icon_rapid.png", "Tir rapide", "Cadence de tir augmentée"),
+    ("icon_multishot.png", "Multi-tir", "Tirs en éventail"),
+    ("icon_invincible.png", "Invincible", "Aucun dégât"),
+    ("icon_emp.png", "EMP", "Détruit les mines proches"),
+]
+
+
+def run_how_to_play(events, dt, screen, game_state):
+    now = pygame.time.get_ticks()
+    for ev in events:
+        if _is_press(ev):
+            leave_attract(game_state)
+            return config.MENU
+    if _state_elapsed(game_state, 'howto', now) >= ATTRACT_HOWTO_MS:
+        return config.TITLE
+
+    font_large = game_state.get('font_large')
+    font_medium = game_state.get('font_medium')
+    font_default = game_state.get('font_default')
+    font_small = game_state.get('font_small')
+    sw, sh = screen.get_size()
+    _draw_background(screen, game_state, now, darken=195)
+
+    title = _glow_text(font_large, "COMMENT JOUER", (230, 255, 240), (0, 255, 150), 10)
+    screen.blit(title, title.get_rect(center=(sw // 2, int(sh * 0.09))))
+
+    # Commandes (boutons configurés)
+    ctrl = pygame.Rect(int(sw * 0.04), int(sh * 0.18), int(sw * 0.34), int(sh * 0.68))
+    _draw_panel(screen, ctrl)
+    utils.draw_text(screen, "COMMANDES", font_medium, config.COLOR_HOF_CATEGORY, (ctrl.centerx, ctrl.top + 14), "midtop")
+    lines = [
+        ("Stick", "Diriger le serpent"),
+        (f"Bouton {getattr(config, 'BUTTON_PRIMARY_ACTION', 1)}", "Tirer"),
+        (f"Bouton {getattr(config, 'BUTTON_SECONDARY_ACTION', 0)}", "Dash (ruée)"),
+        (f"Bouton {getattr(config, 'BUTTON_TERTIARY_ACTION', 3)}", "Bouclier"),
+        (f"Bouton {getattr(config, 'BUTTON_PAUSE', 7)}", "Pause"),
+        (f"Bouton {getattr(config, 'BUTTON_BACK', 8)}", "Pause / quitter"),
+    ]
+    y = ctrl.top + 24 + font_medium.get_height()
+    row_h = max(font_default.get_linesize() + 14, int(ctrl.height * 0.1))
+    for key, action in lines:
+        key_rect = pygame.Rect(ctrl.left + 20, y, int(ctrl.width * 0.36), row_h - 10)
+        pygame.draw.rect(screen, (20, 40, 70), key_rect, border_radius=8)
+        pygame.draw.rect(screen, (0, 200, 255), key_rect, 2, border_radius=8)
+        utils.draw_text(screen, key, font_default, (220, 245, 255), key_rect.center, "center")
+        utils.draw_text(screen, action, font_default, config.COLOR_TEXT_MENU, (key_rect.right + 16, key_rect.centery), "midleft")
+        y += row_h
+    tips = ["Manger fait grandir et rapporte des points.", "Évite les murs, les mines et ton corps.",
+            "Enchaîne vite pour faire des combos !"]
+    y += 6
+    for tip in tips:
+        utils.draw_text(screen, tip, font_small, (150, 180, 210), (ctrl.left + 20, y), "topleft")
+        y += font_small.get_linesize()
+
+    # Objets
+    items = pygame.Rect(ctrl.right + int(sw * 0.02), ctrl.top, sw - ctrl.right - int(sw * 0.06), ctrl.height)
+    _draw_panel(screen, items)
+    utils.draw_text(screen, "BONUS & OBJETS", font_medium, config.COLOR_HOF_CATEGORY, (items.centerx, items.top + 14), "midtop")
+    cols = 2
+    per_col = (len(HOWTO_ITEMS) + cols - 1) // cols
+    top = items.top + 24 + font_medium.get_height()
+    cell_h = (items.bottom - 14 - top) // per_col
+    col_w = (items.width - 30) // cols
+    icon = max(20, min(cell_h - 8, 44))
+    for idx, (img_name, name, desc) in enumerate(HOWTO_ITEMS):
+        c, r = divmod(idx, per_col)
+        x = items.left + 15 + c * col_w
+        yy = top + r * cell_h
+        img = utils.images.get(img_name)
+        if img is not None:
+            try:
+                screen.blit(pygame.transform.smoothscale(img, (icon, icon)), (x, yy + (cell_h - icon) // 2))
+            except Exception:
+                pass
+        utils.draw_text(screen, name, font_default, config.COLOR_TEXT_HIGHLIGHT, (x + icon + 12, yy + cell_h // 2), "bottomleft")
+        utils.draw_text(screen, desc, font_small, config.COLOR_TEXT_MENU, (x + icon + 12, yy + cell_h // 2 + 2), "topleft")
+
+    if (now // 550) % 2 == 0:
+        utils.draw_text_with_shadow(screen, "APPUIE SUR UN BOUTON", font_default, config.COLOR_TEXT_MENU,
+                                    config.COLOR_UI_SHADOW, (sw // 2, int(sh * 0.94)), "center")
+    return config.HOW_TO_PLAY

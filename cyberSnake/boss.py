@@ -79,7 +79,7 @@ def maybe_spawn_boss(game_state, current_time, wave):
     game_state['boss_banner_text'] = f"!! BOSS - VAGUE {wave} !!"
     game_state['boss_banner_until'] = current_time + BOSS_BANNER_MS
     try:
-        utils.play_sound("powerup_spawn")
+        utils.play_sound("boss_spawn")
         utils.trigger_shake(6, 500)
         fx.trigger_flash((190, 60, 255), 450, 110, now=current_time)
     except Exception:
@@ -107,7 +107,7 @@ def update_boss(game_state, current_time):
         utils.trigger_shake(9, 650)
         fx.trigger_flash((255, 255, 255), 300, 140, now=current_time)
         fx.add_popup(hx, hy, "BOSS VAINCU !", (255, 220, 80), now=current_time, big=True)
-        utils.play_sound("explode_mine")
+        utils.play_sound("boss_defeat")
     except Exception:
         pass
     if player and player.alive:
@@ -124,6 +124,7 @@ def update_boss(game_state, current_time):
         if new:
             game_state['boss_banner_text'] = "BOSS VAINCU ! COULEUR DÉBLOQUÉE : " + ", ".join(new)
             game_state.setdefault('new_unlocks', []).extend(new)
+            utils.play_sound("unlock")
     except Exception:
         logging.warning("Boss: progression non enregistrée", exc_info=True)
     game_state['boss_banner_until'] = current_time + BOSS_BANNER_MS

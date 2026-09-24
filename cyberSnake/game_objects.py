@@ -1004,6 +1004,8 @@ class Snake:
         if self.alive:
             self.growing = True
             self.length += 1
+            if self.is_player:
+                self.foods_eaten = getattr(self, 'foods_eaten', 0) + 1  # Statistiques de fin de partie
 
     def shrink(self, amount=1):
         if not self.alive or amount <= 0: return
@@ -1038,7 +1040,7 @@ class Snake:
         score_added = int(round(score_added_float))
 
         # --- START: Added Logging ---
-        logging.info(f"ADD_SCORE: Snake='{self.name}', Value={value}, Multiplier={final_multiplier:.2f}, "
+        logging.debug(f"ADD_SCORE: Snake='{self.name}', Value={value}, Multiplier={final_multiplier:.2f}, "
                      f"CalculatedAdd={score_added}, ScoreBefore={self.score}")
         # --- END: Added Logging ---
 
@@ -1065,7 +1067,7 @@ class Snake:
             pass
 
         # --- START: Added Logging ---
-        logging.info(f"ADD_SCORE: Snake='{self.name}', ScoreAfter={self.score}")
+        logging.debug(f"ADD_SCORE: Snake='{self.name}', ScoreAfter={self.score}")
         # --- END: Added Logging ---
 
         if not is_combo_bonus and not is_objective_bonus and self.combo_counter > 1:
@@ -1081,6 +1083,7 @@ class Snake:
         else:
             self.combo_counter += points
         self.combo_timer = current_time + config.COMBO_TIMEOUT
+        self.max_combo = max(getattr(self, 'max_combo', 0), self.combo_counter)
         if points > 0 and self.combo_counter > 1:
              utils.play_sound("combo_increase")
 
@@ -1218,6 +1221,7 @@ class Snake:
                 fx.trigger_flash((255, 40, 40), 380, 120, now=current_time)
             elif killer_snake is not None and getattr(killer_snake, 'is_player', False) and px != -1:
                 fx.add_popup(px, py, "KILL !", config.COLOR_TEXT_HIGHLIGHT, big=True)
+                utils.play_sound("kill")
                 fx.trigger_flash((255, 255, 255), 120, 45, now=current_time)
         except Exception:
             pass
@@ -1251,6 +1255,7 @@ class Snake:
         if self.is_player:
             utils.play_sound("powerup_pickup")
             self.increment_combo(points=2)
+            self.powerups_collected = getattr(self, 'powerups_collected', 0) + 1
             if cx is not None:
                 labels = {"shield": "BOUCLIER", "rapid_fire": "TIR RAPIDE", "emp": "EMP", "invincibility": "INVINCIBLE", "multishot": "MULTI-TIR"}
                 fx.add_popup(cx, cy - 20, labels.get(type_key, type_key.upper()), data['color'], big=True)

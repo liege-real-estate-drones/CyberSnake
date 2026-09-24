@@ -419,6 +419,7 @@ def main():
         config.GAME_OVER: game_states.run_game_over,
         config.HALL_OF_FAME: screens.run_hall_of_fame,
         config.TITLE: screens.run_title,
+        config.HOW_TO_PLAY: screens.run_how_to_play,
         config.UPDATE: game_states.run_update,
         config.DEMO: game_states.run_demo,
     }

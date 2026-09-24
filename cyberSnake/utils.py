@@ -735,12 +735,26 @@ def choose_food_type(current_game_mode, current_objective):
 
     return random.choice(valid_types) # Fallback
 
+# Zones (pixels) couvertes par les panneaux du HUD : rien n'y apparaît (mis à jour à chaque image)
+HUD_EXCLUSION_RECTS = []
+
+
+def _under_hud(pos):
+    if not HUD_EXCLUSION_RECTS:
+        return False
+    g = config.GRID_SIZE
+    cell = pygame.Rect(pos[0] * g, pos[1] * g, g, g)
+    return any(r.colliderect(cell) for r in HUD_EXCLUSION_RECTS)
+
+
 def get_random_empty_position(occupied_positions):
-    """Trouve une position aléatoire vide sur la grille."""
+    """Trouve une position aléatoire vide sur la grille (hors des panneaux du HUD si possible)."""
     max_attempts = config.GRID_WIDTH * config.GRID_HEIGHT // 2
-    for _ in range(max_attempts):
+    for attempt in range(max_attempts):
         pos = (random.randint(0, config.GRID_WIDTH - 1), random.randint(0, config.GRID_HEIGHT - 1))
         if pos not in occupied_positions:
+            if attempt < max_attempts // 2 and _under_hud(pos):
+                continue
             return pos
     # print("Warning: Could not find guaranteed empty position, skipping spawn.") # Optionnel
     return None
