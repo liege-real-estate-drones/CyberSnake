@@ -612,9 +612,11 @@ BABY_AI_START_AMMO = 5          # Munitions de départ du bébé IA
 
 
 # --- Constantes Mines Mobiles (Mode Survie) ---
-MOVING_MINE_SPEED = 2.5         # Vitesse de déplacement des mines mobiles
-MOVING_MINE_PROXIMITY_RADIUS = 50 # Rayon en pixels pour l'explosion à proximité du joueur
-MOVING_MINE_EXPLOSION_RADIUS_DAMAGE = 25 # Rayon en pixels pour infliger des dégâts si explosion de proximité
+MOVING_MINE_SPEED = 2.5         # Vitesse (pixels par image pour une grille de 20 px, ajustée à la grille réelle)
+MOVING_MINE_PROXIMITY_CELLS = 1.1  # Explose quand elle arrive à cette distance (en cases) d'une tête
+MOVING_MINE_DAMAGE_CELLS = 1.6     # Blesse tout serpent joueur dont un anneau est à cette distance (en cases)
+MOVING_MINE_TURN_DEG = 2.0      # Guidage : virage maximal par image (degrés), assez doux pour être esquivé
+MOVING_MINE_LIFETIME = 9000     # ms : au-delà, la mine s'éteint d'elle-même
 MINE_WAVE_INTERVAL = 15000      # Intervalle (ms) entre les vagues de mines mobiles
 MINE_WAVE_COUNT = 5             # Nombre de mines par vague mobile
 
@@ -627,18 +629,22 @@ SOUND_PATHS = {
     "powerup_pickup": "powerup_pickup.mp3",
     "powerup_spawn": "powerup_spawn.mp3", "shield_absorb": "shield_absorb.mp3", "effect_poison": "effect_poison.mp3",
     "effect_speed": "effect_speed.mp3", "effect_ghost": "effect_ghost.mp3", "effect_freeze": "effect_freeze.mp3",
-    "combo_increase": "powerup_pickup.mp3", "combo_break": "hit_player.mp3", "objective_complete": "objective_complete.wav",
-    "name_input_char": "shoot_player.mp3", "name_input_confirm": "powerup_pickup.mp3",
+    "combo_increase": "powerup_pickup.mp3", "combo_break": "combo_end.wav", "objective_complete": "objective_complete.wav",
+    "name_input_char": "menu_move.wav", "name_input_confirm": "menu_select.wav",
     "eat_special": "eat_special.mp3", "low_armor_warning": "low_armor.mp3",
-    "skill_activate": "powerup_pickup.mp3",
-    "skill_ready": "objective_complete.wav", "dash_sound": "effect_speed.mp3",
+    "skill_activate": "shield_up.wav",
+    "skill_ready": "objective_complete.wav", "dash_sound": "dash.wav",
     # Sons synthétiques (tools/generate_sounds.py)
     "boss_spawn": "boss_spawn.wav", "boss_defeat": "boss_defeat.wav", "kill": "kill.wav",
     "unlock": "unlock.wav", "game_over_sfx": "game_over.wav", "new_record": "new_record.wav",
     "hit_wall": "hit_enemy.mp3",
-    # Ajouter sons pour Nids/Mines Mobiles si besoin
-    # "nest_hit": "hit_enemy.mp3", "nest_destroyed": "die_enemy.mp3", "nest_spawn": "???",
-    # "mine_wave_spawn": "???", "moving_mine_explode": "explode_mine.mp3",
+    "menu_move": "menu_move.wav", "menu_select": "menu_select.wav", "menu_back": "menu_back.wav",
+    "denied": "denied.wav", "emp_blast": "emp_blast.wav", "mine_wave": "mine_wave.wav",
+    "wave_start": "wave_start.wav", "portal": "portal.wav", "armor_regen_tick": "armor_regen.wav",
+    "countdown": "countdown.wav", "go": "go.wav",
+    "combo_1": "combo_1.wav", "combo_2": "combo_2.wav", "combo_3": "combo_3.wav",
+    "combo_4": "combo_4.wav", "combo_5": "combo_5.wav", "combo_6": "combo_6.wav",
+    "nest_hit": "hit_enemy.mp3", "nest_destroyed": "die_enemy.mp3",
 }
 MUSIC_TRACKS = {
     1: "music_track_1.mp3", 2: "music_track_2.mp3", 3: "music_track_3.mp3", 4: "music_track_4.mp3",

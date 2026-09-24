@@ -131,7 +131,7 @@ def run_stick_wizard(events, dt, screen, game_state):
                     res['invert_h'] = value < 0
                 st['message'] = ""
                 st['wait_release'] = (inst, ev.axis)
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
                 st['step'] += 1
                 if st['step'] >= len(STEPS):
                     st['done_at'] = now
@@ -150,7 +150,7 @@ def run_stick_wizard(events, dt, screen, game_state):
                 st['step'] = 2 if slot == "p1" else len(STEPS)
                 if st['step'] >= len(STEPS):
                     st['done_at'] = now
-                utils.play_sound("eat")
+                utils.play_sound("menu_move")
                 break
 
     # --- Dessin ---

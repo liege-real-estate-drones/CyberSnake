@@ -138,7 +138,7 @@ def run_title(events, dt, screen, game_state):
     for ev in events:
         if _is_press(ev):
             leave_attract(game_state)
-            utils.play_sound("powerup_pickup")
+            utils.play_sound("menu_select")
             return config.MENU
 
     elapsed = _state_elapsed(game_state, 'title', now)
@@ -217,10 +217,10 @@ def run_hall_of_fame(events, dt, screen, game_state):
             except Exception:
                 back = True
             if back:
-                utils.play_sound("combo_break")
+                utils.play_sound("menu_back")
                 return config.MENU
         elif ev.type == pygame.KEYDOWN and ev.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_BACKSPACE):
-            utils.play_sound("combo_break")
+            utils.play_sound("menu_back")
             return config.MENU
 
     if attract:
@@ -436,14 +436,14 @@ HOWTO_ITEMS = [
     ("food_speed.png", "Vitesse", "Accélère le serpent"),
     ("food_multiplier.png", "x2", "Points doublés"),
     ("food_bonus.png", "Bonus $", "Multiplicateur de score permanent"),
-    ("food_ghost.png", "Fantôme", "Traverse ton propre corps"),
+    ("food_ghost.png", "Fantôme", "Traverse serpents et mines"),
     ("food_freeze.png", "Gel", "Gèle l'adversaire"),
     ("food_poison.png", "Poison", "À éviter : commandes inversées"),
     ("icon_shield.png", "Bouclier", "Bloque un coup"),
     ("icon_rapid.png", "Tir rapide", "Cadence de tir augmentée"),
     ("icon_multishot.png", "Multi-tir", "Tirs en éventail"),
     ("icon_invincible.png", "Invincible", "Aucun dégât"),
-    ("icon_emp.png", "EMP", "Détruit les mines proches"),
+    ("icon_emp.png", "EMP", "Détruit mines et tirs"),
     ("icon_magnet.png", "Aimant", "Attire la nourriture proche"),
     ("icon_slowmo.png", "Ralenti", "Ralentit ennemis et tirs ennemis"),
     ("icon_mirror.png", "Miroir", "Renvoie les tirs ennemis"),
@@ -511,7 +511,7 @@ def run_how_to_play(events, dt, screen, game_state):
         c, r = divmod(idx, per_col)
         x = items.left + 15 + c * col_w
         yy = top + r * cell_h
-        img = utils.images.get(img_name)
+        img = utils.images_hd.get(img_name) or utils.images.get(img_name)
         if img is not None:
             try:
                 screen.blit(pygame.transform.smoothscale(img, (icon, icon)), (x, yy + (cell_h - icon) // 2))

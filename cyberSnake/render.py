@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Rendu d'une partie : arène, objets, serpents, effets et HUD."""
 import pygame
+
+import game_clock
 import math
 import traceback
 import logging
@@ -9,6 +11,7 @@ import config
 import utils
 import fx
 import boss as boss_mod
+import bonuses
 import arenas
 from ui_common import _format_mmss, _hud_begin, _hud_end, draw_ui_panel, draw_wall_tile
 
@@ -181,7 +184,7 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
 def _draw_game_elements_inner(target_surface, game_state, current_time=None):
     """Dessine tous les éléments du jeu sur la surface cible avec améliorations UX."""
     if current_time is None:
-        current_time = pygame.time.get_ticks()
+        current_time = game_clock.ticks()
 
     # --- Accès Variables d'État ---
     player_snake = game_state.get('player_snake')
@@ -335,6 +338,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
 
     # --- Textes flottants (+points) et flash d'impact ---
     try:
+        fx.draw_shockwaves(target_surface, current_time)
         fx.draw_popups(target_surface, current_time, font_small, font_default)
         fx.draw_flash(target_surface, current_time)
         # Barre de vie du boss (Survie) + bannières d'annonce (boss, défi du jour)
@@ -596,7 +600,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
             if player_snake.alive and player_snake.is_player and current_game_mode != config.MODE_CLASSIC:
                 # Compétence Dash
                 dash_color = config.COLOR_SKILL_READY if player_snake.dash_ready else config.COLOR_SKILL_COOLDOWN
-                dash_text = f"DASH: {'PRET' if player_snake.dash_ready else 'CD'}"
+                dash_text = f"DASH: {'PRÊT' if player_snake.dash_ready else 'CD'}"
                 text_rect_dash = utils.draw_text_with_shadow(target_surface, dash_text, font_default, dash_color,
                                                              config.COLOR_UI_SHADOW, (x_p1_ui, y_p1_ui), "topleft")
                 if not player_snake.dash_ready:
@@ -625,7 +629,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                 if player_snake.shield_charge_active:
                     shield_status_text = " CHARGE"  # Indique que la charge est prête à absorber
                     shield_color = config.COLOR_SHIELD_POWERUP  # Couleur spéciale si chargé
-                shield_text = f"SHIELD:{' PRET' if player_snake.shield_ready else ' CD'}{shield_status_text}"
+                shield_text = f"SHIELD:{' PRÊT' if player_snake.shield_ready else ' CD'}{shield_status_text}"
                 # --- FIN MODIF ---
 
                 text_rect_shield = utils.draw_text_with_shadow(target_surface, shield_text, font_default, shield_color,
@@ -699,6 +703,10 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                     icons.append(("icon_invincible.png", "I", config.COLOR_INVINCIBILITY_POWERUP))
                 if player_snake.multishot_active:
                     icons.append(("icon_multishot.png", "M", config.COLOR_MULTISHOT_POWERUP))
+                for _key in bonuses.NEW_BONUSES:  # Aimant, Ralenti, Miroir (minuteurs propres)
+                    if current_time < getattr(player_snake, _key + "_until", 0):
+                        _data = config.POWERUP_TYPES.get(_key, {})
+                        icons.append((_data.get("image_file", ""), _data.get("symbol", "?"), _data.get("color", config.COLOR_WHITE)))
 
                 if icons:
                     total_w = len(icons) * icon_size + (len(icons) - 1) * icon_gap
@@ -961,7 +969,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                 if player2_snake.shield_charge_active:
                     shield_status_text_p2 = " CHARGE"
                     shield_color_p2 = config.COLOR_SHIELD_POWERUP
-                shield_text_p2 = f"SHIELD:{' PRET' if player2_snake.shield_ready else ' CD'}{shield_status_text_p2}"
+                shield_text_p2 = f"SHIELD:{' PRÊT' if player2_snake.shield_ready else ' CD'}{shield_status_text_p2}"
                 text_rect_shield_p2 = utils.draw_text_with_shadow(target_surface, shield_text_p2, font_default, shield_color_p2,
                                             config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
                 if text_rect_shield_p2 and not player2_snake.shield_ready:
@@ -984,7 +992,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                 y_p2_ui -= gap
                 y_p2_ui -= line_height_default
                 dash_color_p2 = config.COLOR_SKILL_READY if player2_snake.dash_ready else config.COLOR_SKILL_COOLDOWN
-                dash_text_p2 = f"DASH: {'PRET' if player2_snake.dash_ready else 'CD'}"
+                dash_text_p2 = f"DASH: {'PRÊT' if player2_snake.dash_ready else 'CD'}"
                 text_rect_dash_p2 = utils.draw_text_with_shadow(target_surface, dash_text_p2, font_default, dash_color_p2,
                                             config.COLOR_UI_SHADOW, (x_p2_ui, y_p2_ui), "bottomleft")
                 if text_rect_dash_p2 and not player2_snake.dash_ready:
@@ -1099,6 +1107,10 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                     icons.append(("icon_invincible.png", "I", config.COLOR_INVINCIBILITY_POWERUP))
                 if player2_snake.multishot_active:
                     icons.append(("icon_multishot.png", "M", config.COLOR_MULTISHOT_POWERUP))
+                for _key in bonuses.NEW_BONUSES:  # Aimant, Ralenti, Miroir (minuteurs propres)
+                    if current_time < getattr(player2_snake, _key + "_until", 0):
+                        _data = config.POWERUP_TYPES.get(_key, {})
+                        icons.append((_data.get("image_file", ""), _data.get("symbol", "?"), _data.get("color", config.COLOR_WHITE)))
 
                 if icons:
                     total_w = len(icons) * icon_size + (len(icons) - 1) * icon_gap

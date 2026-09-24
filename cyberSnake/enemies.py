@@ -13,6 +13,8 @@ import random
 
 import pygame
 
+import game_clock
+
 import config
 import utils
 import fx
@@ -146,7 +148,7 @@ class MinerSnake(game_objects.EnemySnake):
         self.color = MINER_COLOR
         self.special_tint = MINER_COLOR
         self.length = 5
-        self._last_mine_drop = pygame.time.get_ticks()
+        self._last_mine_drop = game_clock.ticks()
 
     def move(self, p1_snake, p2_snake, foods, mines, powerups, current_time, **kwargs):
         moved, new_head, _shoot = super().move(p1_snake, p2_snake, foods, mines, powerups, current_time, **kwargs)
