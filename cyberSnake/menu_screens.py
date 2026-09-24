@@ -1902,6 +1902,7 @@ def run_controls_remap(events, dt, screen, game_state):
     pending["invert_axis"] = pending_invert
 
     menu_items = [
+        ("WIZARD", "Assistant sticks J1 / J2", "action"),
         ("PRIMARY", "Bouton Tir / Confirmer", "button"),
         ("SECONDARY", "Bouton Dash / Retour", "button"),
         ("TERTIARY", "Bouton Bouclier", "button"),
@@ -1994,6 +1995,10 @@ def run_controls_remap(events, dt, screen, game_state):
         if item_id == "RESET":
             reset_defaults()
             return config.CONTROLS
+
+        if item_id == "WIZARD":
+            game_state.pop('stick_wizard', None)
+            return config.STICK_WIZARD
 
         if item_id == "SAVE":
             if apply_and_save():

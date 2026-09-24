@@ -490,6 +490,9 @@ def run_game_over(events, dt, screen, game_state):
                 # Navigation avec le hat (croix directionnelle)
                 elif event.type == pygame.JOYHATMOTION and event.hat == 0:
                     hat_x, hat_y = event.value
+                    # Boutons côte à côte : gauche/droite (haut/bas fonctionnent aussi)
+                    if hat_y == 0 and hat_x != 0:
+                        hat_y = 1 if hat_x < 0 else -1
                     if hat_y > 0: # Haut
                         gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
                         utils.play_sound("eat")
