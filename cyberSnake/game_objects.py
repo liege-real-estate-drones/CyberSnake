@@ -12,6 +12,7 @@ import config
 # Importe le module utils pour accéder aux fonctions utilitaires
 import utils
 import fx
+import bonuses
 import logging # Added for detailed score logging
 
 
@@ -146,6 +147,9 @@ class Projectile:
         """Déplace le projectile."""
         time_factor = dt / (1000.0 / 60.0) if dt > 0 else 0
         distance = self.speed * time_factor
+        owner = self.owner_snake
+        if owner is not None and not getattr(owner, 'is_player', False) and bonuses.enemies_slowed(pygame.time.get_ticks()):
+            distance *= bonuses.ENEMY_PROJECTILE_SLOW  # Bonus Ralenti
         dx, dy = self.direction
         self.x += dx * distance
         self.y += dy * distance
@@ -898,6 +902,8 @@ class Snake:
             base_interval *= float(getattr(config, "GAME_SPEED_FACTOR", 1.0))
         except Exception:
             pass
+        if not self.is_player and bonuses.enemies_slowed(pygame.time.get_ticks()):
+            base_interval *= bonuses.ENEMY_SLOW_FACTOR  # Bonus Ralenti
         return base_interval
 
     def move(self, obstacles, current_time): # `obstacles` est un set ici
@@ -1004,6 +1010,8 @@ class Snake:
         if self.alive:
             self.growing = True
             self.length += 1
+            if self.is_player:
+                self.foods_eaten = getattr(self, 'foods_eaten', 0) + 1  # Statistiques de fin de partie
 
     def shrink(self, amount=1):
         if not self.alive or amount <= 0: return
@@ -1038,7 +1046,7 @@ class Snake:
         score_added = int(round(score_added_float))
 
         # --- START: Added Logging ---
-        logging.info(f"ADD_SCORE: Snake='{self.name}', Value={value}, Multiplier={final_multiplier:.2f}, "
+        logging.debug(f"ADD_SCORE: Snake='{self.name}', Value={value}, Multiplier={final_multiplier:.2f}, "
                      f"CalculatedAdd={score_added}, ScoreBefore={self.score}")
         # --- END: Added Logging ---
 
@@ -1065,7 +1073,7 @@ class Snake:
             pass
 
         # --- START: Added Logging ---
-        logging.info(f"ADD_SCORE: Snake='{self.name}', ScoreAfter={self.score}")
+        logging.debug(f"ADD_SCORE: Snake='{self.name}', ScoreAfter={self.score}")
         # --- END: Added Logging ---
 
         if not is_combo_bonus and not is_objective_bonus and self.combo_counter > 1:
@@ -1081,6 +1089,7 @@ class Snake:
         else:
             self.combo_counter += points
         self.combo_timer = current_time + config.COMBO_TIMEOUT
+        self.max_combo = max(getattr(self, 'max_combo', 0), self.combo_counter)
         if points > 0 and self.combo_counter > 1:
              utils.play_sound("combo_increase")
 
@@ -1218,6 +1227,7 @@ class Snake:
                 fx.trigger_flash((255, 40, 40), 380, 120, now=current_time)
             elif killer_snake is not None and getattr(killer_snake, 'is_player', False) and px != -1:
                 fx.add_popup(px, py, "KILL !", config.COLOR_TEXT_HIGHLIGHT, big=True)
+                utils.play_sound("kill")
                 fx.trigger_flash((255, 255, 255), 120, 45, now=current_time)
         except Exception:
             pass
@@ -1251,11 +1261,15 @@ class Snake:
         if self.is_player:
             utils.play_sound("powerup_pickup")
             self.increment_combo(points=2)
+            self.powerups_collected = getattr(self, 'powerups_collected', 0) + 1
             if cx is not None:
-                labels = {"shield": "BOUCLIER", "rapid_fire": "TIR RAPIDE", "emp": "EMP", "invincibility": "INVINCIBLE", "multishot": "MULTI-TIR"}
+                labels = {"shield": "BOUCLIER", "rapid_fire": "TIR RAPIDE", "emp": "EMP", "invincibility": "INVINCIBLE", "multishot": "MULTI-TIR",
+                          "magnet": "AIMANT", "slowmo": "RALENTI", "mirror": "MIROIR"}
                 fx.add_popup(cx, cy - 20, labels.get(type_key, type_key.upper()), data['color'], big=True)
 
         duration = data.get("duration", config.POWERUP_BASE_DURATION)
+        if bonuses.activate(self, type_key, current_time, duration):
+            return  # Nouveaux bonus : minuteurs propres, n'annulent pas les autres
         if duration > 0:
             new_end_time = current_time + duration
             self.deactivate_powerups()
@@ -1645,6 +1659,9 @@ class Snake:
         if self.score_multiplier_active and mult_end > current_time:
              effects_to_draw.append(("X2", config.COLOR_FOOD_MULTIPLIER, mult_end - current_time, config.FOOD_EFFECT_DURATION))
 
+        # 6b. Nouveaux bonus (aimant, ralenti, miroir)
+        effects_to_draw.extend(bonuses.status_effects(self, current_time))
+
         # 7. Frozen
         frozen_end = self.effect_end_timers.get('freeze_self', 0)
         if self.frozen and frozen_end > current_time:
@@ -1765,18 +1782,6 @@ class Snake:
         _g = int(getattr(config, "GRID_SIZE", 20))
         self._render_head_center_px = (render_px[0][0] + _g // 2, render_px[0][1] + _g // 2)
 
-        # Halo néon sous le serpent (tête plus lumineuse)
-        if getattr(config, "NEON_GLOW", True):
-            try:
-                glow_col = self.color
-                boss_k = 1.5 if getattr(self, 'is_boss', False) else 1.0
-                for i, (gx, gy) in enumerate(render_px):
-                    if i == 0:
-                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.7 * boss_k, 8)
-                    elif i % 2 == 0 or len(render_px) < 12 or boss_k > 1.0:
-                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.3 * boss_k, 5)
-            except Exception:
-                pass
 
         def _draw_armor_pips(head_rect):
             """Affiche l'armure restante (très lisible) près de la tête."""
@@ -1922,6 +1927,19 @@ class Snake:
             if flash: # Si un des flashs doit rendre invisible
                 return
 
+        # Halo néon sous le serpent (tête plus lumineuse)
+        if getattr(config, "NEON_GLOW", True):
+            try:
+                glow_col = self.color
+                boss_k = 1.5 if getattr(self, 'is_boss', False) else 1.0
+                for i, (gx, gy) in enumerate(render_px):
+                    if i == 0:
+                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.7 * boss_k, 8)
+                    elif i % 2 == 0 or len(render_px) < 12 or boss_k > 1.0:
+                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.3 * boss_k, 5)
+            except Exception:
+                pass
+
         # --- Détermination Couleur de Base ---
         base_color = self.color
         if current_time < getattr(self, '_hit_flash_until', 0): # Flash d'impact
@@ -1948,8 +1966,8 @@ class Snake:
         if current_time < getattr(self, '_hit_flash_until', 0):
              tint_color_to_use = config.COLOR_WHITE
              tint_alpha = 170
-        elif getattr(self, 'is_boss', False):
-             tint_color_to_use = self.color  # Boss : teinte violette permanente
+        elif getattr(self, 'is_boss', False) or getattr(self, 'special_tint', None):
+             tint_color_to_use = getattr(self, 'special_tint', None) or self.color  # Boss / ennemis spéciaux
              tint_alpha = 130
         # 1. Effect Tint (Si une couleur d'effet est active et différente de la couleur de base)
         elif base_color != self.color:

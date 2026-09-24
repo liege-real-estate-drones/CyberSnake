@@ -48,6 +48,7 @@ try:
     import fx
     import screens
     import progress
+    import arenas  # Enregistre les arènes animées dans config.MAPS
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -419,6 +420,7 @@ def main():
         config.GAME_OVER: game_states.run_game_over,
         config.HALL_OF_FAME: screens.run_hall_of_fame,
         config.TITLE: screens.run_title,
+        config.HOW_TO_PLAY: screens.run_how_to_play,
         config.UPDATE: game_states.run_update,
         config.DEMO: game_states.run_demo,
     }
@@ -621,7 +623,7 @@ def main():
                 except Exception:
                     logging.error(f"--- ERREUR DANS L'ÉTAT {current_state_key} ---", exc_info=True)
                     try:
-                        pygame.mixer.music.stop()
+                        utils.music_call("stop")
                     except Exception as music_err:
                         logging.warning(f"Erreur mineure arrêt musique lors gestion erreur: {music_err}", exc_info=False)
                     game_state['current_state'] = config.MENU # Retour au menu par sécurité
