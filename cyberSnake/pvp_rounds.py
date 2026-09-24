@@ -27,7 +27,7 @@ ROUND_SCORE_MS = 6000       # L'écran entre deux manches passe tout seul après
 ROUND_INPUT_LOCK_MS = 1200
 # Cartes jouées d'une manche à l'autre (symétriques ou équilibrées pour deux joueurs)
 ROUND_MAPS = ["Vide", "Piliers", "Couloirs", "Chambres", "Obstacle Central", "Portails", "Portes Laser",
-              "Duel Miroir", "Circuit", "Labyrinthe", "Arène Circulaire", "Quatre Salles"]
+              "Duel Miroir", "Circuit", "Labyrinthe", "Labyrinthe Mouvant", "Arène Circulaire", "Forteresse"]
 
 
 def load_settings():

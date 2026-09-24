@@ -29,6 +29,7 @@ import keyboard_controls  # noqa: E402
 import menu_input  # noqa: E402
 import game_objects  # noqa: E402
 import pvp_rounds  # noqa: E402
+import maps_extra  # noqa: E402
 
 utils.load_assets(GAME_DIR)
 FONTS = utils.load_fonts(GAME_DIR, 1.0)
@@ -303,6 +304,51 @@ class TestPvpRounds(unittest.TestCase):
         with MemoryOptions() as mem:
             mem.data['pvp'] = {'best_of': 3, 'score_limit': 10, 'friendly_fire': False}
             self.assertEqual(pvp_rounds.load_settings(), (3, pvp_rounds.DEFAULT_SCORE_LIMIT))
+
+
+class TestNewMaps(unittest.TestCase):
+    SIZES = ((40, 30), (32, 24), (40, 22), (53, 30), (26, 20), (60, 33), (80, 45))
+
+    def test_new_maps_are_registered(self):
+        import arenas
+        for key in maps_extra.MAPS:
+            self.assertIn(key, config.MAPS)
+            self.assertIn(key, arenas.MAP_DESCRIPTIONS)
+        self.assertGreaterEqual(len(maps_extra.MAPS), 5)
+
+    def test_starts_are_free_and_every_cell_is_reachable(self):
+        from collections import deque
+        for gw, gh in self.SIZES:
+            for name, m in maps_extra.MAPS.items():
+                walls = set(m['walls_generator'](gw, gh))
+                self.assertTrue(walls, name)
+                blocked = set(walls)
+                if m.get('events'):
+                    for seg in m['events'](gw, gh).get('lasers', []):
+                        blocked |= set(seg)
+                for key, d in (('p1_start', 1), ('p2_start', -1), ('ai_start', -1)):
+                    x, y = m[key](gw, gh)
+                    for k in range(-2, 6):  # Corps derrière la tête, 5 cases libres devant
+                        self.assertNotIn(((x + d * k) % gw, y), blocked, f"{name} {gw}x{gh} {key} {k}")
+                free = {(x, y) for x in range(gw) for y in range(gh)} - walls
+                start = m['p1_start'](gw, gh)
+                seen, todo = {start}, deque([start])
+                while todo:
+                    x, y = todo.popleft()
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        n = ((x + dx) % gw, (y + dy) % gh)
+                        if n in free and n not in seen:
+                            seen.add(n)
+                            todo.append(n)
+                self.assertEqual(len(seen), len(free), f"{name} {gw}x{gh} : zone fermée")
+
+    def test_games_start_on_every_new_map(self):
+        for key in maps_extra.MAPS:
+            gs = new_game(config.MODE_VS_AI, key)
+            gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+            self.assertTrue(gs['player_snake'].alive, key)
+        gs = new_game(config.MODE_SOLO, "Labyrinthe Mouvant")
+        self.assertTrue(gs['arena']['lasers'])
 
 
 if __name__ == "__main__":
