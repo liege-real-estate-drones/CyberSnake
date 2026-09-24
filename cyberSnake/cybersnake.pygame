@@ -46,6 +46,7 @@ try:
     import game_states
     import menu_input
     import fx
+    import screens
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -346,7 +347,7 @@ def main():
 
     # --- Initialisation de l'État du Jeu ---
     game_state = {
-        'current_state': config.MENU,
+        'current_state': config.TITLE,  # Écran titre façon borne d'arcade
         'current_game_mode': config.MODE_VS_AI, # Mode par défaut
         'player_snake': None, 'player2_snake': None, 'enemy_snake': None,
         'foods': [], 'mines': [], 'powerups': [],
@@ -410,7 +411,8 @@ def main():
         config.PLAYING: game_states.run_game,
         config.PAUSED: game_states.run_pause,
         config.GAME_OVER: game_states.run_game_over,
-        config.HALL_OF_FAME: game_states.run_hall_of_fame,
+        config.HALL_OF_FAME: screens.run_hall_of_fame,
+        config.TITLE: screens.run_title,
         config.UPDATE: game_states.run_update,
         config.DEMO: game_states.run_demo,
     }
@@ -581,9 +583,12 @@ def main():
                     if (
                         current_state_key in idle_demo_states
                         and current_state_key != config.DEMO
+                        and not game_state.get('attract_mode')
                         and (now_ticks - last_input_time) >= int(getattr(config, "DEMO_IDLE_TIMEOUT_MS", 180000))
                     ):
-                        force_next_state = config.DEMO
+                        # Inactivité : boucle d'attente (titre -> démo -> scores -> titre...)
+                        force_next_state = config.TITLE
+                        game_state.pop('_attract_state_key', None)
 
                     next_state_val = run_current_state(state_events, dt, screen, game_state)
 

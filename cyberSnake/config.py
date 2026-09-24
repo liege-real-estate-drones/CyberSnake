@@ -664,6 +664,7 @@ DEMO = 101 # Mode démo / attract (inactivité)
 VS_AI_SETUP = 102 # Choix difficulté avant Vs IA
 CLASSIC_SETUP = 103 # Options rapides avant Classique
 CONTROLS = 104 # Remapping contrôles
+TITLE = 105 # Écran titre (borne d'arcade)
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)

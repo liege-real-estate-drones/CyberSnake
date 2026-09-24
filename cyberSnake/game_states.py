@@ -7311,8 +7311,7 @@ def run_demo(events, dt, screen, game_state):
     if any(ev.type == pygame.QUIT for ev in events):
         return False  # Fermeture du jeu (fenêtre / Batocera) : ne pas repasser par le menu
 
-    if any(_is_demo_input(ev) for ev in events):
-        # Sortie immédiate vers le menu
+    def _exit_demo():
         saved = game_state.pop('_demo_saved', None)
         if isinstance(saved, dict):
             for key, value in saved.items():
@@ -7322,7 +7321,27 @@ def run_demo(events, dt, screen, game_state):
                     pass
         game_state.pop('demo_mode', None)
         game_state.pop('_demo_initialized', None)
+        game_state.pop('_demo_start_time', None)
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+    if any(_is_demo_input(ev) for ev in events):
+        # Sortie immédiate vers le menu
+        _exit_demo()
+        game_state['attract_mode'] = False
+        game_state.pop('_attract_state_key', None)
+        game_state.pop('_attract_state_start', None)
         return config.MENU
+
+    # Boucle d'attente (borne) : après un moment, la démo laisse place au Hall of Fame
+    _now_demo = pygame.time.get_ticks()
+    if not game_state.get('_demo_start_time'):
+        game_state['_demo_start_time'] = _now_demo
+    if game_state.get('attract_mode') and _now_demo - int(game_state.get('_demo_start_time') or _now_demo) >= 45000:
+        _exit_demo()
+        return config.HALL_OF_FAME
 
     if not bool(game_state.get('_demo_initialized', False)):
         # Sauvegarde un minimum de contexte pour ne pas "polluer" la session
