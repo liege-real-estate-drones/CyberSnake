@@ -31,6 +31,7 @@ import game_objects  # noqa: E402
 import pvp_rounds  # noqa: E402
 import maps_extra  # noqa: E402
 import boss  # noqa: E402
+import demo_mode  # noqa: E402
 
 utils.load_assets(GAME_DIR)
 FONTS = utils.load_fonts(GAME_DIR, 1.0)
@@ -457,6 +458,46 @@ class TestBoss(unittest.TestCase):
             boss.update_boss(gs, game_clock.ticks())
             self.assertIsNone(gs.get('boss'))
             self.assertIn("BOSS VAINCU", gs['boss_banner_text'])
+
+
+class TestDemo(unittest.TestCase):
+    def _state(self):
+        return {'current_state': config.DEMO, 'current_game_mode': config.MODE_SOLO, 'selected_map_key': 'Piliers',
+                'base_path': GAME_DIR, 'player1_name_input': 'A', 'player2_name_input': 'B', 'coop': True,
+                'font_small': FONTS['small'], 'font_default': FONTS['default'], 'font_medium': FONTS['medium'],
+                'font_large': FONTS['large'], 'font_title': FONTS['title']}
+
+    def test_scenarios_rotate_modes_and_maps(self):
+        gs = {}
+        seen = [demo_mode.next_scenario(gs) for _ in range(len(demo_mode.SCENARIOS) * 3)]
+        self.assertEqual({s['mode'] for s in seen}, {config.MODE_VS_AI, config.MODE_SURVIVAL, config.MODE_PVP})
+        self.assertGreaterEqual(len({s['map'] for s in seen}), 8)
+        for a, b in zip(seen, seen[1:]):
+            self.assertNotEqual((a['title'], a['map']), (b['title'], b['map']))
+
+    def test_every_scenario_plays_and_session_is_restored(self):
+        surf = pygame.Surface((800, 600))
+        gs = self._state()
+        with FakeClock() as clock:
+            for _ in range(len(demo_mode.SCENARIOS)):
+                boss_seen = False
+                for _ in range(420):
+                    self.assertEqual(demo_mode.run_demo([], 16, surf, gs), config.DEMO)
+                    boss_seen = boss_seen or gs.get('boss') is not None
+                    clock.tick()
+                scenario = gs['_demo_scenario']
+                self.assertEqual(gs['current_game_mode'], scenario['mode'])
+                if scenario['setup'] == 'boss':
+                    self.assertTrue(boss_seen, "le boss n'est pas apparu dans la démo")
+                if scenario['mode'] == config.MODE_PVP:
+                    self.assertIsNotNone(gs.get('player2_snake'))
+                press = pygame.event.Event(pygame.JOYBUTTONDOWN, button=1, instance_id=0, joy=0)
+                self.assertEqual(demo_mode.run_demo([press], 16, surf, gs), config.MENU)
+                self.assertEqual(gs['current_game_mode'], config.MODE_SOLO)
+                self.assertEqual(gs['selected_map_key'], 'Piliers')
+                self.assertTrue(gs['coop'])
+                self.assertNotIn('demo_mode', gs)
+                gs['current_state'] = config.DEMO
 
 
 if __name__ == "__main__":
