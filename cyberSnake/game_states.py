@@ -63,6 +63,7 @@ import config
 import utils
 import game_objects
 import fx
+import boss as boss_mod
 import subprocess
 import os
 import sys
@@ -650,6 +651,8 @@ def draw_game_elements_on_surface(target_surface, game_state, current_time=None)
     try:
         fx.draw_popups(target_surface, current_time, font_small, font_default)
         fx.draw_flash(target_surface, current_time)
+        if current_game_mode == config.MODE_SURVIVAL:
+            boss_mod.draw_boss_ui(target_surface, game_state, current_time, font_default, font_medium)
     except Exception:
         pass
 
@@ -1506,6 +1509,8 @@ def reset_game(game_state):
     print("Resetting game...")
     current_time_reset = pygame.time.get_ticks()
     fx.clear_popups()
+    game_state['boss'] = None
+    game_state['boss_banner_until'] = 0
     game_state['player_projectiles'] = []
     game_state['player2_projectiles'] = []
     game_state['enemy_projectiles'] = []
@@ -7941,6 +7946,11 @@ def run_game(events, dt, screen, game_state):
             if survival_wave > 0 and current_time >= survival_wave_start_time + config.SURVIVAL_WAVE_DURATION:
                 survival_wave += 1; game_state['survival_wave'] = survival_wave
                 game_state['survival_wave_start_time'] = current_time
+                try:
+                    boss_mod.maybe_spawn_boss(game_state, current_time, survival_wave)
+                    active_enemies = game_state.get('active_enemies', active_enemies)
+                except Exception as e:
+                    logging.error(f"Erreur apparition boss: {e}", exc_info=True)
                 factor = config.SURVIVAL_INITIAL_INTERVAL_FACTOR - (survival_wave - 1) * config.SURVIVAL_INTERVAL_REDUCTION_PER_WAVE
                 current_survival_interval_factor = max(config.SURVIVAL_MIN_INTERVAL_FACTOR, factor)
                 game_state['current_survival_interval_factor'] = current_survival_interval_factor
@@ -9220,6 +9230,12 @@ def run_game(events, dt, screen, game_state):
          new_active_enemies = [baby for baby in current_active_enemies if baby not in enemies_died_this_frame]
          game_state['active_enemies'] = new_active_enemies
          enemies_died_this_frame.clear()
+
+    # --- Boss (Survie) : récompense à sa défaite ---
+    try:
+        boss_mod.update_boss(game_state, current_time)
+    except Exception as e:
+        logging.error(f"Erreur mise à jour boss: {e}", exc_info=True)
 
     # --- Nettoyage final Nids (Proj + Tête IA) ---
     all_nests_to_remove_final = nests_hit_indices_proj | nests_collided_indices_head

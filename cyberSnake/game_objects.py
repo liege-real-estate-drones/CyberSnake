@@ -1762,11 +1762,12 @@ class Snake:
         if getattr(config, "NEON_GLOW", True):
             try:
                 glow_col = self.color
+                boss_k = 1.5 if getattr(self, 'is_boss', False) else 1.0
                 for i, (gx, gy) in enumerate(render_px):
                     if i == 0:
-                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.7, 8)
-                    elif i % 2 == 0 or len(render_px) < 12:
-                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.3, 5)
+                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.7 * boss_k, 8)
+                    elif i % 2 == 0 or len(render_px) < 12 or boss_k > 1.0:
+                        fx.draw_glow(surface, (gx + _g // 2, gy + _g // 2), glow_col, _g * 1.3 * boss_k, 5)
             except Exception:
                 pass
 
@@ -1940,6 +1941,9 @@ class Snake:
         if current_time < getattr(self, '_hit_flash_until', 0):
              tint_color_to_use = config.COLOR_WHITE
              tint_alpha = 170
+        elif getattr(self, 'is_boss', False):
+             tint_color_to_use = self.color  # Boss : teinte violette permanente
+             tint_alpha = 130
         # 1. Effect Tint (Si une couleur d'effet est active et différente de la couleur de base)
         elif base_color != self.color:
              tint_color_to_use = base_color
