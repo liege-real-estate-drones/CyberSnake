@@ -258,6 +258,14 @@ class TestBornePistolets(unittest.TestCase):
         self.assertEqual(self.bp.pick_camera(self.RED, swapped), "/dev/video2")
         self.assertIsNone(self.bp.pick_camera(self.RED, self.CAMERAS[2:]))
 
+    def test_each_driver_hides_only_the_other_guns_cameras(self):
+        red = {"camera_nodes": self.bp.camera_nodes(self.RED, self.CAMERAS)}
+        blue = {"camera_nodes": self.bp.camera_nodes(self.BLUE, self.CAMERAS)}
+        self.assertEqual(red["camera_nodes"], ["/dev/video0", "/dev/video1"])
+        self.assertEqual(self.bp.hidden_for(red, [red, blue]), ["/dev/video2", "/dev/video3"])
+        self.assertEqual(self.bp.hidden_for(blue, [red, blue]), ["/dev/video0", "/dev/video1"])
+        self.assertEqual(self.bp.hidden_for(red, [red]), [])
+
     def test_gun_names(self):
         self.assertEqual(self.bp.gun_id("Bleu"), "0f01")
         self.assertEqual(self.bp.gun_id("rouge"), "0f02")

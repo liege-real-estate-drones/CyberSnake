@@ -11,8 +11,11 @@ Pourquoi :
   (on vise avec un pistolet, le curseur suit l'autre).
 
 Solution (service, rien à faire pendant les jeux) :
-- chaque pilote Sinden reçoit la caméra de SON pistolet (réglage VideoDevice), trouvée
-  par le câblage USB (la caméra est branchée dans le même boîtier que le pistolet) ;
+- chaque pilote Sinden est relancé dans un espace isolé où il ne voit QUE la caméra de
+  son pistolet (trouvée par le câblage USB : la caméra est dans le même boîtier que le
+  pistolet). Il la trouve par son nom, comme d'habitude : le pilote en déduit le sens de
+  montage de la caméra. (Imposer la caméra par VideoDevice fait perdre ce sens : image à
+  l'envers, haut/bas et gauche/droite inversés.)
 - les « Sinden lightgun » sont recréés dans l'ordre J1 puis J2 (liens
   /dev/input/borne-pistolet-j1 et -j2). Si Batocera les recrée (pistolet rebranché,
   réglage des pistolets modifié), le service remet l'ordre, jamais pendant un jeu.
@@ -112,6 +115,18 @@ def pick_camera(gun_usb_path, cameras):
     return None
 
 
+def camera_nodes(gun_usb_path, cameras):
+    """Tous les nœuds /dev/videoN (capture et autres) branchés dans le boîtier du pistolet."""
+    hub = os.path.dirname(gun_usb_path.rstrip("/"))
+    return sorted(dev for dev, path, _ in cameras if path.startswith(hub + "/"))
+
+
+def hidden_for(gun, guns):
+    """Caméras à cacher au pilote de ce pistolet : celles des AUTRES pistolets."""
+    mine = set(gun["camera_nodes"])
+    return sorted({n for g in guns if g is not gun for n in g["camera_nodes"]} - mine)
+
+
 def with_link(argv, link):
     """Commande evsieve de Batocera + « create-link=LIEN » sur la sortie."""
     args = [a for a in argv if not a.startswith("create-link=")]
@@ -173,7 +188,7 @@ def find_guns(sys_root="/sys"):
         ttys = sorted(glob.glob(os.path.join(d, name + ":*", "tty", "ttyACM*")))
         guns.append({"id": pid, "usb": d, "inputs": inputs,
                      "tty": "/dev/" + os.path.basename(ttys[0]) if ttys else None,
-                     "camera": pick_camera(d, cameras)})
+                     "camera": pick_camera(d, cameras), "camera_nodes": camera_nodes(d, cameras)})
     return guns
 
 
@@ -242,39 +257,69 @@ def _stop(pid, timeout=5.0):
 
 # ---------------------------------------------------------------- corrections
 
+def _mount_ns(pid):
+    try:
+        return os.readlink(f"/proc/{pid}/ns/mnt")
+    except OSError:
+        return None
+
+
 def fix_cameras(guns, procs):
-    """Chaque pilote reçoit la caméra de son pistolet. Retourne True si tout est bon."""
+    """Chaque pilote ne voit que la caméra de son pistolet. Retourne True si tout est bon."""
     drivers = []
     for g in guns:
         drv = driver_of(g)
         if drv is None or driver_pid(drv[1], procs) is None:
             return False  # Pilote pas encore lancé par Batocera : on attend
         drivers.append((g, drv))
-    todo = [(g, drv) for g, drv in drivers if g["camera"] and video_device(_read(drv[2])) != g["camera"]]
+    if len(guns) < 2:
+        return True  # Un seul pistolet : aucune confusion possible
+    own_ns = _mount_ns("self")
+    # Pilote lancé par Batocera (espace commun) ou ancienne version (VideoDevice imposé)
+    todo = [(g, drv) for g, drv in drivers
+            if _mount_ns(driver_pid(drv[1], procs)) == own_ns or video_device(_read(drv[2]))]
     if not todo:
         return True
     # On arrête TOUS les pilotes (l'un d'eux tient peut-être la caméra d'un autre)
     for g, (d, digest, cfg) in drivers:
         _stop(driver_pid(digest, procs))
-        if g["camera"]:
-            with open(cfg, "r") as f:
-                text = f.read()
+        text = _read(cfg)
+        if video_device(text):
             with open(cfg, "w") as f:
-                f.write(set_video_device(text, g["camera"]))
+                f.write(set_video_device(text, ""))
     for g, (d, digest, cfg) in drivers:
         try:
             os.remove(os.path.join(d, "lockfile"))
         except OSError:
             pass
+        hide = hidden_for(g, guns)
         with open(f"/var/log/virtual-sindenlightgun-devices.{digest}.log2", "w") as out:
-            subprocess.Popen(["mono-service", f"-l:{d}/lockfile", f"-d:{d}", "--no-daemon",
-                              f"./LightgunMono-{digest}.exe"],
-                             cwd=d, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
-                             env=dict(os.environ, PATH="/bin:/sbin:/usr/bin:/usr/sbin"),
+            subprocess.Popen([sys.executable, os.path.abspath(__file__), "--pilote", d, digest] + hide,
+                             stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
                              start_new_session=True)
-        log(f"{gun_label(g['id'])} : pilote relancé avec SA caméra {g['camera']} (port {g['tty']})")
+        log(f"{gun_label(g['id'])} : pilote relancé, ne voit que SA caméra {g['camera']} "
+            f"(caméras cachées : {' '.join(hide) or '-'})")
         time.sleep(1)
     return True
+
+
+def run_isolated_driver(d, digest, hide):
+    """Lance le pilote Sinden dans un espace de montage à lui, où les caméras des autres
+    pistolets sont remplacées par /dev/null (le reste du système n'est pas touché)."""
+    flag = 0x00020000  # CLONE_NEWNS
+    if hasattr(os, "unshare"):
+        os.unshare(flag)
+    else:
+        import ctypes
+        if ctypes.CDLL(None, use_errno=True).unshare(flag) != 0:
+            raise OSError(ctypes.get_errno(), "unshare")
+    subprocess.run(["mount", "--make-rprivate", "/"], check=True)
+    for node in hide:
+        subprocess.run(["mount", "--bind", "/dev/null", node], check=True)
+    os.chdir(d)
+    os.environ["PATH"] = "/bin:/sbin:/usr/bin:/usr/sbin"
+    os.execvp("mono-service", ["mono-service", f"-l:{d}/lockfile", f"-d:{d}", "--no-daemon",
+                               f"./LightgunMono-{digest}.exe"])
 
 
 def order_ok(ordered, procs):
@@ -357,7 +402,9 @@ def cmd_list():
         print(f"{gun_label(g['id'])} : usb={os.path.basename(g['usb'])} série={g['tty']} caméra={g['camera']}")
         print(f"    entrées={g['inputs']} evsieve={pid} lien={link} -> "
               f"{os.path.realpath(link) if link and os.path.exists(link) else '-'}")
-        print(f"    pilote={dpid} VideoDevice={video_device(_read(drv[2])) if drv else '-'!r}")
+        isolated = dpid is not None and _mount_ns(dpid) != _mount_ns("self")
+        print(f"    pilote={dpid} isolé={'oui' if isolated else 'NON'} caméras du boîtier={g['camera_nodes']} "
+              f"VideoDevice={video_device(_read(drv[2])) if drv else '-'!r}")
     print("=== Caméras ===")
     for dev, path, idx in find_cameras():
         print(f"  {dev} index={idx} {path}")
@@ -385,7 +432,10 @@ def main(argv=None):
     g.add_argument("--list", action="store_true")
     g.add_argument("--run", action="store_true")
     g.add_argument("--j1", metavar="PISTOLET")
+    g.add_argument("--pilote", nargs="+", metavar="ARG", help=argparse.SUPPRESS)  # usage interne
     a = p.parse_args(argv)
+    if a.pilote:
+        return run_isolated_driver(a.pilote[0], a.pilote[1], a.pilote[2:])
     if a.list:
         return cmd_list()
     if a.j1:
