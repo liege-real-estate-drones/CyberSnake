@@ -7,10 +7,11 @@ Pourquoi : les deux encodeurs « Zero Delay » (DragonRise) de la borne sont ide
 l'ordre où ils répondent au démarrage : c'est aléatoire.
 
 Solution : ce service reconnaît chaque encodeur par le PORT USB où il est branché
-(ça, ça ne change jamais), le « capture » et le recrée sous forme d'une manette
-virtuelle au nom unique : « Borne J1 » et « Borne J2 ». Batocera voit alors deux
-manettes différentes et les attribue toujours de la même façon. Au passage, le sens
-du stick est corrigé (stick monté de travers, haut/bas inversé...) pour tous les jeux.
+(ça, ça ne change jamais), le « capture », le cache aux jeux et le remplace par une
+copie conforme (même nom, mêmes identifiants : le réglage de boutons de Batocera reste
+valable). Les copies sont toujours créées dans l'ordre J1 puis J2.
+
+URGENCE : Select + Start tenus 5 secondes = correction désactivée, sticks d'origine rendus.
 
 Usage (en SSH sur la borne) :
   python3 borne_manettes.py --list     # affiche les périphériques (manettes, pistolets...)
@@ -27,8 +28,6 @@ import time
 CONFIG_PATH = "/userdata/system/borne-manettes.json"
 VIRTUAL_PREFIX = "Borne J"
 VIRTUAL_PHYS_PREFIX = "borne-j"
-VIRTUAL_VENDOR = 0x1209          # pid.codes (identifiants libres)
-VIRTUAL_PRODUCTS = {1: 0xB0E1, 2: 0xB0E2}
 
 try:
     import evdev
@@ -209,78 +208,236 @@ def cmd_learn():
 
 
 # ---------------------------------------------------------------- --run
+#
+# Fonctionnement :
+# - chaque encodeur est reconnu par son port USB (« phys »), capturé (grab) puis caché
+#   aux jeux (nœuds /dev supprimés + faux débranchement envoyé à udev) ;
+# - à sa place, une COPIE CONFORME (même nom, mêmes identifiants) est créée, toujours
+#   dans l'ordre J1 puis J2 : Batocera et les émulateurs gardent le réglage de boutons
+#   existant, et J1 / J2 ne changent plus de place ;
+# - URGENCE : Select + Start tenus 5 s = correction désactivée, manettes d'origine rendues.
+
+PANIC_BUTTONS = (296, 297)   # Select + Start (BTN_BASE3 + BTN_BASE4 des encodeurs Zero Delay)
+PANIC_HOLD_S = 5.0
+
+
+def _sysfs_input_name(event_path):
+    """« input31 » pour /dev/input/event20."""
+    try:
+        return os.path.basename(os.path.realpath(f"/sys/class/input/{os.path.basename(event_path)}/device"))
+    except OSError:
+        return ""
+
+
+def _input_number(event_path):
+    digits = "".join(ch for ch in _sysfs_input_name(event_path) if ch.isdigit())
+    return int(digits) if digits else -1
+
+
+def in_sysfs_order(numbers):
+    """True si l'ordre « texte » de /sys (où input9 > input10 !) suit l'ordre J1, J2."""
+    names = [f"input{n}" for n in numbers]
+    return names == sorted(names)
+
+
+def _joydev_nodes(event_path):
+    base = f"/sys/class/input/{os.path.basename(event_path)}/device"
+    try:
+        return ["/dev/input/" + n for n in os.listdir(base) if n.startswith("js")]
+    except OSError:
+        return []
+
+
+def _uevent(node_path, action):
+    """Faux branchement / débranchement envoyé à udev (vu aussi par les jeux déjà lancés)."""
+    try:
+        with open(f"/sys/class/input/{os.path.basename(node_path)}/uevent", "w") as f:
+            f.write(action)
+    except OSError:
+        pass
+
+
+class HiddenNode:
+    """Nœud /dev d'un encodeur d'origine, caché aux jeux ; restore() le remet."""
+
+    def __init__(self, path):
+        st = os.stat(path)
+        self.path, self.mode, self.rdev = path, st.st_mode, st.st_rdev
+        _uevent(path, "remove")
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+    def restore(self):
+        try:
+            if not os.path.exists(self.path):
+                os.mknod(self.path, self.mode, self.rdev)
+        except OSError:
+            pass
+        _uevent(self.path, "add")
+
 
 class Slot:
     def __init__(self, conf):
         self.player = int(conf["player"])
         self.phys = conf["phys"]
-        self.axes = {int(k): (int(v[0]), bool(v[1])) for k, v in (conf.get("axes") or {}).items()}
         self.dev = None
         self.ui = None
+        self.hidden = []
+        self.pressed = {}
 
     def matches(self, dev):
         return dev.phys == self.phys and _is_joystick(dev) and not _is_virtual(dev)
 
+    def create_virtual(self, model):
+        i = model.info
+        self.ui = evdev.UInput.from_device(model, name=model.name, vendor=i.vendor, product=i.product,
+                                           version=i.version, bustype=i.bustype,
+                                           phys=f"{VIRTUAL_PHYS_PREFIX}{self.player}")
+
+    def destroy_virtual(self):
+        if self.ui is not None:
+            try:
+                self.ui.close()
+            except Exception:
+                pass
+            self.ui = None
+
     def attach(self, dev):
-        dev.grab()  # Les jeux ne voient plus l'original (sinon doublon)
+        dev.grab()
         self.dev = dev
-        if self.ui is None:
-            # La manette virtuelle survit aux débranchements : J1 reste J1
-            self.ui = evdev.UInput.from_device(
-                dev, name=f"{VIRTUAL_PREFIX}{self.player}", vendor=VIRTUAL_VENDOR,
-                product=VIRTUAL_PRODUCTS.get(self.player, 0xB0E0 + self.player), version=1,
-                phys=f"{VIRTUAL_PHYS_PREFIX}{self.player}")
-        log(f"J{self.player} : {dev.name!r} ({dev.phys}) -> « {VIRTUAL_PREFIX}{self.player} »")
+        self.pressed = {}
+        self.hidden = []
+        for node in [dev.path] + _joydev_nodes(dev.path):
+            try:
+                self.hidden.append(HiddenNode(node))
+            except OSError:
+                pass
+        log(f"J{self.player} : {dev.name!r} ({dev.phys}) capturée -> manette virtuelle J{self.player}")
+
+    def release(self):
+        """Rend l'encodeur d'origine aux jeux."""
+        if self.dev is not None:
+            try:
+                self.dev.ungrab()
+            except Exception:
+                pass
+            try:
+                self.dev.close()
+            except Exception:
+                pass
+            self.dev = None
+        for h in self.hidden:
+            h.restore()
+        self.hidden = []
+        self.destroy_virtual()
 
     def detach(self):
         log(f"J{self.player} : manette débranchée, en attente...")
+        self.hidden = []  # Nœuds supprimés par le noyau avec la manette
         try:
             self.dev.close()
         except Exception:
             pass
         self.dev = None
 
-    def transform(self, ev):
-        if ev.type == ecodes.EV_ABS and ev.code in self.axes:
-            dest, invert = self.axes[ev.code]
-            value = ev.value
-            if invert:
-                a = self.dev.absinfo(ev.code)
-                value = a.min + a.max - value
-            return ev.type, dest, value
-        return ev.type, ev.code, ev.value
-
     def forward(self):
         for ev in self.dev.read():
-            t, c, v = self.transform(ev)
-            self.ui.write(t, c, v)
+            if ev.type == ecodes.EV_KEY:
+                if ev.value:
+                    self.pressed.setdefault(ev.code, time.time())
+                else:
+                    self.pressed.pop(ev.code, None)
+            self.ui.write(ev.type, ev.code, ev.value)
+
+    def panic_held(self, now=None):
+        now = time.time() if now is None else now
+        if not all(c in self.pressed for c in PANIC_BUTTONS):
+            return False
+        return now - max(self.pressed[c] for c in PANIC_BUTTONS) >= PANIC_HOLD_S
 
 
 def log(msg):
     print(time.strftime("%H:%M:%S ") + msg, flush=True)
 
 
+def _create_virtuals(slots, model):
+    """Crée les manettes virtuelles dans l'ordre J1, J2 (recommence si /sys les classe mal)."""
+    for _attempt in range(6):
+        for s in slots:
+            s.create_virtual(model)
+        try:
+            numbers = [_input_number(s.ui.device.path) for s in slots]
+        except Exception:
+            return  # evdev sans .device : pas de vérification possible
+        if -1 in numbers or in_sysfs_order(numbers):
+            log(f"Manettes virtuelles créées : {numbers}")
+            return
+        log(f"Ordre {numbers} incorrect, nouvel essai")
+        for s in slots:
+            s.destroy_virtual()
+        time.sleep(0.3)
+    for s in slots:
+        if s.ui is None:
+            s.create_virtual(model)
+
+
+def disable_config():
+    try:
+        os.replace(CONFIG_PATH, CONFIG_PATH + ".off")
+    except OSError:
+        pass
+
+
 def cmd_run():
     _need_evdev()
     cfg = load_config()
-    slots = [Slot(s) for s in cfg["slots"]]
+    slots = sorted((Slot(s) for s in cfg["slots"]), key=lambda s: s.player)
     if not slots:
-        log(f"Aucune configuration ({CONFIG_PATH}) : lance d'abord --learn.")
+        log(f"Aucune configuration ({CONFIG_PATH}) : correction désactivée.")
         return 1
+    import signal
+
+    def stop(*_args):
+        for s in slots:
+            s.release()
+        log("Service arrêté : manettes d'origine rendues.")
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    log("Démarrage. URGENCE : Select + Start tenus 5 s = correction désactivée.")
+
+    # Un encodeur sert de modèle pour les copies (30 s max d'attente au démarrage)
+    model = None
+    deadline = time.time() + 30
+    while model is None and time.time() < deadline:
+        for dev in _open_all():
+            if model is None and any(s.matches(dev) for s in slots):
+                model = dev
+            else:
+                dev.close()
+        if model is None:
+            time.sleep(0.5)
+    if model is None:
+        log("Aucun encodeur trouvé : correction inactive.")
+        return 1
+    _create_virtuals(slots, model)
+    model.close()
+
     last_scan = 0.0
     while True:
         now = time.time()
         if now - last_scan > 1.0 and any(s.dev is None for s in slots):
             last_scan = now
-            taken = {s.dev.path for s in slots if s.dev is not None}
             for dev in _open_all():
                 slot = next((s for s in slots if s.dev is None and s.matches(dev)), None)
-                if slot is None or dev.path in taken:
+                if slot is None:
                     dev.close()
                     continue
                 try:
                     slot.attach(dev)
-                    taken.add(dev.path)
                 except OSError as e:
                     log(f"J{slot.player} : impossible de capturer {dev.path} ({e})")
                     dev.close()
@@ -297,6 +454,10 @@ def cmd_run():
                 pass
             except OSError:
                 slot.detach()
+        if any(s.dev is not None and s.panic_held() for s in slots):
+            log("URGENCE : Select + Start tenus 5 s -> correction désactivée.")
+            disable_config()
+            stop()
 
 
 def main(argv=None):

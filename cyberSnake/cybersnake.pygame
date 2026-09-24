@@ -81,7 +81,6 @@ def _handle_joystick_added(game_state, device_index):
             return  # Déjà connue (événement envoyé au démarrage)
     borne_slot = joy_map.borne_slot(joy)
     if borne_slot is not None:
-        borne_install.ensure_es_mapping(joy, joy_map.event_path(new_id))
         # Manette virtuelle « Borne Jx » : elle prend toujours sa place
         slot = f"p{borne_slot}"
         game_state[f'joystick_{slot}'] = joy
@@ -175,8 +174,7 @@ def main():
         except pygame.error as joy_err:
             logging.error(f"Erreur initialisation joystick (ID {idx}): {joy_err}", exc_info=True)
     joystick_p1, joystick_p2 = joy_map.pick_players(all_joysticks)
-    for joy in all_joysticks:
-        borne_install.ensure_es_mapping(joy, joy_map.event_path(_joy_instance_id(joy)))
+    borne_install.refresh_installed(os.path.dirname(os.path.abspath(__file__)))  # Service J1/J2 à jour
     borne_install.dump_devices()  # Diagnostic lisible depuis Windows (\\BATOCERA\share\system\logs)
     if joystick_p1 is not None:
         joystick_p1_name = joystick_p1.get_name()

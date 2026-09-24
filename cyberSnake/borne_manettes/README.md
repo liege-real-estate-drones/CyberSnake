@@ -4,9 +4,13 @@
 identiques : même nom, même identifiant, pas de numéro de série. Batocera les numérote
 dans l'ordre où ils répondent au démarrage, donc au hasard. Changer de port USB n'y change rien.
 
-**La solution :** un service reconnaît chaque encodeur par son **port USB**, le capture et
-le remplace par une manette virtuelle au nom unique (**Borne J1** / **Borne J2**). Le sens
-de chaque stick est corrigé au passage, pour tous les jeux.
+**La solution :** un service reconnaît chaque encodeur par son **port USB**, le capture, le
+cache aux jeux et le remplace par une **copie conforme** (même nom, mêmes identifiants), créée
+toujours dans l'ordre J1 puis J2. Le réglage de boutons de Batocera reste valable : rien à
+reconfigurer.
+
+**URGENCE :** si les sticks ne répondent plus, tenir **Select + Start** (J1 ou J2) pendant
+**5 secondes** : la correction se désactive et les sticks d'origine reviennent.
 
 ## Installation la plus simple : depuis CyberSnake
 
@@ -25,10 +29,7 @@ curl -L https://raw.githubusercontent.com/liege-real-estate-drones/CyberSnake/ma
 ```
 
 L'assistant demande à J1 puis à J2 de pousser son stick vers le haut puis vers la droite.
-Ensuite, dans EmulationStation :
-
-1. Menu > Réglages des manettes > Configurer une manette : configurer **Borne J1**, puis **Borne J2**.
-2. Même menu : Joueur 1 = **Borne J1**, Joueur 2 = **Borne J2**.
+Redémarrer ensuite la borne.
 
 Ne plus déplacer les câbles USB des encodeurs après l'installation (sinon relancer l'assistant).
 
