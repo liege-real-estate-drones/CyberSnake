@@ -122,7 +122,11 @@ def load_from_controls(controls):
 
 def axes_for(instance_id):
     """(axe horizontal, axe vertical, inverser H, inverser V) pour cette manette."""
-    prof = _profiles.get(_ids.get(instance_id))
+    sid = _ids.get(instance_id)
+    prof = _profiles.get(sid)
+    if not prof and _is_borne_virtual(sid):
+        # Manette virtuelle du service « borne_manettes » : axes déjà corrigés
+        return (0, 1, False, False)
     if prof:
         try:
             return (int(prof.get("axis_h", 0)), int(prof.get("axis_v", 1)),
@@ -133,14 +137,44 @@ def axes_for(instance_id):
             bool(getattr(config, "JOY_INVERT_H", False)), bool(getattr(config, "JOY_INVERT_V", False)))
 
 
+def _is_borne_virtual(sid):
+    return bool(sid) and "borne-j" in sid
+
+
+def borne_slot(joy):
+    """1 / 2 pour les manettes virtuelles « Borne J1 » / « Borne J2 », sinon None."""
+    try:
+        name = joy.get_name() or ""
+    except Exception:
+        return None
+    if name.startswith("Borne J") and name[7:8] in ("1", "2"):
+        return int(name[7])
+    return None
+
+
+def pick_players(joys):
+    """Choisit (J1, J2) parmi toutes les manettes ouvertes au démarrage."""
+    joys = [j for j in joys if j is not None]
+    virtual = {borne_slot(j): j for j in joys if borne_slot(j) is not None}
+    if virtual:
+        # Service borne_manettes actif : les encodeurs d'origine sont capturés (muets)
+        return virtual.get(1), virtual.get(2)
+    return (joys[0] if joys else None), (joys[1] if len(joys) > 1 else None)
+
+
 def assign_players(game_state):
     """Remet chaque manette à sa place (J1 / J2) d'après les ports mémorisés."""
-    if not _players:
-        return
     joys = [j for j in (game_state.get('joystick_p1'), game_state.get('joystick_p2')) if j is not None]
     by_sid = {_ids.get(_instance_id(j)): j for j in joys}
     p1 = by_sid.get(_players.get("p1"))
     p2 = by_sid.get(_players.get("p2"))
+    # Service « borne_manettes » : le nom dit déjà qui est J1 / J2
+    for j in joys:
+        slot = borne_slot(j)
+        if slot == 1 and p1 is None and j is not p2:
+            p1 = j
+        elif slot == 2 and p2 is None and j is not p1:
+            p2 = j
     if p1 is None and p2 is None:
         return
     others = [j for j in joys if j is not p1 and j is not p2]

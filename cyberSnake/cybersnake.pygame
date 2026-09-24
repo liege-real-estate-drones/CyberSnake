@@ -78,6 +78,15 @@ def _handle_joystick_added(game_state, device_index):
         existing = game_state.get(f'joystick_{slot}')
         if existing is not None and _joy_instance_id(existing) == new_id:
             return  # Déjà connue (événement envoyé au démarrage)
+    borne_slot = joy_map.borne_slot(joy)
+    if borne_slot is not None:
+        # Manette virtuelle « Borne Jx » : elle prend toujours sa place
+        slot = f"p{borne_slot}"
+        game_state[f'joystick_{slot}'] = joy
+        game_state[f'joystick_{slot}_name'] = joy.get_name()
+        game_state[f'num_buttons_{slot}'] = joy.get_numbuttons()
+        logging.info(f"Manette virtuelle connectée -> {slot.upper()}: {joy.get_name()}")
+        return
     for slot in ('p1', 'p2'):
         if game_state.get(f'joystick_{slot}') is None:
             game_state[f'joystick_{slot}'] = joy
@@ -151,35 +160,29 @@ def main():
     joystick_count = pygame.joystick.get_count()
     logging.info(f"Nombre de joysticks détectés: {joystick_count}")
 
-    if joystick_count > 0:
+    # On ouvre toutes les manettes puis on choisit J1 / J2 (les manettes virtuelles
+    # « Borne J1 / J2 » du service borne_manettes passent avant les encodeurs capturés)
+    all_joysticks = []
+    for idx in range(joystick_count):
         try:
-            joystick_p1 = pygame.joystick.Joystick(0)
-            joystick_p1.init()
-            joy_map.register(joystick_p1, 0)
-            joystick_p1_name = joystick_p1.get_name()
-            num_buttons_p1 = joystick_p1.get_numbuttons()
-            logging.info(f"Joystick 1 (ID 0) initialisé: {joystick_p1_name} ({num_buttons_p1} boutons)")
+            joy = pygame.joystick.Joystick(idx)
+            joy.init()
+            joy_map.register(joy, idx)
+            all_joysticks.append(joy)
+            logging.info(f"Joystick (ID {idx}) initialisé: {joy.get_name()} ({joy.get_numbuttons()} boutons)")
         except pygame.error as joy_err:
-            logging.error(f"Erreur initialisation joystick 1 (ID 0): {joy_err}", exc_info=True)
-            joystick_p1 = None
+            logging.error(f"Erreur initialisation joystick (ID {idx}): {joy_err}", exc_info=True)
+    joystick_p1, joystick_p2 = joy_map.pick_players(all_joysticks)
+    if joystick_p1 is not None:
+        joystick_p1_name = joystick_p1.get_name()
+        num_buttons_p1 = joystick_p1.get_numbuttons()
     else:
         logging.warning("Aucun joystick trouvé pour Joueur 1.")
-
-    if joystick_count > 1:
-        try:
-            joystick_p2 = pygame.joystick.Joystick(1)
-            joystick_p2.init()
-            joy_map.register(joystick_p2, 1)
-            joystick_p2_name = joystick_p2.get_name()
-            num_buttons_p2 = joystick_p2.get_numbuttons()
-            logging.info(f"Joystick 2 (ID 1) initialisé: {joystick_p2_name} ({num_buttons_p2} boutons)")
-        except pygame.error as joy_err:
-            logging.error(f"Erreur initialisation joystick 2 (ID 1): {joy_err}", exc_info=True)
-            joystick_p2 = None
-    elif joystick_count == 1:
-        logging.warning("Un seul joystick détecté. Joueur 2 ne sera pas contrôlé par joystick.")
+    if joystick_p2 is not None:
+        joystick_p2_name = joystick_p2.get_name()
+        num_buttons_p2 = joystick_p2.get_numbuttons()
     else:
-        logging.warning("Aucun joystick trouvé pour Joueur 2.")
+        logging.warning("Pas de joystick pour Joueur 2.")
     # --- Fin Initialisation Joysticks ---
 
     # --- Calcul du Chemin de Base pour Assets ---
