@@ -167,7 +167,9 @@ class TestBorneManettes(unittest.TestCase):
             with open(cfg, "w") as f:
                 f.write('{"slots": [{"player": 1, "phys": "usb-0000:00:1a.0-1.5/input0"}]}')
             joy_map.load_from_controls({"sticks": {"usb:usb-0000:00:1a.0-1.5/input0":
-                                                   {"axis_h": 1, "axis_v": 0, "invert_h": 1, "invert_v": 0}}})
+                                                   {"axis_h": 1, "axis_v": 0, "invert_h": 1, "invert_v": 0},
+                                                   # Réglage périmé de l'ancienne version : ignoré
+                                                   "usb:borne-j1": {"axis_h": 0, "axis_v": 1, "invert_h": 0, "invert_v": 0}}})
             joy_map.load_borne_aliases(cfg)
             joy_map._ids[42] = "usb:borne-j1"
             self.assertEqual(joy_map.axes_for(42), (1, 0, True, False))
