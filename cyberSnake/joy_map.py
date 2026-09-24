@@ -24,6 +24,7 @@ _sdl_checked = False
 _ids = {}          # instance_id -> identifiant stable
 _profiles = {}     # identifiant stable -> {"axis_h", "axis_v", "invert_h", "invert_v"}
 _players = {}      # "p1"/"p2" -> identifiant stable
+_paths = {}        # instance_id -> /dev/input/eventN (si connu)
 
 
 def _load_sdl():
@@ -59,16 +60,22 @@ def _instance_id(joy):
             return None
 
 
-def compute_stable_id(device_index, joy):
-    """Port USB si possible, sinon chemin du périphérique, sinon GUID + nom."""
-    dev_path = None
+def device_path(device_index):
+    """/dev/input/eventN de la manette (None si SDL ne le donne pas)."""
     lib = _load_sdl()
-    if lib is not None:
-        try:
-            raw = lib.SDL_JoystickPathForIndex(int(device_index))
-            dev_path = raw.decode("utf-8", "replace") if raw else None
-        except Exception:
-            dev_path = None
+    if lib is None:
+        return None
+    try:
+        raw = lib.SDL_JoystickPathForIndex(int(device_index))
+        return raw.decode("utf-8", "replace") if raw else None
+    except Exception:
+        return None
+
+
+def compute_stable_id(device_index, joy, dev_path=None):
+    """Port USB si possible, sinon chemin du périphérique, sinon GUID + nom."""
+    if dev_path is None:
+        dev_path = device_path(device_index)
     if dev_path:
         node = os.path.basename(dev_path)
         for sys_path in (f"/sys/class/input/{node}/device/phys", f"/sys/class/input/{node}/phys"):
@@ -88,14 +95,22 @@ def compute_stable_id(device_index, joy):
 
 
 def register(joy, device_index):
-    sid = compute_stable_id(device_index, joy)
+    path = device_path(device_index)
+    sid = compute_stable_id(device_index, joy, path)
     _ids[_instance_id(joy)] = sid
+    if path:
+        _paths[_instance_id(joy)] = path
     logging.info(f"Manette « {joy.get_name()} » (instance {_instance_id(joy)}) identifiée : {sid}")
     return sid
 
 
 def unregister(instance_id):
     _ids.pop(instance_id, None)
+    _paths.pop(instance_id, None)
+
+
+def event_path(instance_id):
+    return _paths.get(instance_id)
 
 
 def stable_id(instance_id):

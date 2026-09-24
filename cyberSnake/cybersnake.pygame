@@ -51,6 +51,7 @@ try:
     import arenas  # Enregistre les arènes animées dans config.MAPS
     import joy_map
     import stick_wizard
+    import borne_install
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -173,6 +174,7 @@ def main():
         except pygame.error as joy_err:
             logging.error(f"Erreur initialisation joystick (ID {idx}): {joy_err}", exc_info=True)
     joystick_p1, joystick_p2 = joy_map.pick_players(all_joysticks)
+    borne_install.dump_devices()  # Diagnostic lisible depuis Windows (\\BATOCERA\share\system\logs)
     if joystick_p1 is not None:
         joystick_p1_name = joystick_p1.get_name()
         num_buttons_p1 = joystick_p1.get_numbuttons()

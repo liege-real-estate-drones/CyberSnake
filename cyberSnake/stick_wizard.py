@@ -6,6 +6,7 @@ quelle manette est J1 / J2 et le sens des axes de chaque stick, puis l'enregistr
 controls.json (identifié par le port USB : valable après chaque redémarrage).
 """
 import logging
+import os
 
 import pygame
 
@@ -13,6 +14,7 @@ import config
 import utils
 import joy_map
 import screens
+import borne_install
 
 PUSH_THRESHOLD = 0.6
 RELEASE_THRESHOLD = 0.3
@@ -25,8 +27,38 @@ STEPS = [
 ]
 
 
-def _new_state():
-    return {'step': 0, 'wait_release': None, 'results': {'p1': None, 'p2': None}, 'done_at': None, 'message': ""}
+def _new_state(system=False):
+    return {'step': 0, 'wait_release': None, 'results': {'p1': None, 'p2': None}, 'done_at': None, 'message': "",
+            'system': system, 'service_was_installed': False, 'result_text': None, 'result_ok': True}
+
+
+def start_system_fix(game_state):
+    """Assistant en mode « correctif pour tous les jeux » (service Batocera borne_manettes)."""
+    st = _new_state(system=True)
+    if os.path.exists(borne_install.SERVICE_PATH):
+        # On arrête l'ancien service pour voir les vraies manettes (et leur port USB)
+        st['service_was_installed'] = True
+        borne_install.stop_service()
+    game_state['stick_wizard'] = st
+    return config.STICK_WIZARD
+
+
+def _install_system_fix(st):
+    slots = []
+    for num, slot in ((1, "p1"), (2, "p2")):
+        res = st['results'][slot]
+        if not res:
+            continue
+        path = joy_map.event_path(res['instance_id'])
+        if not path:
+            return False, "Cette version de Batocera ne donne pas le port USB des manettes."
+        try:
+            slots.append(borne_install.slot_config(num, res, path))
+        except Exception as e:
+            return False, f"Manette J{num} : {e}"
+    if not slots:
+        return False, "Aucune manette enregistrée."
+    return borne_install.install(st.get('base_path', ""), slots)
 
 
 def run_stick_wizard(events, dt, screen, game_state):
@@ -36,6 +68,8 @@ def run_stick_wizard(events, dt, screen, game_state):
     now = pygame.time.get_ticks()
 
     def finish(save=True):
+        if not save and st.get('system') and st.get('service_was_installed'):
+            borne_install.start_service()  # Annulé : on remet l'ancien correctif
         if save:
             try:
                 controls = utils.load_controls(game_state.get('base_path', ""))
@@ -48,8 +82,14 @@ def run_stick_wizard(events, dt, screen, game_state):
         game_state.pop('stick_wizard', None)
         return config.CONTROLS
 
+    if st['done_at'] is not None and st.get('system') and st['result_text'] is None:
+        st['base_path'] = game_state.get('base_path', "")
+        st['result_ok'], st['result_text'] = _install_system_fix(st)
+        st['done_at'] = pygame.time.get_ticks()
+        now = st['done_at']
     if st['done_at'] is not None:
-        if now - st['done_at'] > 2200 or any(e.type in (pygame.JOYBUTTONDOWN, pygame.KEYDOWN) for e in events):
+        wait_ms = 2200 if not st.get('system') else 15000
+        if now - st['done_at'] > wait_ms or any(e.type in (pygame.JOYBUTTONDOWN, pygame.KEYDOWN) for e in events):
             return finish(save=True)
     else:
         for ev in events:
@@ -120,9 +160,24 @@ def run_stick_wizard(events, dt, screen, game_state):
     font_medium = game_state.get('font_medium')
     font_default = game_state.get('font_default')
     font_small = game_state.get('font_small')
-    title = screens._glow_text(font_large, "STICKS J1 / J2", (230, 245, 255), (0, 200, 255), 10)
+    title = screens._glow_text(font_large, "TOUS LES JEUX : J1 / J2" if st.get('system') else "STICKS J1 / J2", (230, 245, 255), (0, 200, 255), 10)
     screen.blit(title, title.get_rect(center=(sw // 2, int(sh * 0.14))))
 
+    if st['done_at'] is not None and st.get('system'):
+        ok = st.get('result_ok')
+        utils.draw_text_with_shadow(screen, st.get('result_text') or "", font_medium,
+                                    (120, 255, 150) if ok else (255, 120, 120), config.COLOR_UI_SHADOW,
+                                    (sw // 2, int(sh * 0.36)), "center")
+        if ok:
+            lines = ["Dernière étape, dans EmulationStation (une seule fois) :",
+                     "1. Réglages des manettes > Configurer une manette : « Borne J1 », puis « Borne J2 »",
+                     "2. Même menu : Joueur 1 = Borne J1, Joueur 2 = Borne J2"]
+        else:
+            lines = ["Rien n'a été modifié pour les autres jeux."]
+        for k, line in enumerate(lines):
+            utils.draw_text(screen, line, font_default, config.COLOR_TEXT_MENU, (sw // 2, int(sh * (0.48 + 0.07 * k))), "center")
+        utils.draw_text(screen, "Appuie sur un bouton pour continuer", font_small, (150, 170, 200), (sw // 2, int(sh * 0.92)), "center")
+        return config.STICK_WIZARD
     if st['done_at'] is not None:
         utils.draw_text_with_shadow(screen, "C'EST ENREGISTRÉ !", font_medium, (120, 255, 150), config.COLOR_UI_SHADOW,
                                     (sw // 2, int(sh * 0.42)), "center")

@@ -9,6 +9,8 @@ import logging
 import config
 import utils
 import progress
+import borne_install
+import stick_wizard
 from setup_screens import invalidate_map_selection_cache
 from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
@@ -1903,6 +1905,7 @@ def run_controls_remap(events, dt, screen, game_state):
 
     menu_items = [
         ("WIZARD", "Assistant sticks J1 / J2", "action"),
+        ("SYSFIX", "Fixer J1 / J2 pour TOUS les jeux", "action"),
         ("PRIMARY", "Bouton Tir / Confirmer", "button"),
         ("SECONDARY", "Bouton Dash / Retour", "button"),
         ("TERTIARY", "Bouton Bouclier", "button"),
@@ -1999,6 +2002,12 @@ def run_controls_remap(events, dt, screen, game_state):
         if item_id == "WIZARD":
             game_state.pop('stick_wizard', None)
             return config.STICK_WIZARD
+
+        if item_id == "SYSFIX":
+            if not borne_install.is_batocera():
+                set_message("Disponible uniquement sur la borne (Batocera)")
+                return config.CONTROLS
+            return stick_wizard.start_system_fix(game_state)
 
         if item_id == "SAVE":
             if apply_and_save():

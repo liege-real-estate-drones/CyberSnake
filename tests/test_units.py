@@ -23,7 +23,7 @@ import progress  # noqa: E402
 import updater  # noqa: E402
 import joy_map  # noqa: E402
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "borne_manettes"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cyberSnake", "borne_manettes"))
 import borne_manettes  # noqa: E402
 
 
@@ -143,6 +143,15 @@ class TestBorneManettes(unittest.TestCase):
         j2, j1 = _FakeJoy("Borne J2", 2), _FakeJoy("Borne J1", 3)
         self.assertEqual(joy_map.pick_players([orig_a, orig_b, j2, j1]), (j1, j2))
         self.assertEqual(joy_map.pick_players([orig_a, orig_b]), (orig_a, orig_b))
+
+    def test_sdl_axis_index_to_evdev_code(self):
+        import borne_install
+        # Zero Delay typique : X, Y, Z, RZ + croix HAT0X/HAT0Y
+        codes = borne_install.parse_abs_bitmask("3002f")  # bits 0,1,2,3,5,16,17
+        self.assertEqual(codes, [0, 1, 2, 3, 5, 16, 17])
+        self.assertEqual(borne_install.sdl_axis_to_code(codes, 4), 5)
+        self.assertIsNone(borne_install.sdl_axis_to_code(codes, 5))
+        self.assertEqual(borne_install.parse_abs_bitmask("1 0"), [])  # bit 64 hors plage
 
     def test_virtual_controller_uses_standard_axes(self):
         joy_map._ids[99] = "usb:borne-j1"
