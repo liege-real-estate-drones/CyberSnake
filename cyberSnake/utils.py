@@ -346,6 +346,23 @@ def load_assets(base_path):
 
     return menu_bg
 
+def music_call(action, *args, **kwargs):
+    """Appel sûr à pygame.mixer.music (pause, play, stop, set_volume...).
+
+    Contourne un blocage de pygame : si un effet sonore se termine pendant un appel
+    à la musique, le jeu peut se figer définitivement (verrou audio + verrou Python).
+    On coupe d'abord les effets en cours (pygame.mixer.stop libère ce verrou),
+    ce qui rend l'appel sans danger.
+    """
+    try:
+        if not pygame.mixer.get_init():
+            return None
+        pygame.mixer.stop()
+    except Exception:
+        pass
+    return getattr(pygame.mixer.music, action)(*args, **kwargs)
+
+
 def play_sound(name):
     """Joue un effet sonore s'il existe et est chargé."""
     # Accède au dict global 'sounds'
@@ -388,7 +405,7 @@ def update_music_volume(change):
     music_volume = max(0.0, min(1.0, music_volume + change))
     print(f"Volume Musique réglé à: {music_volume:.1f}")
     try:
-        pygame.mixer.music.set_volume(music_volume)
+        music_call("set_volume", music_volume)
     except pygame.error as e:
         print(f"Erreur réglage volume musique: {e}")
 
@@ -411,7 +428,7 @@ def set_music_volume(value):
     except Exception:
         return
     try:
-        pygame.mixer.music.set_volume(music_volume)
+        music_call("set_volume", music_volume)
     except Exception:
         pass
 
@@ -1038,9 +1055,9 @@ def play_selected_music(base_path):
         music_full_path = os.path.join(base_path, selected_music_file)
         if os.path.exists(music_full_path):
             try:
-                pygame.mixer.music.load(music_full_path)
-                pygame.mixer.music.set_volume(music_volume)
-                pygame.mixer.music.play(-1) # Joue en boucle
+                music_call("load", music_full_path)
+                music_call("set_volume", music_volume)
+                music_call("play", -1) # Joue en boucle
                 success = True
             except pygame.error as e:
                 print(f"Erreur lecture musique ({selected_music_file}): {e}")
@@ -1069,7 +1086,7 @@ def select_and_load_music(number_key, base_path):
         new_track_full_path = os.path.join(base_path, new_track_file)
         if os.path.exists(new_track_full_path):
             try:
-                pygame.mixer.music.load(new_track_full_path) # Charge sans jouer
+                music_call("load", new_track_full_path) # Charge sans jouer
                 selected_music_file = new_track_file # Met à jour globale si succès
                 selected_music_index = new_index
                 print(f"Musique sélectionnée: {selected_music_file} (Index: {selected_music_index})")

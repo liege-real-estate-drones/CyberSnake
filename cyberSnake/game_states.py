@@ -1867,7 +1867,7 @@ def reset_game(game_state):
         print(f"Nouvel Objectif: {game_state.get('objective_display_text','N/A')} (Cible: {game_state.get('current_objective', {}).get('target_value','N/A')})")
     if utils.selected_music_file and pygame.mixer.get_init():
         try:
-            pygame.mixer.music.stop()
+            utils.music_call("stop")
             utils.play_selected_music(base_path)
         except pygame.error as e: print(f"Erreur redémarrage musique pendant reset: {e}")
 
@@ -6841,7 +6841,7 @@ def run_pause(events, dt, screen, game_state):
                 utils.play_selected_music(base_path)
                 game_state['pause_music_changed'] = False
             elif pygame.mixer.get_init() and pygame.mixer.music.get_busy():
-                pygame.mixer.music.unpause()
+                utils.music_call("unpause")
             elif pygame.mixer.get_init() and (not pygame.mixer.music.get_busy()) and utils.selected_music_file:
                 utils.play_selected_music(base_path)
         except pygame.error as music_e:
@@ -6871,7 +6871,7 @@ def run_pause(events, dt, screen, game_state):
 
     def _quit_to_menu():
         try:
-            pygame.mixer.music.stop()
+            utils.music_call("stop")
         except pygame.error:
             pass
         game_state['pause_music_changed'] = False
@@ -7223,7 +7223,7 @@ def run_game_over(events, dt, screen, game_state):
     if not game_state.get('_go_sound_played'):
         game_state['_go_sound_played'] = True
         try:
-            pygame.mixer.music.fadeout(800)
+            utils.music_call("fadeout", 800)
         except Exception:
             pass
         if is_high_score and not is_daily:
@@ -7540,7 +7540,7 @@ def run_demo(events, dt, screen, game_state):
         game_state.pop('_demo_initialized', None)
         game_state.pop('_demo_start_time', None)
         try:
-            pygame.mixer.music.stop()
+            utils.music_call("stop")
         except Exception:
             pass
 
@@ -8089,7 +8089,7 @@ def run_game(events, dt, screen, game_state):
     
     if critical_error:
         logging.error(f"Erreur critique dans run_game: {error_message} - Retour forcé au menu.") # Log l'erreur
-        try: pygame.mixer.music.stop()
+        try: utils.music_call("stop")
         except Exception: pass
         game_state['current_state'] = config.MENU; return config.MENU
 
@@ -8286,7 +8286,7 @@ def run_game(events, dt, screen, game_state):
             if pause_allowed and event.button in (pause_button, menu_button):
                 logging.info(f"Joystick button {event.button} pressed, pausing game.")
                 try:
-                    pygame.mixer.music.pause()
+                    utils.music_call("pause")
                 except Exception:
                     pass
                 game_state['previous_state'] = config.PLAYING
@@ -8381,12 +8381,12 @@ def run_game(events, dt, screen, game_state):
                 key = event.key
                 if key == pygame.K_ESCAPE:
                     logging.info("Escape key pressed, returning to MENU.")
-                    try: pygame.mixer.music.pause()
+                    try: utils.music_call("pause")
                     except Exception: pass
                     game_state['current_state'] = config.MENU; return config.MENU
                 if key == pygame.K_p:
                     logging.info("P key pressed, pausing game.")
-                    try: pygame.mixer.music.pause()
+                    try: utils.music_call("pause")
                     except Exception: pass
                     game_state['previous_state'] = config.PLAYING
                     game_state['current_state'] = config.PAUSED; return config.PAUSED
@@ -9552,7 +9552,7 @@ def run_game(events, dt, screen, game_state):
     # --- Transition vers Game Over ---
     if game_over:
         logging.info("Game Over sequence initiated.")
-        try: pygame.mixer.music.fadeout(1000)
+        try: utils.music_call("fadeout", 1000)
         except pygame.error: pass
         game_state['game_over_hs_saved'] = False
         game_state['gameover_menu_selection'] = 0 # Reset menu selection to "Rejouer"
