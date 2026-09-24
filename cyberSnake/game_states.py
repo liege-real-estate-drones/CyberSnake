@@ -2079,8 +2079,9 @@ def run_menu(events, dt, screen, game_state):
         panel_w = min(680, int(config.SCREEN_WIDTH * 0.72))
         panel_top_min = int(config.SCREEN_HEIGHT * 0.22)
         available_h = max(220, legend_y - panel_top_min - 12)
-        row_h = max(48, min(64, int((available_h - 40) / max(1, len(menu_options)))))
-        panel_h = max(220, (len(menu_options) * row_h) + 40)
+        info_h = font_small.get_height() + 6  # Ligne d'info (meilleur score) sous les options
+        row_h = max(44, min(64, int((available_h - 40 - info_h) / max(1, len(menu_options)))))
+        panel_h = max(220, (len(menu_options) * row_h) + 40 + info_h)
         panel_x = (config.SCREEN_WIDTH - panel_w) // 2
         panel_y = max(12, min(panel_top_min, legend_y - panel_h - 12))
         menu_panel_rect = pygame.Rect(panel_x, panel_y, panel_w, panel_h)
@@ -2808,23 +2809,8 @@ def run_options(events, dt, screen, game_state):
         except Exception:
             scale_factor = 1.0
 
-        def _scaled_font_size(base_size):
-            return max(12, int(round(float(base_size) * scale_factor)))
-
         try:
-            fonts = {}
-            try:
-                fonts['small'] = pygame.font.SysFont("Consolas", _scaled_font_size(18))
-                fonts['default'] = pygame.font.SysFont("Consolas", _scaled_font_size(24))
-                fonts['medium'] = pygame.font.SysFont("Consolas", _scaled_font_size(36))
-                fonts['large'] = pygame.font.SysFont("Consolas", _scaled_font_size(72))
-                fonts['title'] = pygame.font.SysFont("Consolas", _scaled_font_size(90))
-            except pygame.error:
-                fonts['small'] = pygame.font.Font(None, _scaled_font_size(22))
-                fonts['default'] = pygame.font.Font(None, _scaled_font_size(30))
-                fonts['medium'] = pygame.font.Font(None, _scaled_font_size(40))
-                fonts['large'] = pygame.font.Font(None, _scaled_font_size(72))
-                fonts['title'] = pygame.font.Font(None, _scaled_font_size(100))
+            fonts = utils.load_fonts(base_path, scale_factor)
 
             game_state['font_small'] = fonts['small']
             game_state['font_default'] = fonts['default']
@@ -8179,6 +8165,7 @@ def run_game(events, dt, screen, game_state):
             if respawn_pos:
                 enemy_snake.reset(current_game_mode, walls_for_respawn)
                 enemy_snake.positions = [respawn_pos]
+                enemy_snake._prev_positions = None
                 if safe_dir is None:
                     safe_dir = enemy_snake._find_safe_initial_direction(respawn_pos, walls_for_respawn, config.LEFT)
                 enemy_snake.current_direction = safe_dir

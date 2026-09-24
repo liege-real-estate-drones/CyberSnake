@@ -109,6 +109,48 @@ def _deep_merge_dict(defaults, loaded):
     return merged
 
 
+# --- Polices du jeu (fichiers inclus dans fonts/, licence OFL) ---
+FONT_FILES = {
+    "display": "Orbitron.ttf",          # Titres
+    "text": "Rajdhani-SemiBold.ttf",    # Menus / textes
+}
+# (police, taille de base) par rôle ; Rajdhani est étroite -> tailles un peu plus grandes
+FONT_ROLES = {
+    "small": ("text", 21),
+    "default": ("text", 28),
+    "medium": ("text", 40),
+    "large": ("display", 62),
+    "title": ("display", 80),
+}
+LEGACY_FONT_SIZES = {"small": 18, "default": 24, "medium": 36, "large": 72, "title": 90}
+
+
+def load_fonts(base_path="", scale_factor=1.0):
+    """Charge les polices du jeu. Repli sur la police système si les fichiers manquent."""
+    if not base_path:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    def _size(base):
+        return max(12, int(round(float(base) * float(scale_factor or 1.0))))
+
+    fonts = {}
+    for role, (family, base_size) in FONT_ROLES.items():
+        font = None
+        path = os.path.join(base_path, "fonts", FONT_FILES[family])
+        try:
+            if os.path.exists(path):
+                font = pygame.font.Font(path, _size(base_size))
+        except Exception as e:
+            logging.warning(f"Police {path} illisible: {e}")
+        if font is None:
+            try:
+                font = pygame.font.SysFont("Consolas", _size(LEGACY_FONT_SIZES[role]))
+            except Exception:
+                font = pygame.font.Font(None, _size(LEGACY_FONT_SIZES[role]))
+        fonts[role] = font
+    return fonts
+
+
 def load_game_options(base_path=""):
     """Charge game_options.json (avec defaults + compat)."""
     if not base_path:

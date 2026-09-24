@@ -522,6 +522,7 @@ class Snake:
         self.direction_queue = []
 
         self.positions = [self.start_pos]
+        self._prev_positions = None
         desired_length = 1
         if self.is_player:
             try:
@@ -937,6 +938,8 @@ class Snake:
                      death_cause_detail = 'wall' # Cause: collision mur
 
             if not died_in_move:
+                self._prev_positions = list(self.positions)
+                self._prev_move_interval = move_interval
                 self.positions.insert(0, new_head)
                 tail_pos_to_emit = None
 
@@ -983,6 +986,7 @@ class Snake:
         if actual_shrink > 0:
             removed_segments_pos = self.positions[-actual_shrink:]
             self.positions = self.positions[:-actual_shrink]
+            self._prev_positions = None
             self.length = len(self.positions)
             for pos in removed_segments_pos:
                 px = pos[0] * config.GRID_SIZE + config.GRID_SIZE // 2
@@ -1410,6 +1414,7 @@ class Snake:
 
         # Le dash part dans la direction demandée (virage en attente inclus)
         self._apply_direction_change()
+        self._prev_positions = None  # Déplacement instantané : pas d'interpolation
 
         for i in range(config.DASH_STEPS):
             dx, dy = self.current_direction
@@ -1631,11 +1636,41 @@ class Snake:
                 current_y -= (h + spacing)
             except Exception: pass
 
+    def get_render_positions_px(self, current_time, grid_px=None):
+        """Coin haut-gauche (en pixels) de chaque segment, interpolé entre deux cases
+        pour un mouvement fluide. La logique du jeu reste case par case."""
+        if grid_px is None:
+            grid_px = int(getattr(config, "GRID_SIZE", 20))
+        positions = self.positions
+        plain = [(p[0] * grid_px, p[1] * grid_px) for p in positions]
+        prev = getattr(self, '_prev_positions', None)
+        if not prev or not bool(getattr(config, "SMOOTH_MOVEMENT", True)):
+            return plain
+        try:
+            interval = float(getattr(self, '_prev_move_interval', 0) or 0)
+            if interval <= 0 or interval == float('inf'):
+                return plain
+            t = (float(current_time) - float(self.last_move_time)) / interval
+        except Exception:
+            return plain
+        if t >= 1.0:
+            return plain
+        t = max(0.0, t)
+        out = []
+        for i, p in enumerate(positions):
+            if i < len(prev):
+                q = prev[i]
+                dx = p[0] - q[0]
+                dy = p[1] - q[1]
+                if abs(dx) + abs(dy) == 1:  # Case voisine (pas de wrap, pas de téléport)
+                    out.append(((q[0] + dx * t) * grid_px, (q[1] + dy * t) * grid_px))
+                    continue
+            out.append(plain[i])
+        return out
+
     def draw(self, surface, current_time, font_small, font_default):
-        if self.is_player: # Log only for players to reduce noise
-            logging.debug(f"DRAW CHECK: Snake {self.name}. alive={self.alive}, positions_empty={not self.positions}, current_time={current_time}")
-        # Le reste de la fonction draw...
         if not self.alive or not self.positions: return
+        render_px = [(int(round(x)), int(round(y))) for (x, y) in self.get_render_positions_px(current_time)]
 
         def _draw_armor_pips(head_rect):
             """Affiche l'armure restante (très lisible) près de la tête."""
@@ -1862,7 +1897,7 @@ class Snake:
             # --- Style "wire" : ligne + nœuds, sans traits à travers le wrap ---
             if style == "wire":
                 try:
-                    centers = [(p[0] * grid_px + grid_px // 2, p[1] * grid_px + grid_px // 2) for p in self.positions]
+                    centers = [(x + grid_px // 2, y + grid_px // 2) for (x, y) in render_px]
                     line_width = max(2, grid_px // 4)
 
                     for idx in range(len(self.positions) - 1):
@@ -1887,8 +1922,7 @@ class Snake:
                     pass
 
                 try:
-                    hp = self.positions[0]
-                    _draw_armor_pips(pygame.Rect(int(hp[0] * grid_px), int(hp[1] * grid_px), int(grid_px), int(grid_px)))
+                    _draw_armor_pips(pygame.Rect(render_px[0][0], render_px[0][1], int(grid_px), int(grid_px)))
                 except Exception:
                     pass
 
@@ -1906,8 +1940,7 @@ class Snake:
 
             # --- Styles "blocks" / "rounded" / "neon" / "glass" / "circuit" / "pixel" ---
             for i, p in enumerate(self.positions):
-                px = p[0] * grid_px
-                py = p[1] * grid_px
+                px, py = render_px[i]
                 r = pygame.Rect(px, py, grid_px, grid_px)
 
                 seg_color = base_color
@@ -2059,15 +2092,14 @@ class Snake:
                     pass
 
             try:
-                hp = self.positions[0]
-                _draw_armor_pips(pygame.Rect(int(hp[0] * grid_px), int(hp[1] * grid_px), int(grid_px), int(grid_px)))
+                _draw_armor_pips(pygame.Rect(render_px[0][0], render_px[0][1], int(grid_px), int(grid_px)))
             except Exception:
                 pass
 
             if self.is_player and self.reversed_controls_active:
                 try:
-                    hx = self.positions[0][0] * grid_px + grid_px // 2
-                    hy = self.positions[0][1] * grid_px + grid_px // 2
+                    hx = render_px[0][0] + grid_px // 2
+                    hy = render_px[0][1] + grid_px // 2
                     q_surf = font_default.render("?", True, config.COLOR_WHITE)
                     q_rect = q_surf.get_rect(center=(hx, hy))
                     surface.blit(q_surf, q_rect)
@@ -2088,9 +2120,8 @@ class Snake:
         tail_img = utils.images.get(f"snake_{prefix}_tail.png")
 
         for i, p in enumerate(self.positions):
-            # Calcul position pixel (Coin haut-gauche)
-            px = p[0] * config.GRID_SIZE
-            py = p[1] * config.GRID_SIZE
+            # Calcul position pixel (Coin haut-gauche), interpolée pour la fluidité
+            px, py = render_px[i]
 
             # Centre de la case (CRUCIAL pour la rotation)
             center = (px + config.GRID_SIZE // 2, py + config.GRID_SIZE // 2)
@@ -2221,11 +2252,10 @@ class Snake:
                 except (TypeError, ValueError): pass
 
         try:
-            hp = self.positions[0]
             _draw_armor_pips(
                 pygame.Rect(
-                    int(hp[0] * config.GRID_SIZE),
-                    int(hp[1] * config.GRID_SIZE),
+                    render_px[0][0],
+                    render_px[0][1],
                     int(config.GRID_SIZE),
                     int(config.GRID_SIZE),
                 )
@@ -2737,6 +2767,7 @@ class EnemySnake(Snake):
             self.start_pos = (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
 
         self.positions = [self.start_pos]
+        self._prev_positions = None
         current_dir = self.current_direction # Direction sûre déjà trouvée par super().reset
         grow_dir = (-current_dir[0], -current_dir[1]) # Direction opposée pour faire grandir vers l'arrière
         current_walls_set = set(self.current_walls)
@@ -3278,6 +3309,8 @@ class EnemySnake(Snake):
                      died_in_move = True
 
             if not died_in_move:
+                self._prev_positions = list(self.positions)
+                self._prev_move_interval = move_interval
                 self.positions.insert(0, new_head)
                 if self.growing:
                     self.growing = False

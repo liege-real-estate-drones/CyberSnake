@@ -33,6 +33,11 @@ PARTICLE_FACTOR = 1.0
 SCREEN_SHAKE_ENABLED = True
 SHOW_FPS = False
 
+# --- Effets visuels (Options) ---
+SMOOTH_MOVEMENT = True   # Mouvement fluide (interpolation entre cases)
+NEON_GLOW = True         # Halo lumineux autour des serpents / tirs / bonus
+CRT_EFFECT = False       # Effet écran d'arcade (scanlines + vignettage)
+
 # UI
 # Échelle UI (polices/menus): "small", "normal", "large"
 UI_SCALE = "normal"
