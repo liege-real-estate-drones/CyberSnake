@@ -10,6 +10,7 @@ import utils
 import progress
 import music
 import rules
+import settings_screens
 import borne_install
 import stick_wizard
 from setup_screens import invalidate_map_selection_cache
@@ -261,9 +262,14 @@ def run_menu(events, dt, screen, game_state):
         back_btn = getattr(config, "BUTTON_SECONDARY_ACTION", 2)
         music_btn = 4
         quit_btn = 8
+        def _btn(action, number):  # Nom du bouton par sa couleur sur la borne (Options > Couleurs des boutons)
+            try:
+                return "Bouton " + settings_screens.BUTTON_COLORS[settings_screens.button_color_key(action)][0].lower()
+            except Exception:
+                return f"Bouton {number}"
         legend_lines = [
-            f"Stick/Croix: Naviguer   |   Bouton {confirm_btn}: Valider   |   Bouton {back_btn}: Retour",
-            f"Bouton {music_btn}: Musique   |   Bouton {quit_btn}: Quitter   |   Inactivité: Démo (3 min)",
+            f"Stick/Croix: Naviguer   |   {_btn('PRIMARY', confirm_btn)}: Valider   |   {_btn('SECONDARY', back_btn)}: Retour",
+            f"Bouton {music_btn}: Musique   |   {_btn('BACK', quit_btn)}: Quitter   |   Inactivité: Démo (3 min)",
         ]
         legend_h = (font_small.get_height() + 6) * len(legend_lines) + 14
         legend_w = min(int(config.SCREEN_WIDTH * 0.92), 900)
@@ -276,7 +282,9 @@ def run_menu(events, dt, screen, game_state):
         panel_top_min = int(config.SCREEN_HEIGHT * 0.22)
         available_h = max(220, legend_y - panel_top_min - 12)
         info_h = font_small.get_height() + 6  # Ligne d'info (meilleur score) sous les options
-        row_h = max(44, min(64, int((available_h - 40 - info_h) / max(1, len(menu_options)))))
+        row_h = max(34, min(64, int((available_h - 40 - info_h) / max(1, len(menu_options)))))
+        # Petit écran (11 entrées en 720p) : lignes plus basses et police plus petite plutôt que de couvrir le titre
+        row_font = font_medium if row_h - 8 >= font_medium.get_height() - 4 else game_state.get('font_default', font_medium)
         panel_h = max(220, (len(menu_options) * row_h) + 40 + info_h)
         panel_x = (config.SCREEN_WIDTH - panel_w) // 2
         panel_y = max(12, min(panel_top_min, legend_y - panel_h - 12))
@@ -312,7 +320,7 @@ def run_menu(events, dt, screen, game_state):
             utils.draw_text_with_shadow(
                 screen,
                 text,
-                font_medium,
+                row_font,
                 main_color,
                 config.COLOR_UI_SHADOW,
                 (row_rect.centerx, row_rect.centery),
