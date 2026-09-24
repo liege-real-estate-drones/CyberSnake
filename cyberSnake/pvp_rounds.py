@@ -18,7 +18,7 @@ import pygame
 import config
 import utils
 import screens
-from ui_common import get_joystick_ids, is_confirm_button, is_back_button
+from ui_common import get_joystick_ids, is_confirm_button
 
 BEST_OF_CHOICES = (1, 3, 5)
 SCORE_LIMIT_STEP = 25
@@ -161,7 +161,7 @@ def run_round_score(events, dt, screen, game_state):
             if is_confirm_button(ev.button):
                 game_state.pop('_round_sound', None)
                 return start_next_round(game_state)
-            if ev.button == int(getattr(config, 'BUTTON_BACK', 8)) or (is_back_button(ev.button) and ev.instance_id == p1_id):
+            if ev.button == int(getattr(config, 'BUTTON_BACK', 8)):  # Pas le bouton Dash : il sert en jeu
                 utils.play_sound("menu_back")
                 game_state.pop('_round_sound', None)
                 game_state.pop('round_score_start', None)
