@@ -54,10 +54,28 @@ fi
 
 echo "Installation des données dans $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
+# Sauvegarde des données du joueur (scores, options, contrôles, cartes favorites)
+USER_BACKUP_DIR="/tmp/cybersnake_user_backup"
+USER_FILES="highscores.json game_options.json controls.json favorite_maps.json"
+rm -rf "$USER_BACKUP_DIR"
+mkdir -p "$USER_BACKUP_DIR"
+for f in $USER_FILES; do
+    if [ -f "$INSTALL_DIR/$f" ]; then
+        cp "$INSTALL_DIR/$f" "$USER_BACKUP_DIR/$f"
+    fi
+done
 # Nettoyage ancienne version
 rm -rf "$INSTALL_DIR"/*
 # Copie nouvelle version
 cp -r "$GAME_ROOT"/* "$INSTALL_DIR/"
+# Restauration des données du joueur
+for f in $USER_FILES; do
+    if [ -f "$USER_BACKUP_DIR/$f" ]; then
+        cp "$USER_BACKUP_DIR/$f" "$INSTALL_DIR/$f"
+        echo "Donnée joueur conservée : $f"
+    fi
+done
+rm -rf "$USER_BACKUP_DIR"
 
 # 5. Création du lanceur
 echo "Création du lanceur dans $LAUNCHER_PATH..."

@@ -16,8 +16,11 @@ try:
     log_filename = 'cybersnake_debug.log'
     log_filepath = os.path.join(base_path_log, log_filename)
 
+    # INFO par défaut (le niveau DEBUG écrit à chaque image : lent sur la borne et use la carte SD).
+    # Pour diagnostiquer : lancer avec CYBERSNAKE_DEBUG=1
+    log_level = logging.DEBUG if os.environ.get("CYBERSNAKE_DEBUG") else logging.INFO
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=log_level,
         format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
         filename=log_filepath,
         filemode='w'
@@ -46,6 +49,44 @@ except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
     print(f"FATAL: Erreur import modules jeu: {e}")
     sys.exit(1)
+
+
+def _joy_instance_id(joy):
+    try:
+        return joy.get_instance_id()
+    except Exception:
+        try:
+            return joy.get_id()
+        except Exception:
+            return None
+
+
+def _handle_joystick_added(game_state, device_index):
+    """Attribue une manette connectée après le démarrage au premier slot libre (J1 puis J2)."""
+    joy = pygame.joystick.Joystick(device_index)
+    joy.init()
+    new_id = _joy_instance_id(joy)
+    for slot in ('p1', 'p2'):
+        existing = game_state.get(f'joystick_{slot}')
+        if existing is not None and _joy_instance_id(existing) == new_id:
+            return  # Déjà connue (événement envoyé au démarrage)
+    for slot in ('p1', 'p2'):
+        if game_state.get(f'joystick_{slot}') is None:
+            game_state[f'joystick_{slot}'] = joy
+            game_state[f'joystick_{slot}_name'] = joy.get_name()
+            game_state[f'num_buttons_{slot}'] = joy.get_numbuttons()
+            logging.info(f"Manette connectée -> {slot.upper()}: {joy.get_name()} (instance {new_id})")
+            return
+
+
+def _handle_joystick_removed(game_state, instance_id):
+    for slot in ('p1', 'p2'):
+        existing = game_state.get(f'joystick_{slot}')
+        if existing is not None and _joy_instance_id(existing) == instance_id:
+            logging.info(f"Manette déconnectée: {slot.upper()} (instance {instance_id})")
+            game_state[f'joystick_{slot}'] = None
+            game_state[f'joystick_{slot}_name'] = f"Aucun joystick {slot.upper()} détecté"
+            game_state[f'num_buttons_{slot}'] = 0
 
 
 def main():
@@ -392,6 +433,16 @@ def main():
                 except Exception:
                     return False
             return False
+
+        # --- Manettes branchées / débranchées pendant le jeu (hotplug) ---
+        for ev in events:
+            try:
+                if ev.type == pygame.JOYDEVICEADDED:
+                    _handle_joystick_added(game_state, ev.device_index)
+                elif ev.type == pygame.JOYDEVICEREMOVED:
+                    _handle_joystick_removed(game_state, ev.instance_id)
+            except Exception:
+                logging.warning("Erreur gestion hotplug manette", exc_info=True)
 
         if any(_is_user_input_event(ev) for ev in events):
             game_state['last_input_time'] = now_ticks

@@ -5072,6 +5072,7 @@ def run_classic_setup(events, dt, screen, game_state):
 
     selection_index = game_state.get('classic_setup_selection_index', 0)
     last_axis_move_time = int(game_state.get('last_axis_move_time_classic_setup', 0) or 0)
+    axis_repeat_delay = 200
 
     IDX_START = 0
     IDX_CLASSIC_ARENA = 1
@@ -5257,8 +5258,7 @@ def run_classic_setup(events, dt, screen, game_state):
                 if is_back_button(event.button):
                     utils.play_sound("combo_break")
                     game_state['classic_setup_selection_index'] = 0
-                    game_state['last_axis_move_time_classic_setup_v'] = 0
-                    game_state['last_axis_move_time_classic_setup_h'] = 0
+                    game_state['last_axis_move_time_classic_setup'] = 0
                     game_state['current_state'] = config.MENU
                     return config.MENU
                 if is_confirm_button(event.button):
@@ -6258,7 +6258,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
 
             if selected_char == "OK":  # Confirmation du nom
-                current_input_name = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
+                current_input_name = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
                 name_entered = current_input_name.strip()[:15]
                 default_name = "Thib" if stage == 1 else "Alex"
                 name_entered = name_entered if name_entered else default_name
@@ -6296,7 +6296,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
 
             elif selected_char == "<-":  # Effacer
                 # Récupérer la valeur la plus à jour de game_state avant de modifier
-                temp_current_input = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
+                temp_current_input = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
                 if temp_current_input:
                     new_value = temp_current_input[:-1]
                     if stage == 1:
@@ -6311,7 +6311,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 try:
                     logging.debug(f"PVP Char Input: Stage {stage}, Char: '{selected_char}', vk_row: {vk_row}, vk_col: {vk_col}")
                     # Récupérer la valeur la plus à jour de game_state avant de modifier
-                    temp_current_input = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
+                    temp_current_input = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
                     logging.debug(f"PVP Char Input: temp_current_input = '{temp_current_input}'")
 
                     if len(temp_current_input) < 15:
@@ -6437,7 +6437,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         # Affichage du titre et du nom
         utils.draw_text_with_shadow(screen, current_prompt, font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, 
                                   (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.25), "center")
-        input_display_value = game_state['player1_name_input'] if stage == 1 else game_state['player2_name_input']
+        input_display_value = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
         utils.draw_text_with_shadow(screen, input_display_value + cursor_char, font_large, 
                                   config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW, 
                                   (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.35), "center")
@@ -7550,6 +7550,8 @@ def run_demo(events, dt, screen, game_state):
             if current_time - last_turn >= turn_interval:
                 chosen = _choose_demo_direction(player_snake, obstacles, foods, powerups)
                 if chosen:
+                    # L'IA démo recalcule à chaque fois depuis la tête : seule sa dernière décision compte
+                    player_snake.direction_queue = []
                     player_snake.turn(chosen)
                 game_state['_demo_last_turn_time'] = current_time
 
@@ -7981,32 +7983,29 @@ def run_game(events, dt, screen, game_state):
 
         # --- Gestion Boutons Joystick J1 (AVEC LOGGING) ---
         elif event.type == pygame.JOYBUTTONDOWN:
+            # --- Pause (Start) / Back : J1 ou J2 (PvP), même si le serpent est mort (respawn) ---
+            # Back ouvre aussi la pause (au lieu de quitter directement) pour éviter
+            # de perdre une partie sur un appui accidentel. "Quitter" reste dans le menu Pause.
+            pause_button = int(getattr(config, 'BUTTON_PAUSE', 7))
+            menu_button = int(getattr(config, 'BUTTON_BACK', 8))
+            pause_allowed = event.instance_id == p1_id or (current_game_mode == config.MODE_PVP and event.instance_id == p2_id)
+            if pause_allowed and event.button in (pause_button, menu_button):
+                logging.info(f"Joystick button {event.button} pressed, pausing game.")
+                try:
+                    pygame.mixer.music.pause()
+                except Exception:
+                    pass
+                game_state['previous_state'] = config.PLAYING
+                game_state['pause_menu_selection'] = 0
+                game_state['current_state'] = config.PAUSED
+                return config.PAUSED  # Return immediately
+
              # --- Gestion Boutons Joystick J1 ---
             if player_snake and player_snake.alive and event.instance_id == p1_id:
                 button = event.button
                 dash_button = int(getattr(config, 'BUTTON_SECONDARY_ACTION', 2))
                 shoot_button = int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1))
                 shield_button = int(getattr(config, 'BUTTON_TERTIARY_ACTION', 3))
-                pause_button = int(getattr(config, 'BUTTON_PAUSE', 7))
-                menu_button = int(getattr(config, 'BUTTON_BACK', 8))
-
-                if button == pause_button:  # Pause (often Start)
-                    logging.info(f"Joystick button {button} pressed, pausing game.")
-                    try:
-                        pygame.mixer.music.pause()
-                    except Exception:
-                        pass
-                    game_state['previous_state'] = config.PLAYING
-                    game_state['current_state'] = config.PAUSED
-                    return config.PAUSED  # Return immediately
-                if button == menu_button:  # Menu (Back/Select)
-                    logging.info("Joystick menu button pressed in game, returning to MENU.")
-                    try:
-                        pygame.mixer.music.stop()
-                    except Exception:
-                        pass
-                    game_state['current_state'] = config.MENU
-                    return config.MENU  # Return immediately
 
                 if current_game_mode != config.MODE_CLASSIC and button == dash_button:  # Dash
                     logging.debug(f"P1 Button {button} (Dash) pressed")
@@ -9293,6 +9292,14 @@ def run_game(events, dt, screen, game_state):
     return next_state
 # --- END: REVISED run_game function ---
 
+# Fichiers propres au joueur, conservés lors d'une mise à jour
+USER_DATA_FILES = {
+    config.HIGH_SCORE_FILE,
+    config.GAME_OPTIONS_FILE,
+    config.FAVORITE_MAP_FILE,
+    config.CONTROLS_FILE,
+}
+
 def update_worker(game_state):
     """Tâche de fond pour la mise à jour."""
     try:
@@ -9311,6 +9318,19 @@ def update_worker(game_state):
         # Determine install directory (where sys.argv[0] is located)
         install_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
         logging.info(f"Git detection: cmd={git_cmd}, install_dir={install_dir}, cwd={os.getcwd()}")
+
+        # Git uniquement si le dossier d'installation est réellement un dépôt git
+        # (sur Batocera, le jeu est installé depuis un zip : git pull échouerait).
+        if git_cmd:
+            try:
+                check = subprocess.run([git_cmd, "rev-parse", "--is-inside-work-tree"], cwd=install_dir,
+                                       capture_output=True, text=True, check=False, timeout=10)
+                if check.returncode != 0 or check.stdout.strip() != "true":
+                    logging.info("install_dir n'est pas un dépôt git, bascule en mode Zip.")
+                    git_cmd = None
+            except Exception as e:
+                logging.warning(f"Vérification dépôt git impossible ({e}), bascule en mode Zip.")
+                git_cmd = None
 
         if git_cmd:
             # Mode Git
@@ -9392,12 +9412,19 @@ def update_worker(game_state):
 
                             target_path = os.path.join(install_dir, relative_path)
 
+                            # Ne jamais écraser les données du joueur (scores, contrôles, options, cartes favorites)
+                            if relative_path in USER_DATA_FILES and os.path.exists(target_path):
+                                logging.info(f"Update: fichier utilisateur conservé: {relative_path}")
+                                continue
+
                             # Ensure target dir exists
                             os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
-                            # Write file
-                            with open(target_path, "wb") as f:
+                            # Écriture atomique (évite un fichier corrompu si coupure pendant la mise à jour)
+                            tmp_path = target_path + ".update_tmp"
+                            with open(tmp_path, "wb") as f:
                                 f.write(zip_ref.read(member))
+                            os.replace(tmp_path, target_path)
 
                     game_state['update_message'] = "Extraction terminée !"
                     game_state['update_status'] = 'success'
