@@ -35,6 +35,7 @@ try:
 except ImportError:  # pragma: no cover - dépend de la machine
     evdev = None
     ecodes = None
+EV_KEY = ecodes.EV_KEY if ecodes else 0x01
 
 
 def _need_evdev():
@@ -202,6 +203,11 @@ def cmd_learn():
         slots.append({"player": num, "phys": dev.phys, "name": dev.name,
                       "vendor": dev.info.vendor, "product": dev.info.product, "axes": axes})
         used = dev.path
+    # On garde les boutons échangés (option « boutons ») déjà réglés pour chaque joueur
+    previous = {s.get("player"): s for s in load_config()["slots"]}
+    for s in slots:
+        if previous.get(s["player"], {}).get("boutons"):
+            s["boutons"] = previous[s["player"]]["boutons"]
     save_config({"slots": slots})
     print(f"\nEnregistré dans {CONFIG_PATH}.")
     print("Démarre ou redémarre le service :  /userdata/system/services/borne_manettes restart")
@@ -286,6 +292,9 @@ class Slot:
         self.ui = None
         self.hidden = []
         self.pressed = {}
+        # Boutons câblés autrement que sur l'autre joueur (ex. Player / Coin inversés) :
+        # {"296": 297, "297": 296} -> la copie J1/J2 envoie le code corrigé.
+        self.buttons = {int(k): int(v) for k, v in (conf.get("boutons") or {}).items()}
 
     def matches(self, dev):
         return dev.phys == self.phys and _is_joystick(dev) and not _is_virtual(dev)
@@ -344,12 +353,14 @@ class Slot:
 
     def forward(self):
         for ev in self.dev.read():
-            if ev.type == ecodes.EV_KEY:
+            code = ev.code
+            if ev.type == EV_KEY:
                 if ev.value:
                     self.pressed.setdefault(ev.code, time.time())
                 else:
                     self.pressed.pop(ev.code, None)
-            self.ui.write(ev.type, ev.code, ev.value)
+                code = self.buttons.get(ev.code, ev.code)
+            self.ui.write(ev.type, code, ev.value)
 
     def panic_held(self, now=None):
         now = time.time() if now is None else now
