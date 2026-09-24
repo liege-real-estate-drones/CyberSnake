@@ -342,7 +342,8 @@ def load_assets(base_path):
     for who in ("p1", "p2", "enemy"):
         for part in ("head", "body", "tail"):
             files_to_load.append(f"snake_{who}_{part}.png")
-    files_to_load += ["mine.png", "mine_lit.png"]
+    files_to_load += ["mine.png", "mine_lit.png", "skill_dash.png", "skill_shield.png"]
+    files_to_load += [f"nest_{k}.png" for k in range(4)]
 
     for filename in files_to_load:
         full_path = os.path.join(base_path, filename)
