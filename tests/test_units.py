@@ -153,6 +153,42 @@ class TestBorneManettes(unittest.TestCase):
         self.assertIsNone(borne_install.sdl_axis_to_code(codes, 5))
         self.assertEqual(borne_install.parse_abs_bitmask("1 0"), [])  # bit 64 hors plage
 
+    def test_es_mapping_copied_for_virtual_controller(self):
+        import borne_install
+        import xml.etree.ElementTree as ET
+        tmp = tempfile.mkdtemp()
+        try:
+            es = os.path.join(tmp, "es_input.cfg")
+            with open(es, "w") as f:
+                f.write('<?xml version="1.0"?>\n<inputList>\n'
+                        '<inputConfig type="keyboard" deviceName="Keyboard" deviceGUID="-1"><input name="a" type="key" id="13" value="1"/></inputConfig>\n'
+                        '<inputConfig type="joystick" deviceName="DragonRise Inc.   Generic   USB  Joystick  " deviceGUID="03000000790000000600000010010000">'
+                        '<input name="a" type="button" id="1" value="1"/><input name="hotkey" type="button" id="8" value="1"/>'
+                        '<input name="up" type="axis" id="0" value="1"/><input name="left" type="axis" id="1" value="1"/>'
+                        '<input name="joystick1up" type="axis" id="0" value="1"/></inputConfig>\n</inputList>\n')
+            slots = {1: {"player": 1, "name": "DragonRise Inc.   Generic   USB  Joystick",
+                         "axes": {"0": [1, False], "1": [0, False]}}}
+            joy = _FakeJoy("Borne J1", 5)
+            joy.get_guid = lambda: "03003a5e0912000e1b000000100000000"[:32]
+            orig_abs = borne_install.abs_codes
+            borne_install.abs_codes = lambda path: [0, 1, 2, 16, 17]
+            try:
+                self.assertTrue(borne_install.ensure_es_mapping(joy, "/dev/input/event9", es, slots))
+                self.assertFalse(borne_install.ensure_es_mapping(joy, "/dev/input/event9", es, slots))  # une seule fois
+            finally:
+                borne_install.abs_codes = orig_abs
+            entries = [c for c in ET.parse(es).getroot().findall("inputConfig") if c.get("deviceName") == "Borne J1"]
+            self.assertEqual(len(entries), 2)  # GUID SDL récente + ancienne
+            inputs = {i.get("name"): (i.get("type"), i.get("id"), i.get("value")) for i in entries[0].findall("input")}
+            self.assertEqual(inputs["a"], ("button", "1", "1"))
+            self.assertEqual(inputs["hotkey"], ("button", "8", "1"))
+            self.assertEqual(inputs["up"], ("axis", "1", "-1"))
+            self.assertEqual(inputs["left"], ("axis", "0", "-1"))
+            self.assertEqual(inputs["joystick1up"], ("axis", "1", "-1"))
+            self.assertTrue(os.path.exists(es + ".avant-borne"))
+        finally:
+            shutil.rmtree(tmp)
+
     def test_virtual_controller_uses_standard_axes(self):
         joy_map._ids[99] = "usb:borne-j1"
         try:
