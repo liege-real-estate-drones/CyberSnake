@@ -171,3 +171,25 @@ def draw_tile(surface, rect, style=None):
         pygame.draw.circle(surface, _scale(color, 0.55), rect.center, max(1, w // 4))
         pygame.draw.circle(surface, _mix(color, (255, 255, 255), 0.55), rect.center, max(1, w // 9))
     pygame.draw.rect(surface, color, rect, max(1, w // 9))
+
+
+_preview_cache = {}
+
+
+def preview_surface(cells, grid_w, grid_h, cell_px, style=None):
+    """Aperçu d'une carte (menus) dans le même style que le jeu : structures d'un seul tenant."""
+    color = theme_color(style)
+    key = (frozenset(cells), grid_w, grid_h, cell_px, color)
+    surf = _preview_cache.get(key)
+    if surf is None:
+        if len(_preview_cache) > 24:
+            _preview_cache.clear()
+        bg = pygame.Surface((max(1, grid_w * cell_px), max(1, grid_h * cell_px)))
+        bg.fill((4, 6, 16))
+        for x in range(0, bg.get_width(), cell_px * 4):
+            pygame.draw.line(bg, (10, 20, 34), (x, 0), (x, bg.get_height()))
+        for y in range(0, bg.get_height(), cell_px * 4):
+            pygame.draw.line(bg, (10, 20, 34), (0, y), (bg.get_width(), y))
+        surf, _conduits = _render(bg, set(cells), cell_px, color)
+        _preview_cache[key] = surf
+    return surf

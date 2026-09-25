@@ -435,6 +435,13 @@ def draw_boss_ui(surface, game_state, now, font_default, font_medium):
             bar_w = int(sw * 0.36)
             bar_h = max(12, int(sh * 0.018))
             rect = pygame.Rect((sw - bar_w) // 2, int(sh * 0.035), bar_w, bar_h)
+            # Écran étroit : la barre ne doit pas passer sous le panneau de J1 (en haut à gauche)
+            import hud
+            min_left = 8 + hud.PANEL_WIDTH + 16
+            if rect.left < min_left:
+                rect.left = min_left
+                rect.width = max(80, min(bar_w, sw - min_left - 16))
+                bar_w = rect.width
             pygame.draw.rect(surface, (20, 10, 30), rect.inflate(8, 8), border_radius=6)
             gap = 3
             seg_w = (bar_w - gap * (max_hp - 1)) / float(max_hp)
