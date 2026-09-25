@@ -241,10 +241,9 @@ def run_menu(events, dt, screen, game_state):
     # --- Dessin de l'écran du menu ---
     try:
         if menu_background_image:
-            try: backgrounds.draw(screen, menu_background_image)
+            try: backgrounds.draw(screen, menu_background_image, darken=150)
             except Exception as e: logging.error(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
         else: screen.fill(config.COLOR_BACKGROUND)
-        darken(screen, 150)
         
         if pvp_error_msg:
             error_y = config.SCREEN_HEIGHT * 0.05 # En haut de l'écran
@@ -1328,13 +1327,11 @@ def run_options(events, dt, screen, game_state):
         menu_background_image = game_state.get('menu_background_image')
         if menu_background_image:
             try:
-                backgrounds.draw(screen, menu_background_image)
+                backgrounds.draw(screen, menu_background_image, darken=180)
             except Exception:
                 screen.fill(config.COLOR_BACKGROUND)
         else:
             screen.fill(config.COLOR_BACKGROUND)
-
-        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
 

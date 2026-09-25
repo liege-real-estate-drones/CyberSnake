@@ -368,6 +368,7 @@ def _enter_pause(game_state):
     game_state['previous_state'] = config.PLAYING
     game_state['pause_opened_at'] = pygame.time.get_ticks()
     game_state.pop('pause_quit_armed_until', None)
+    game_state.pop('_pause_frame', None)  # Image figée de la partie : refaite à chaque pause
     game_state['pause_menu_selection'] = 0
     game_state['current_state'] = config.PAUSED
     return config.PAUSED

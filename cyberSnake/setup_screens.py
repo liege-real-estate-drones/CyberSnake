@@ -1276,13 +1276,11 @@ def run_classic_setup(events, dt, screen, game_state):
     try:
         if menu_background_image:
             try:
-                backgrounds.draw(screen, menu_background_image)
+                backgrounds.draw(screen, menu_background_image, darken=180)
             except Exception:
                 screen.fill(config.COLOR_BACKGROUND)
         else:
             screen.fill(config.COLOR_BACKGROUND)
-
-        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
         utils.draw_text_with_shadow(

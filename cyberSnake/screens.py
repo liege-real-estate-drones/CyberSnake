@@ -11,6 +11,7 @@ import logging
 import pygame
 
 import config
+import ui_common
 from ui_common import darken as darken_screen
 import backgrounds
 import utils
@@ -107,7 +108,8 @@ def _draw_background(screen, game_state, now, darken=150):
     bg = game_state.get('menu_background_image')
     if bg is not None:
         try:
-            backgrounds.draw(screen, bg, now)
+            backgrounds.draw(screen, bg, now, darken=darken)  # Assombri une fois pour toutes (fond fixe)
+            return
         except Exception:
             screen.fill(config.COLOR_BACKGROUND)
     else:
@@ -197,9 +199,7 @@ def run_title(events, dt, screen, game_state):
         line = "RECORDS  —  " + _best_scores_line()
         txt = font_default.render(line, True, (180, 220, 255))
         band_h = txt.get_height() + 16
-        band = pygame.Surface((sw, band_h), pygame.SRCALPHA)
-        band.fill((0, 0, 0, 150))
-        screen.blit(band, (0, sh - band_h - 30))
+        ui_common.blend_rect(screen, (0, sh - band_h - 30, sw, band_h), (0, 0, 0, 150))
         span = txt.get_width() + sw
         x = sw - int((now * 0.09) % span)
         screen.blit(txt, (x, sh - band_h - 30 + 8))
@@ -302,9 +302,7 @@ def run_hall_of_fame(events, dt, screen, game_state):
     for i, (key, label) in enumerate(HOF_CATEGORIES):
         x = margin + i * (col_w + gap)
         rect = pygame.Rect(x, top, col_w, panel_h)
-        box = pygame.Surface(rect.size, pygame.SRCALPHA)
-        box.fill((6, 10, 24, 200))
-        screen.blit(box, rect.topleft)
+        ui_common.blend_rect(screen, rect, (6, 10, 24, 200))
         border_col = config.COLOR_TEXT_HIGHLIGHT if i == highlight_idx else (40, 90, 140)
         pygame.draw.rect(screen, border_col, rect, 2, border_radius=8)
         if i == highlight_idx:
@@ -441,10 +439,22 @@ def _fmt_duration(ms):
     return f"{s // 60}:{s % 60:02d}"
 
 
+_icon_cache = {}
+
+
+def _scaled_icon(name, img, size):
+    """Icône réduite une seule fois (elle l'était à chaque image dans « Comment jouer »)."""
+    key = (name, size)
+    surf = _icon_cache.get(key)
+    if surf is None:
+        if len(_icon_cache) > 64:
+            _icon_cache.clear()
+        surf = _icon_cache[key] = pygame.transform.smoothscale(img, (size, size))
+    return surf
+
+
 def _draw_panel(screen, rect, border=(40, 90, 140), alpha=200):
-    box = pygame.Surface(rect.size, pygame.SRCALPHA)
-    box.fill((6, 10, 24, alpha))
-    screen.blit(box, rect.topleft)
+    ui_common.blend_rect(screen, rect, (6, 10, 24, alpha))
     pygame.draw.rect(screen, border, rect, 2, border_radius=10)
 
 
@@ -546,9 +556,7 @@ def draw_game_over(screen, game_state, info):
     for i, opt in enumerate(options):
         r = pygame.Rect(bx, by, btn_w, btn_h)
         selected = (i == sel)
-        fill = pygame.Surface(r.size, pygame.SRCALPHA)
-        fill.fill((255, 230, 80, 60) if selected else (10, 16, 32, 200))
-        screen.blit(fill, r.topleft)
+        ui_common.blend_rect(screen, r, (255, 230, 80, 60) if selected else (10, 16, 32, 200))
         pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT if selected else (60, 90, 130), r, 2, border_radius=8)
         if selected:
             fx.draw_glow(screen, r.center, config.COLOR_TEXT_HIGHLIGHT, btn_w * 0.35, 2)
@@ -647,7 +655,7 @@ def run_how_to_play(events, dt, screen, game_state):
         img = utils.images_hd.get(img_name) or utils.images.get(img_name)
         if img is not None:
             try:
-                screen.blit(pygame.transform.smoothscale(img, (icon, icon)), (x, yy + (cell_h - icon) // 2))
+                screen.blit(_scaled_icon(img_name, img, icon), (x, yy + (cell_h - icon) // 2))
             except Exception:
                 pass
         utils.draw_text(screen, name, font_default, config.COLOR_TEXT_HIGHLIGHT, (x + icon + 12, yy + cell_h // 2), "bottomleft")

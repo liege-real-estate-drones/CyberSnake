@@ -68,9 +68,9 @@ def draw_screen_background(screen, game_state, darken=0):
     bg = game_state.get('menu_background_image') if isinstance(game_state, dict) else None
     try:
         if bg is not None:
-            backgrounds.draw(screen, bg)
-        else:
-            screen.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, True), (0, 0))
+            backgrounds.draw(screen, bg, darken=darken)  # Assombri une fois pour toutes (fond fixe)
+            return
+        screen.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, True), (0, 0))
     except Exception:
         screen.fill(config.COLOR_BACKGROUND)
     if darken > 0:
@@ -88,6 +88,37 @@ def _darken(surface, alpha):
 
 
 darken = _darken
+
+
+def blend_rect(surface, rect, rgba):
+    """Rectangle translucide (couleur rgb, opacité a) sans surface transparente :
+    assombrir puis ajouter la couleur donne exactement pixel * (1 - a) + couleur * a.
+    Deux remplissages directs, sans allocation (écrans de menu plus fluides sur la borne)."""
+    r, g, b, a = rgba
+    rect = pygame.Rect(rect).clip(surface.get_rect())
+    if rect.width <= 0 or rect.height <= 0 or a <= 0:
+        return
+    k = 255 - min(255, int(a))
+    surface.fill((k, k, k), rect, special_flags=pygame.BLEND_RGB_MULT)
+    add = tuple(int(c * a / 255) for c in (r, g, b))
+    if any(add):
+        surface.fill(add, rect, special_flags=pygame.BLEND_RGB_ADD)
+
+
+_shape_cache = {}
+
+
+def rounded_translucent(size, rgba, radius):
+    """Surface translucide aux coins arrondis, mise en cache (même taille et couleur d'une image à l'autre)."""
+    key = (tuple(size), tuple(rgba), radius)
+    surf = _shape_cache.get(key)
+    if surf is None:
+        if len(_shape_cache) > 64:
+            _shape_cache.clear()
+        surf = pygame.Surface(size, pygame.SRCALPHA)
+        pygame.draw.rect(surf, rgba, surf.get_rect(), border_radius=radius)
+        _shape_cache[key] = surf
+    return surf
 
 
 # --- Fonction Helper pour Dessiner les Panneaux UI (avec correction alpha) ---

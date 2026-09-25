@@ -82,6 +82,7 @@ def run_pause(events, dt, screen, game_state):
 
     def _open_options():
         game_state['options_return_state'] = config.PAUSED
+        game_state.pop('_pause_frame', None)  # Les réglages peuvent changer le rendu : image refaite au retour
         return config.OPTIONS
 
     def _quit_to_menu():
@@ -221,8 +222,14 @@ def run_pause(events, dt, screen, game_state):
 
     # Dessin de l'écran de pause
     try:
-        draw_game_elements_on_surface(screen, game_state, game_clock.ticks())  # Partie figée
-        darken(screen, 180)
+        # Partie figée : dessinée et assombrie une seule fois à l'ouverture de la pause
+        frozen = game_state.get('_pause_frame')
+        if frozen is None or frozen.get_size() != screen.get_size():
+            draw_game_elements_on_surface(screen, game_state, game_clock.ticks())
+            darken(screen, 180)
+            game_state['_pause_frame'] = frozen = screen.copy()
+        else:
+            screen.blit(frozen, (0, 0))
 
         try:
             pause_title = screens._glow_text(font_large, "PAUSE", (235, 250, 255), (0, 200, 255), 10)

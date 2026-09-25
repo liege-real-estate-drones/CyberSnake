@@ -151,18 +151,38 @@ def load(base_path, key, size):
         return None
 
 
-def draw(screen, bg, now=None):
-    """Dessine le fond ; un fond animé dérive lentement et s'accompagne d'étincelles."""
+_dark_cache = {}
+
+
+def _darkened(bg, darken):
+    """Copie assombrie d'un fond fixe, calculée une fois (au lieu d'assombrir tout l'écran à chaque image)."""
+    entry = _dark_cache.get(darken)
+    if entry is None or entry[0] is not bg:
+        dark = bg.copy()
+        k = 255 - max(0, min(255, int(darken)))
+        dark.fill((k, k, k), special_flags=pygame.BLEND_RGB_MULT)
+        entry = _dark_cache[darken] = (bg, dark)
+        if len(_dark_cache) > 8:
+            _dark_cache.clear()
+            _dark_cache[darken] = entry
+    return entry[1]
+
+
+def draw(screen, bg, now=None, darken=0):
+    """Dessine le fond (assombri de `darken`, 0-255) ; un fond animé dérive et s'accompagne d'étincelles."""
     if bg is None:
         return
     if bg is not _anim.get('surface'):
-        screen.blit(bg, (0, 0))
+        screen.blit(_darkened(bg, darken) if darken > 0 else bg, (0, 0))
         return
     if now is None:
         now = pygame.time.get_ticks()
     mx, my = _anim['margin']
     t = (now % ANIM_PERIOD_MS) / float(ANIM_PERIOD_MS) * 2 * math.pi
     screen.blit(bg, (-mx - int(mx * 0.9 * math.sin(t)), -my - int(my * 0.9 * math.sin(2 * t + 0.7))))
+    if darken > 0:
+        k = 255 - max(0, min(255, int(darken)))
+        screen.fill((k, k, k), special_flags=pygame.BLEND_RGB_MULT)
     _draw_sparks(screen, now)
 
 
