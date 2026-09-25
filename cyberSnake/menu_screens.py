@@ -1402,6 +1402,7 @@ def run_options(events, dt, screen, game_state):
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
             ("Contrôles", ""),
+            ("Couleurs des boutons", ""),
             (reset_label, ""),
             ("Appliquer", ""),
             ("Retour", ""),
