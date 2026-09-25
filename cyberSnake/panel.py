@@ -24,6 +24,8 @@ import utils
 DEFAULT_LAYOUT = [0, 2, 4, 6, 1, 3, 5, 7, 8, 9]
 SLOTS = len(DEFAULT_LAYOUT)
 FRONT_NAMES = {8: "Coin", 9: "Player"}
+# Façade de gauche à droite (places 8 = Coin, 9 = Player) : J1 Coin puis Player, J2 Player puis Coin
+FRONT_ORDER = {1: (8, 9), 2: (9, 8)}
 PLAYER_COLORS = {1: (40, 120, 255), 2: (230, 45, 50)}
 BUTTON_START = 9      # Player (Start) : pause en jeu, comme sur une borne d'arcade
 BUTTON_MUSIC = 4      # Changer de musique (menu principal, pause)
@@ -152,14 +154,48 @@ def draw_stick(surface, center, radius, color):
     pygame.draw.circle(surface, _shade(color, 1.6), (cx - radius // 3, cy - radius // 3), max(2, radius // 4))
 
 
-def draw_front_button(surface, center, radius, lit=False):
-    """Petit bouton blanc éclairé de la façade (Coin / Player)."""
+INK = (35, 55, 120)  # Bleu foncé des inscriptions des boutons de façade
+
+
+def _person(surface, cx, top, h, color):
+    """Pictogramme « joueur » (tête + corps), comme sur les boutons Player de la borne."""
+    head = max(1, int(h * 0.16))
+    pygame.draw.circle(surface, color, (int(cx), int(top + head)), head)
+    body_w = max(2, int(h * 0.26))
+    body = pygame.Rect(0, 0, body_w, max(2, int(h * 0.42)))
+    body.midtop = (int(cx), int(top + 2 * head + 1))
+    pygame.draw.rect(surface, color, body, border_radius=max(1, body_w // 3))
+    leg_h = max(2, int(h * 0.36))
+    leg_w = max(1, body_w // 2 - 1)
+    pygame.draw.rect(surface, color, pygame.Rect(body.left, body.bottom - 1, leg_w, leg_h))
+    pygame.draw.rect(surface, color, pygame.Rect(body.right - leg_w, body.bottom - 1, leg_w, leg_h))
+
+
+def draw_front_button(surface, center, radius, lit=False, kind=None):
+    """Bouton blanc éclairé de la façade, bague chromée, avec son inscription :
+    kind = "coin" (COIN), "p1" (un joueur) ou "p2" (deux joueurs), comme sur la borne."""
     cx, cy = int(center[0]), int(center[1])
     if lit:
-        pygame.draw.circle(surface, (255, 255, 255), (cx, cy), radius + max(4, radius // 2), 2)
-    pygame.draw.circle(surface, (150, 155, 170), (cx, cy), radius + 2)
-    pygame.draw.circle(surface, (255, 255, 255) if lit else (225, 230, 240), (cx, cy), radius)
-    pygame.draw.circle(surface, (255, 255, 255), (cx - radius // 3, cy - radius // 3), max(1, radius // 3))
+        pygame.draw.circle(surface, (255, 255, 255), (cx, cy), radius + max(5, radius // 2), 2)
+    pygame.draw.circle(surface, (120, 125, 140), (cx, cy), radius + max(2, radius // 5))   # Bague chromée
+    pygame.draw.circle(surface, (215, 220, 232), (cx, cy), radius + max(2, radius // 5), 1)
+    pygame.draw.circle(surface, (255, 255, 255) if lit else (228, 234, 245), (cx, cy), radius)
+    if radius < 9 or not kind:
+        pygame.draw.circle(surface, (255, 255, 255), (cx - radius // 3, cy - radius // 3), max(1, radius // 3))
+        return
+    if kind == "coin":
+        txt = _mini_font(int(radius * 0.95)).render("COIN", True, INK)
+        if txt.get_width() > radius * 1.7:
+            txt = pygame.transform.smoothscale(txt, (int(radius * 1.7), max(1, int(txt.get_height() * radius * 1.7 / txt.get_width()))))
+        surface.blit(txt, txt.get_rect(center=(cx, cy)))
+    else:
+        h = radius * 1.2
+        top = cy - h / 2
+        if kind == "p2":
+            _person(surface, cx - radius * 0.28, top, h, INK)
+            _person(surface, cx + radius * 0.28, top, h, INK)
+        else:
+            _person(surface, cx, top, h, INK)
 
 
 def _mini_geometry(height):
@@ -319,14 +355,16 @@ def draw_control_panel(surface, rect, player, font, lit=(), blink_slot=None, sho
         for t, col in texts:
             utils.draw_text(surface, t, font, col, (c[0], y), "midtop")
             y += line
-    # Façade : Coin et Player (nom, puis rôle en jeu et dans les menus, comme les autres boutons)
+    # Façade : Coin et Player (nom, puis rôle en jeu et dans les menus, comme les autres boutons).
+    # Sur la borne : J1 a Coin à gauche et Player à droite, J2 l'inverse (panneau symétrique).
     top_front = rect.bottom - front_h - 2
-    for i, slot in enumerate((8, 9)):
+    r = max(9, int(radius * 0.62))
+    for i, slot in enumerate(FRONT_ORDER.get(player, (8, 9))):
         num = lay[slot]
-        r = max(6, radius // 2)
-        x = rect.left + int(rect.width * (0.12 + 0.46 * i))
+        x = rect.left + int(rect.width * (0.10 + 0.46 * i))
         blink = blink_slot == slot and (now // 250) % 2 == 0
-        draw_front_button(surface, (x + r, top_front + line // 2 + 2), r, lit=(num in lit) or blink)
+        kind = "coin" if slot == 8 else ("p2" if player == 2 else "p1")
+        draw_front_button(surface, (x + r, top_front + line // 2 + 2), r, lit=(num in lit) or blink, kind=kind)
         game, menu = table.get(num, ("", ""))
         tx = x + 2 * r + 10
         utils.draw_text(surface, FRONT_NAMES[DEFAULT_LAYOUT[slot]].upper(), font, (235, 240, 250), (tx, top_front + line // 2 + 2), "midleft")
