@@ -234,10 +234,25 @@ def run_hall_of_fame(events, dt, screen, game_state):
         elif ev.type == pygame.KEYDOWN and ev.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_BACKSPACE):
             utils.play_sound("menu_back")
             return config.MENU
+        elif ev.type == pygame.JOYHATMOTION and ev.value[0]:
+            game_state['_hof_page'] = 1 - int(game_state.get('_hof_page', 0) or 0)  # Records <-> Trophées
+            utils.play_sound("menu_move")
 
+    page = int(game_state.get('_hof_page', 0) or 0)
     if attract:
-        if _state_elapsed(game_state, 'hof', now) >= ATTRACT_HOF_MS:
+        elapsed = _state_elapsed(game_state, 'hof', now)
+        if elapsed >= ATTRACT_HOF_MS:
+            game_state['_hof_page'] = 0
             return config.HOW_TO_PLAY
+        page = 1 if elapsed >= ATTRACT_HOF_MS * 0.6 else 0  # Boucle d'attente : records puis trophées
+    if page == 1:
+        _draw_background(screen, game_state, now, darken=185)
+        draw_trophies(screen, game_state, now)
+        hint = "APPUIE SUR UN BOUTON" if attract else "Gauche / Droite : records  |  Un bouton : retour au menu"
+        if not attract or (now // 550) % 2 == 0:
+            utils.draw_text_with_shadow(screen, hint, game_state.get('font_default'), config.COLOR_TEXT_MENU,
+                                        config.COLOR_UI_SHADOW, (screen.get_width() // 2, int(screen.get_height() * 0.95)), "center")
+        return config.HALL_OF_FAME
 
     font_large = game_state.get('font_large')
     font_medium = game_state.get('font_medium')
@@ -298,11 +313,86 @@ def run_hall_of_fame(events, dt, screen, game_state):
             if y > rect.bottom - row_h:
                 break
 
-    hint = "APPUIE SUR UN BOUTON" if attract else "Un bouton : retour au menu"
+    hint = "APPUIE SUR UN BOUTON" if attract else "Gauche / Droite : trophées  |  Un bouton : retour au menu"
     if not attract or (now // 550) % 2 == 0:
         utils.draw_text_with_shadow(screen, hint, font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW,
                                     (sw // 2, int(sh * 0.95)), "center")
     return config.HALL_OF_FAME
+
+
+def _wrap(font, text, max_width):
+    lines, cur = [], ""
+    for word in text.split(" "):
+        test = (cur + " " + word).strip()
+        if font.size(test)[0] <= max_width or not cur:
+            cur = test
+        else:
+            lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def draw_trophies(screen, game_state, now):
+    """Page « Trophées » : les couleurs à débloquer, leur exploit, et la progression."""
+    import colorsys
+    import progress
+    sw, sh = screen.get_size()
+    font_large = game_state.get('font_large')
+    font_medium = game_state.get('font_medium')
+    font_default = game_state.get('font_default')
+    font_small = game_state.get('font_small')
+    title = _glow_text(font_large, "TROPHÉES", (255, 240, 180), (255, 170, 0), 10)
+    screen.blit(title, title.get_rect(center=(sw // 2, int(sh * 0.10))))
+    data = progress._data()
+    career = int(data.get("career_points", 0) or 0)
+    bosses = int((data.get("stats") or {}).get("bosses", 0) or 0)
+    items = list(progress.UNLOCKABLE_COLORS.items())
+    cols, rows = 3, (len(items) + 2) // 3
+    margin, gap = int(sw * 0.05), int(sw * 0.02)
+    top, bottom = int(sh * 0.19), int(sh * 0.80)
+    card_w = (sw - 2 * margin - (cols - 1) * gap) // cols
+    card_h = (bottom - top - (rows - 1) * gap) // rows
+    for i, (key, (name, rgb, goal)) in enumerate(items):
+        r = pygame.Rect(margin + (i % cols) * (card_w + gap), top + (i // cols) * (card_h + gap), card_w, card_h)
+        unlocked = progress.is_unlocked(key)
+        _draw_panel(screen, r, border=(255, 200, 60) if unlocked else (60, 80, 110), alpha=210)
+        # Petit serpent à la couleur (arc-en-ciel animé), grisé tant qu'elle est verrouillée
+        seg = max(6, int(card_h * 0.07))
+        for k in range(6):
+            if rgb is None:
+                h = ((now * 0.0003) + k * 0.12) % 1.0
+                col = tuple(int(c * 255) for c in colorsys.hsv_to_rgb(h, 0.9, 1.0))
+            else:
+                col = rgb
+            if not unlocked:
+                g = sum(col) // 3
+                col = (g // 2 + 30, g // 2 + 30, g // 2 + 40)
+            cx = r.left + 24 + seg + k * int(seg * 1.7)
+            cy = r.top + int(card_h * 0.22) + int(math.sin(now * 0.004 + k * 0.8) * seg * 0.4)
+            if unlocked:
+                fx.draw_glow(screen, (cx, cy), col, seg * 2.6, 3)
+            pygame.draw.circle(screen, col, (cx, cy), seg if k else int(seg * 1.25))
+        status = "DÉBLOQUÉE" if unlocked else "À débloquer"
+        utils.draw_text(screen, status, font_small, (120, 255, 150) if unlocked else (150, 160, 180),
+                        (r.right - 14, r.top + 12), "topright")
+        utils.draw_text_with_shadow(screen, name, font_medium, (255, 230, 120) if unlocked else config.COLOR_TEXT_MENU,
+                                    config.COLOR_UI_SHADOW, (r.left + 18, r.top + int(card_h * 0.40)), "topleft")
+        y = r.top + int(card_h * 0.40) + font_medium.get_height() + 4
+        for line in _wrap(font_small, goal, r.width - 36)[:2]:
+            utils.draw_text(screen, line, font_small, (170, 195, 225), (r.left + 18, y), "topleft")
+            y += font_small.get_linesize()
+        if key == "rainbow" and not unlocked:  # Seul objectif cumulatif : barre de progression
+            bar = pygame.Rect(r.left + 18, r.bottom - 22, r.width - 36, 8)
+            pygame.draw.rect(screen, (30, 40, 60), bar, border_radius=4)
+            fill = bar.copy()
+            fill.width = int(bar.width * min(1.0, career / float(progress.CAREER_POINTS_RAINBOW)))
+            pygame.draw.rect(screen, (0, 200, 255), fill, border_radius=4)
+    done = sum(1 for k in progress.UNLOCKABLE_COLORS if progress.is_unlocked(k))
+    points = f"{career:,} / {progress.CAREER_POINTS_RAINBOW:,}".replace(",", " ")
+    summary = f"Couleurs débloquées : {done}/{len(items)}   |   Points de carrière : {points}   |   Boss vaincus : {bosses}"
+    utils.draw_text(screen, summary, font_default, config.COLOR_TEXT_HIGHLIGHT, (sw // 2, int(sh * 0.86)), "center")
 
 
 # ---------------------------------------------------------------------------

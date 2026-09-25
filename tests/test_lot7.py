@@ -152,5 +152,46 @@ class TestOptionsFromPause(unittest.TestCase):
                 setattr(config, k, v)
 
 
+class TestTrophies(unittest.TestCase):
+    def _gs(self):
+        return {'base_path': GAME_DIR, 'menu_background_image': None, 'font_small': FONTS['small'],
+                'font_default': FONTS['default'], 'font_medium': FONTS['medium'], 'font_large': FONTS['large'],
+                'font_title': FONTS['title']}
+
+    def test_left_right_switches_page(self):
+        import screens
+        surf = pygame.Surface((800, 600))
+        gs = self._gs()
+        right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
+        self.assertEqual(screens.run_hall_of_fame([right], 16, surf, gs), config.HALL_OF_FAME)
+        self.assertEqual(gs['_hof_page'], 1)
+        screens.run_hall_of_fame([right], 16, surf, gs)
+        self.assertEqual(gs['_hof_page'], 0)
+
+    def test_attract_loop_shows_trophies_then_how_to_play(self):
+        import screens
+        surf = pygame.Surface((800, 600))
+        drawn = []
+        orig = screens.draw_trophies
+        screens.draw_trophies = lambda *a, **k: drawn.append(1)
+        try:
+            with FakeClock() as clock:
+                gs = self._gs()
+                gs['attract_mode'] = True
+                screens.run_hall_of_fame([], 16, surf, gs)
+                self.assertFalse(drawn)
+                clock.tick(int(screens.ATTRACT_HOF_MS * 0.7))
+                screens.run_hall_of_fame([], 16, surf, gs)
+                self.assertTrue(drawn)
+                clock.tick(screens.ATTRACT_HOF_MS)
+                self.assertEqual(screens.run_hall_of_fame([], 16, surf, gs), config.HOW_TO_PLAY)
+        finally:
+            screens.draw_trophies = orig
+
+    def test_trophies_page_draws(self):
+        import screens
+        screens.draw_trophies(pygame.Surface((800, 600)), self._gs(), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
