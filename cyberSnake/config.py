@@ -687,6 +687,7 @@ CLASSIC_SETUP = 103 # Options rapides avant Classique
 CONTROLS = 104 # Remapping contrôles
 TITLE = 105 # Écran titre (borne d'arcade)
 DAILY_CHALLENGE = 106 # Entrée de menu : Défi du jour (partie Solo imposée)
+TIME_ATTACK = 114 # Entrée de menu : Contre-la-montre (2 min en Solo, time_attack.py)
 HOW_TO_PLAY = 107 # Écran « Comment jouer » (boucle d'attente)
 COOP_SURVIVAL = 108 # Entrée de menu : Survie à deux (Coop)
 STICK_WIZARD = 109 # Assistant sticks J1 / J2 (Options > Contrôles)
@@ -737,12 +738,11 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.7.0'
+VERSION = '2.8.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "7 nouveaux fonds des menus (Options > Fond des menus)",
-    "Frénésie : toutes les minutes, 8 s de pluie de nourriture et points x2",
-    "Pendant la frénésie, aucune nouvelle mine : une respiration",
-    "Nouveaux sons : frénésie, queue coupée par un tir",
-    "Écran de fin : le niveau joué est affiché",
+    "Contre-la-montre : 2 minutes pour le plus gros score (menu principal)",
+    "Hall of Fame : nouvelle colonne « Chrono »",
+    "Plus fluide : écran de fin, titre, Hall of Fame, Comment jouer, pause",
+    "Moins de saccades quand des mines apparaissent",
 ]

@@ -316,9 +316,8 @@ def draw_control_panel(surface, rect, player, font, lit=(), blink_slot=None, sho
     """Stick + 8 boutons + Coin / Player d'un joueur, chaque bouton légendé avec son rôle."""
     color = PLAYER_COLORS.get(player, PLAYER_COLORS[1])
     now = pygame.time.get_ticks()
-    bg = pygame.Surface(rect.size, pygame.SRCALPHA)
-    pygame.draw.rect(bg, (10, 12, 22, 225), bg.get_rect(), border_radius=14)
-    surface.blit(bg, rect.topleft)
+    from ui_common import rounded_translucent
+    surface.blit(rounded_translucent(rect.size, (10, 12, 22, 225), 14), rect.topleft)
     pygame.draw.rect(surface, color, rect, 2, border_radius=14)
     top = rect.top + 8
     if title:

@@ -13,6 +13,7 @@ import pvp_rounds
 import rules
 import settings_screens
 import level
+import time_attack
 import panel
 from gameplay import reset_game
 from render import draw_game_elements_on_surface
@@ -82,6 +83,7 @@ def run_pause(events, dt, screen, game_state):
 
     def _open_options():
         game_state['options_return_state'] = config.PAUSED
+        game_state.pop('_pause_frame', None)  # Les réglages peuvent changer le rendu : image refaite au retour
         return config.OPTIONS
 
     def _quit_to_menu():
@@ -221,8 +223,14 @@ def run_pause(events, dt, screen, game_state):
 
     # Dessin de l'écran de pause
     try:
-        draw_game_elements_on_surface(screen, game_state, game_clock.ticks())  # Partie figée
-        darken(screen, 180)
+        # Partie figée : dessinée et assombrie une seule fois à l'ouverture de la pause
+        frozen = game_state.get('_pause_frame')
+        if frozen is None or frozen.get_size() != screen.get_size():
+            draw_game_elements_on_surface(screen, game_state, game_clock.ticks())
+            darken(screen, 180)
+            game_state['_pause_frame'] = frozen = screen.copy()
+        else:
+            screen.blit(frozen, (0, 0))
 
         try:
             pause_title = screens._glow_text(font_large, "PAUSE", (235, 250, 255), (0, 200, 255), 10)
@@ -367,6 +375,8 @@ def run_game_over(events, dt, screen, game_state):
     p1_name = player_snake.name if player_snake else "J1"; p2_name = player2_snake.name if player2_snake else "J2"
 
     mode_key, mode_name, score_to_check, name_for_hs = "solo", "Solo", p1_score, p1_name
+    if time_attack.active(game_state):  # Records à part : 2 minutes sur l'Arène Vide
+        mode_key, mode_name = time_attack.HOF_KEY, time_attack.MODE_NAME
     if current_game_mode == config.MODE_VS_AI: mode_key, mode_name, score_to_check, name_for_hs = "vs_ai", "Vs AI", p1_score, p1_name
     elif current_game_mode == config.MODE_CLASSIC: mode_key, mode_name, score_to_check, name_for_hs = "classic", "Classique", p1_score, p1_name
     elif current_game_mode == config.MODE_PVP:
@@ -630,7 +640,7 @@ def run_game_over(events, dt, screen, game_state):
             record_text = "Règles personnalisées : score non enregistré au Hall of Fame"
         pvp_title = current_game_mode == config.MODE_PVP
         screens.draw_game_over(screen, game_state, {
-            'title': winner_text.upper() if pvp_title else "GAME OVER",
+            'title': winner_text.upper() if pvp_title else ("TEMPS ÉCOULÉ !" if game_state.get('time_attack_done') else "GAME OVER"),
             'title_color': (0, 200, 255) if pvp_title else (255, 60, 80),
             'main_label': info_main_label, 'main_value': info_main_value, 'sub_lines': sub_lines,
             'record_text': record_text, 'is_high_score': is_high_score and not is_daily,

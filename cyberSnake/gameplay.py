@@ -19,6 +19,7 @@ import keyboard_controls
 import rules
 import level
 import frenzy
+import time_attack
 import pvp_rounds
 import progress
 import screens
@@ -368,6 +369,7 @@ def _enter_pause(game_state):
     game_state['previous_state'] = config.PLAYING
     game_state['pause_opened_at'] = pygame.time.get_ticks()
     game_state.pop('pause_quit_armed_until', None)
+    game_state.pop('_pause_frame', None)  # Image figée de la partie : refaite à chaque pause
     game_state['pause_menu_selection'] = 0
     game_state['current_state'] = config.PAUSED
     return config.PAUSED
@@ -483,6 +485,8 @@ def reset_game(game_state):
     game_state['_go_sound_played'] = False
     game_state['new_unlocks'] = []
     game_state['daily_rank'] = None
+    game_state['time_attack_done'] = False
+    game_state.pop('_ta_last_second', None)
     if game_state.get('daily_challenge'):
         random.seed(progress.daily_seed())  # Même départ pour tout le monde aujourd'hui
     game_state['player_projectiles'] = []
@@ -2238,6 +2242,10 @@ def run_game(events, dt, screen, game_state):
     # Coop : la partie continue tant qu'un des deux joueurs est en vie
     if coop:
         game_over = not ((player_snake and player_snake.alive) or (player2_snake and player2_snake.alive))
+
+    # Contre-la-montre : fin de partie quand les 2 minutes sont écoulées
+    if not game_over and time_attack.update(game_state, current_time):
+        game_over = True
 
     # --- Transition vers Game Over (après un court ralenti sur l'explosion) ---
     if game_over:

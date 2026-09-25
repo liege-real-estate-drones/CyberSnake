@@ -29,7 +29,7 @@ SCENARIOS = [
 DEMO_MAPS = ["Arène Circulaire", "Portails", "Labyrinthe", "Portes Laser", "Circuit", "Zone Mortelle",
              "Duel Miroir", "Forteresse", "Labyrinthe Mouvant", "Piliers", "Couloirs", "Chambres"]
 # Réglages de la session restaurés en sortie de démo
-SAVED_KEYS = ('current_game_mode', 'selected_map_key', 'current_random_map_walls', 'coop', 'daily_challenge',
+SAVED_KEYS = ('current_game_mode', 'selected_map_key', 'current_random_map_walls', 'coop', 'daily_challenge', 'time_attack',
               'pvp_condition_type', 'pvp_target_kills', 'pvp_target_time', 'pvp_best_of', 'pvp_match')
 
 
@@ -49,6 +49,7 @@ def _prepare(game_state, scenario):
     game_state['current_random_map_walls'] = None
     game_state['coop'] = False
     game_state['daily_challenge'] = False
+    game_state['time_attack'] = False
     if scenario['mode'] == config.MODE_PVP:
         game_state['pvp_condition_type'] = config.PvpCondition.KILLS
         game_state['pvp_target_kills'] = 3

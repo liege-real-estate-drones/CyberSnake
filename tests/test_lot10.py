@@ -127,7 +127,7 @@ class TestLevelInMainMenu(_Level):
                   'font_large': FONTS['large'], 'font_title': FONTS['title'], 'base_path': GAME_DIR,
                   'menu_background_image': None}
             game_states.run_menu([], 16, surf, gs)
-            gs['menu_selection_index'] = 7
+            gs['menu_selection_index'] = 8  # Ligne « Niveau » (après les modes de jeu et le Contre-la-montre)
             clock.tick(500)
             game_states.run_menu([hat((1, 0))], 16, surf, gs)
             self.assertEqual(level.current(), "difficile")

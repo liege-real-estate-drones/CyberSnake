@@ -15,6 +15,7 @@ import walls as walls_mod
 import pvp_rounds
 import settings_screens
 import panel
+import time_attack
 from ui_common import darken, draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
@@ -455,6 +456,14 @@ def run_map_selection(events, dt, screen, game_state):
     last_axis_move_time = game_state.get('last_axis_move_time_map', 0) # Utilise une clé unique
     current_time = pygame.time.get_ticks()
     # -----------------------------------------------------------------
+
+    # --- Contre-la-montre : Arène Vide pour tout le monde (records comparables) ---
+    if game_state.get('time_attack') and game_state.get('current_game_mode') == config.MODE_SOLO:
+        game_state['selected_map_key'] = time_attack.MAP_KEY
+        game_state['current_random_map_walls'] = None
+        reset_game(game_state)
+        game_state['current_state'] = config.PLAYING
+        return config.PLAYING
 
     # --- Défi du jour : carte imposée (la même pour tout le monde aujourd'hui) ---
     if game_state.get('daily_challenge'):
@@ -1276,13 +1285,11 @@ def run_classic_setup(events, dt, screen, game_state):
     try:
         if menu_background_image:
             try:
-                backgrounds.draw(screen, menu_background_image)
+                backgrounds.draw(screen, menu_background_image, darken=180)
             except Exception:
                 screen.fill(config.COLOR_BACKGROUND)
         else:
             screen.fill(config.COLOR_BACKGROUND)
-
-        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
         utils.draw_text_with_shadow(

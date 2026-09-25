@@ -268,9 +268,10 @@ class Mine:
             if not self.is_armed(current_time):
                 left = self.armed_at - current_time
                 t = 1.0 - left / float(max(1, self.arm_ms))
-                size = max(4, int(self.size * (0.45 + 0.5 * t)))
+                step = min(4, int(t * 5)) / 4.0  # 5 tailles seulement : les images restent en cache (sinon saccades)
+                size = max(4, int(self.size * (0.45 + 0.5 * step)))
                 sprite = fx.mine_sprite(size, (current_time // 120) % 2 == 0).copy()
-                sprite.set_alpha(int(90 + 120 * t))
+                sprite.set_alpha(int(90 + 120 * step))
                 surface.blit(sprite, sprite.get_rect(center=self.rect.center))
                 ring = int(self.size * (0.9 - 0.4 * t))
                 pygame.draw.circle(surface, (255, 90, 90), self.rect.center, max(3, ring), 1)
