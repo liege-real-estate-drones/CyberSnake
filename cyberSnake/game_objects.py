@@ -731,6 +731,7 @@ class Snake:
         self.speed_boost_level = 0
         self.poison_effect_active = False
         self.score_multiplier_active = False
+        self.frenzy_active = False  # Frénésie (frenzy.py) : points x2
         self.ghost_active = False
         self.reversed_controls_active = False
         self.frozen = False
@@ -1182,6 +1183,8 @@ class Snake:
             return
 
         temp_multiplier = 2.0 if self.score_multiplier_active else 1.0
+        if self.frenzy_active:  # Frénésie : points x2
+            temp_multiplier *= 2.0
         final_multiplier = temp_multiplier * self.persistent_score_multiplier
         score_added_float = value * final_multiplier
         score_added = int(round(score_added_float))

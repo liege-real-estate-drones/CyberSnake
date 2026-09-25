@@ -18,6 +18,7 @@ import joy_map
 import keyboard_controls
 import rules
 import level
+import frenzy
 import pvp_rounds
 import progress
 import screens
@@ -385,7 +386,7 @@ def _enemy_shot_on_body(snake, seg_index, hit_pos_px):
         snake.shrink(lost)
     if hit_pos_px:
         utils.emit_particles(hit_pos_px[0], hit_pos_px[1], 8, config.COLOR_ARMOR_HIT, (1, 3), (200, 400), (1, 3))
-    utils.play_sound("hit_p1")
+    utils.play_sound("tail_cut")
     snake._hit_flash_until = game_clock.ticks() + 120
     return True
 
@@ -477,6 +478,7 @@ def reset_game(game_state):
     game_state.pop('game_end_time', None)
     game_state['boss'] = None
     game_state['boss_banner_until'] = 0
+    frenzy.reset(game_state, current_time_reset)
     game_state['progress_recorded'] = False
     game_state['_go_sound_played'] = False
     game_state['new_unlocks'] = []
@@ -1398,7 +1400,8 @@ def run_game(events, dt, screen, game_state):
                 if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
 
             density_interval, density_max = rules.mine_density()  # Règle perso : densité de mines
-            if current_game_mode != config.MODE_CLASSIC and density_interval is not None and current_time - last_mine_spawn_time > mine_interval * density_interval * level.get("mine_interval"):
+            if current_game_mode != config.MODE_CLASSIC and density_interval is not None and not frenzy.active(game_state, current_time) \
+                    and current_time - last_mine_spawn_time > mine_interval * density_interval * level.get("mine_interval"):
                 spawned_count = 0
                 # Jamais juste devant un joueur : 7 cases dans sa direction (sur 3 de large)
                 corridor = set()
@@ -2118,6 +2121,8 @@ def run_game(events, dt, screen, game_state):
         enemies.update_special_enemies(game_state, current_time)
         bonuses.update(game_state, current_time)
         boss_mod.update_boss(game_state, current_time)
+        if not game_over:
+            frenzy.update(game_state, current_time)  # Frénésie : pluie de nourriture, points x2
     except Exception as e:
         logging.error(f"Erreur mise à jour boss: {e}", exc_info=True)
 
