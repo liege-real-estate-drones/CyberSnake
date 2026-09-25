@@ -65,7 +65,7 @@ VK_MOVE_EFFECT_DURATION = 150   # Durée de l'effet de déplacement en ms
 
 def run_name_entry_solo(events, dt, screen, game_state):
     """Gère l'écran de saisie du nom pour les modes Solo, Vs AI, Survie avec support manette."""
-    player1_name_input = game_state.get('player1_name_input', "Thib")
+    player1_name_input = game_state.get('player1_name_input', config.DEFAULT_NAME_P1)
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
@@ -238,7 +238,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
 
                     if selected_char == "OK":  # Confirmation du nom
                         name_entered = player1_name_input.strip()[:15]
-                        game_state['player1_name_input'] = name_entered if name_entered else "Thib"
+                        game_state['player1_name_input'] = name_entered if name_entered else config.DEFAULT_NAME_P1
                         utils.play_sound("name_input_confirm")
                         logging.info(f"Nom Joueur Solo/VsAI/Survie confirmé par joystick: '{game_state['player1_name_input']}'")
 
@@ -271,7 +271,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
             key = event.key
             if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                 name_entered = player1_name_input.strip()[:15] # Limite à 15 caractères
-                game_state['player1_name_input'] = name_entered if name_entered else "Thib" # Nom par défaut si vide
+                game_state['player1_name_input'] = name_entered if name_entered else config.DEFAULT_NAME_P1 # Nom par défaut si vide
                 utils.play_sound("name_input_confirm")
                 logging.info(f"Nom Joueur Solo/VsAI/Survie: '{game_state['player1_name_input']}'")
                 next_state = config.MAP_SELECTION # Après le nom, on choisit la carte
@@ -2102,8 +2102,8 @@ def run_pvp_setup(events, dt, screen, game_state):
 
 def run_name_entry_pvp(events, dt, screen, game_state):
     """Gère l'écran de saisie des noms pour le mode PvP (deux étapes) avec support manette."""
-    player1_name_input = game_state.get('player1_name_input', "Thib")
-    player2_name_input = game_state.get('player2_name_input', "Alex")
+    player1_name_input = game_state.get('player1_name_input', config.DEFAULT_NAME_P1)
+    player2_name_input = game_state.get('player2_name_input', config.DEFAULT_NAME_P2)
     stage = game_state.get('pvp_name_entry_stage', 1) # 1 pour J1, 2 pour J2
 
     p1_id, p2_id = get_joystick_ids(game_state)
@@ -2297,7 +2297,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             if selected_char == "OK":  # Confirmation du nom
                 current_input_name = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
                 name_entered = current_input_name.strip()[:15]
-                default_name = "Thib" if stage == 1 else "Alex"
+                default_name = config.DEFAULT_NAME_P1 if stage == 1 else config.DEFAULT_NAME_P2
                 name_entered = name_entered if name_entered else default_name
                 utils.play_sound("name_input_confirm")
 
@@ -2382,7 +2382,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 if key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                     try:
                         name_entered = current_input_value.strip()[:15] # Nettoie et limite
-                        default_name = "Thib" if stage == 1 else "Alex"
+                        default_name = config.DEFAULT_NAME_P1 if stage == 1 else config.DEFAULT_NAME_P2
                         name_entered = name_entered if name_entered else default_name # Nom par défaut
                         utils.play_sound("name_input_confirm")
                         if stage == 1:

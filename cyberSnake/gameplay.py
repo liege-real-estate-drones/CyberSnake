@@ -278,6 +278,8 @@ def _apply_dash_loot(game_state, snake, dash_result, current_time):
 
 def _enter_pause(game_state):
     game_state['previous_state'] = config.PLAYING
+    game_state['pause_opened_at'] = pygame.time.get_ticks()
+    game_state.pop('pause_quit_armed_until', None)
     game_state['pause_menu_selection'] = 0
     game_state['current_state'] = config.PAUSED
     return config.PAUSED
@@ -361,6 +363,11 @@ def reset_game(game_state):
     fx.clear_shockwaves()
     bonuses.reset()
     custom_rules = rules.begin(game_state)  # Règles personnalisées (figées pour la partie)
+    if not game_state.get('demo_mode'):
+        two = game_state.get('current_game_mode') == config.MODE_PVP or game_state.get('coop')
+        utils.remember_player_names(game_state.get('player1_name_input'),
+                                    game_state.get('player2_name_input') if two else None,
+                                    game_state.get('base_path', ""))
     game_state['game_start_time'] = current_time_reset
     game_state.pop('game_end_time', None)
     game_state['boss'] = None
@@ -411,7 +418,7 @@ def reset_game(game_state):
         current_game_mode = config.MODE_SOLO
         game_state['current_game_mode'] = current_game_mode
     selected_map_key = game_state.get('selected_map_key', config.DEFAULT_MAP_KEY)
-    player1_name = game_state.get('player1_name_input', "Thib")
+    player1_name = game_state.get('player1_name_input', config.DEFAULT_NAME_P1)
     base_path = game_state.get('base_path', "")
     pvp_start_armor = game_state.get('pvp_start_armor', config.pvp_start_armor)
     pvp_start_ammo = game_state.get('pvp_start_ammo', config.pvp_start_ammo)
@@ -549,7 +556,7 @@ def reset_game(game_state):
         if game_state.get('coop'):
             try:
                 game_state['player2_snake'] = game_objects.Snake(
-                    player_num=2, name=game_state.get('player2_name_input', "Alex"), start_pos=p2_start,
+                    player_num=2, name=game_state.get('player2_name_input', config.DEFAULT_NAME_P2), start_pos=p2_start,
                     current_game_mode=current_game_mode, walls=current_map_walls_list,
                     start_armor=start_armor_p1, start_ammo=start_ammo_p1
                 )
@@ -561,7 +568,7 @@ def reset_game(game_state):
         num_initial_nests = min(1, config.MAX_NESTS_SURVIVAL) # Vague 1 = 1 nid
         # =======================================================
     elif current_game_mode == config.MODE_PVP:
-        player2_name = game_state.get('player2_name_input', "Alex")
+        player2_name = game_state.get('player2_name_input', config.DEFAULT_NAME_P2)
         logging.debug(f"DEBUG PVP RESET: Tentative de création de player2_snake avec nom: {player2_name}, start_pos: {p2_start}")
         try:
             game_state['player2_snake'] = game_objects.Snake(

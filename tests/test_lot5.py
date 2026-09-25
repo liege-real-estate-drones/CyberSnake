@@ -34,6 +34,8 @@ import boss  # noqa: E402
 import demo_mode  # noqa: E402
 
 utils.load_assets(GAME_DIR)
+# reset_game mémorise les noms dans game_options.json : jamais sur disque pendant les tests
+utils.remember_player_names = lambda *a, **k: None
 FONTS = utils.load_fonts(GAME_DIR, 1.0)
 
 

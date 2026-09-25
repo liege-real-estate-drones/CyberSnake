@@ -163,6 +163,34 @@ def load_game_options(base_path=""):
     return _deep_merge_dict(DEFAULT_GAME_OPTIONS, loaded)
 
 
+def last_player_names(base_path=""):
+    """(nom J1, nom J2) : derniers noms utilisés, sinon « Joueur 1 » / « Joueur 2 »."""
+    try:
+        names = load_game_options(base_path).get("last_names") or {}
+    except Exception:
+        names = {}
+    p1 = str(names.get("p1") or "").strip()[:15] or config.DEFAULT_NAME_P1
+    p2 = str(names.get("p2") or "").strip()[:15] or config.DEFAULT_NAME_P2
+    return p1, p2
+
+
+def remember_player_names(p1_name, p2_name=None, base_path=""):
+    """Mémorise les noms pour les proposer à la prochaine partie (écrit seulement s'ils changent)."""
+    try:
+        opts = load_game_options(base_path)
+        names = dict(opts.get("last_names") or {})
+        new = dict(names)
+        if p1_name:
+            new["p1"] = str(p1_name)[:15]
+        if p2_name:
+            new["p2"] = str(p2_name)[:15]
+        if new != names:
+            opts["last_names"] = new
+            save_game_options(opts, base_path)
+    except Exception:
+        logger.warning("Noms des joueurs non mémorisés", exc_info=True)
+
+
 def save_game_options(options, base_path=""):
     """Sauvegarde game_options.json (écriture atomique)."""
     if not base_path:
@@ -1191,7 +1219,9 @@ def select_new_objective(current_game_mode, player_current_score):
             new_objective['target_value'] = actual_target_score # Cible réelle
             display_text = chosen_template['text'].format(actual_target_score)
         elif obj_id:
-            display_text = chosen_template['text'].format(target_value)
+            # Singulier quand la cible vaut 1 (« Trouver 1 bouclier », pas « 1 boucliers »)
+            text = chosen_template.get('text_one') if target_value == 1 and chosen_template.get('text_one') else chosen_template['text']
+            display_text = text.format(target_value)
         else:
             display_text = "Objectif Inconnu"
 
