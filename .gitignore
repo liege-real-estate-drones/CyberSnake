@@ -26,3 +26,6 @@ cyberSnake/.cybersnake_manifest.txt
 
 # Réglages du joueur (créés par le jeu, valeurs par défaut dans utils.DEFAULT_GAME_OPTIONS)
 cyberSnake/game_options.json
+
+# Images de fond déposées par le joueur (Options > Fond des menus)
+cyberSnake/mes_fonds/

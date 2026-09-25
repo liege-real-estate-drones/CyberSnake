@@ -60,6 +60,7 @@ try:
     import keyboard_controls
     import ui_common
     import settings_screens
+    import panel
     import pvp_rounds
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
@@ -384,6 +385,8 @@ def main():
     try:
         menu_background_image = utils.load_assets(base_path_assets)
         utils.load_high_scores(base_path_assets)
+        import backgrounds
+        backgrounds.user_dir(base_path_assets, create=True)  # Dossier mes_fonds/ : les images du joueur
         logging.info(f"Assets et High Scores chargés. Scores: Solo={len(utils.high_scores.get('solo', []))}, VsAI={len(utils.high_scores.get('vs_ai', []))}, PvP={len(utils.high_scores.get('pvp', []))}, Survie={len(utils.high_scores.get('survie', []))}")
     except Exception as asset_err:
         logging.error(f"Erreur chargement assets/high scores: {asset_err}", exc_info=True)
@@ -471,7 +474,7 @@ def main():
         config.DEMO: game_states.run_demo,
         config.RULES: settings_screens.run_rules,
         config.ROUND_SCORE: pvp_rounds.run_round_score,
-        config.BUTTON_COLORS_SCREEN: settings_screens.run_button_colors,
+        config.BUTTONS_SCREEN: panel.run_buttons_screen,
         config.BACKGROUND_SCREEN: settings_screens.run_background_screen,
     }
     # --- Fin Mappage États ---

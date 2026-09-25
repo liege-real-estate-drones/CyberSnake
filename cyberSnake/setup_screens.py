@@ -6,6 +6,7 @@ import math
 import logging
 
 import config
+import backgrounds
 import utils
 import progress
 import arenas
@@ -396,7 +397,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                                           (key_x + key_width/2, key_y + key_height/2), "center")
         
         # Instructions
-        utils.draw_text(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", "OK : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
+        settings_screens.draw_hint(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", "OK : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
         logging.error(f"Erreur lors du dessin de run_name_entry_solo: {e}")
@@ -962,7 +963,7 @@ def run_map_selection(events, dt, screen, game_state):
         instruction_text_2 = ""
         if _map_keys_display[current_selection_index] == "Aléatoire":
             instruction_text_2 = "G/D: Nouvelle | F: Sauver en favori"
-        utils.draw_text(screen, instruction_text_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
+        settings_screens.draw_hint(screen, instruction_text_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
         if instruction_text_2:
             utils.draw_text(screen, instruction_text_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + line_gap), "center")
 
@@ -1260,7 +1261,7 @@ def run_classic_setup(events, dt, screen, game_state):
     try:
         if menu_background_image:
             try:
-                screen.blit(menu_background_image, (0, 0))
+                backgrounds.draw(screen, menu_background_image)
             except Exception:
                 screen.fill(config.COLOR_BACKGROUND)
         else:
@@ -1566,7 +1567,7 @@ def run_classic_setup(events, dt, screen, game_state):
             pass
 
         hint = settings_screens.hint("Haut / Bas : choisir", "Gauche / Droite : changer", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour")
-        utils.draw_text(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.92), "center")
+        settings_screens.draw_hint(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.92), "center")
         utils.draw_text(screen, "Astuce: 'Démarrer' = défaut si tu n'as rien changé", font_small, config.COLOR_TEXT, (sw / 2, sh * 0.955), "center")
     except Exception:
         pass
@@ -1717,7 +1718,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
 
         hint = settings_screens.hint("Gauche / Droite : changer", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour")
         hint2 = "Astuce: Options = difficulté par défaut"
-        utils.draw_text(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.90), "center")
+        settings_screens.draw_hint(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.90), "center")
         utils.draw_text(screen, hint2, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception:
         pass
@@ -1968,7 +1969,7 @@ def run_pvp_setup(events, dt, screen, game_state):
             utils.draw_text_with_shadow(screen, label_text, font_medium, label_color, config.COLOR_UI_SHADOW, (label_x, item_y), "midright")
             utils.draw_text_with_shadow(screen, value_text, font_medium, value_color, config.COLOR_UI_SHADOW, (value_x, item_y), "midleft")
         instruction_y = config.SCREEN_HEIGHT * 0.90
-        utils.draw_text(screen, settings_screens.hint("Haut / Bas : choisir", "Gauche / Droite : changer", f"{settings_screens.button_name('PRIMARY')} : noms des joueurs", f"{settings_screens.button_name('SECONDARY')} : carte"), font_small,config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
+        settings_screens.draw_hint(screen, settings_screens.hint("Haut / Bas : choisir", "Gauche / Droite : changer", f"{settings_screens.button_name('PRIMARY')} : noms des joueurs", f"{settings_screens.button_name('SECONDARY')} : carte"), font_small,config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin de run_pvp_setup: {e}", exc_info=True)
         logging.debug("Exiting run_pvp_setup (Exception in draw), next_state: config.MAP_SELECTION") # NOUVEAU LOG
@@ -2388,7 +2389,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                                          (key_x + key_width/2, key_y + key_height/2), "center")
         
         # Instructions
-        utils.draw_text(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", "OK : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
+        settings_screens.draw_hint(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", "OK : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
         logging.error(f"Erreur lors du dessin de run_name_entry_pvp: {e}")

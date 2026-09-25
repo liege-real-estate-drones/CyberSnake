@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """Écrans de réglages en liste (enregistrés dans game_options.json à chaque changement).
 
-- Couleurs des boutons de la borne : « Comment jouer » et les aides affichent des boutons
-  de la même couleur que les boutons physiques (Options > Couleurs des boutons).
+- Aides des écrans : les boutons y sont dessinés à leur place sur le panneau (voir panel.py).
 - Règles personnalisées (mutateurs) : voir rules.py.
 """
 import logging
@@ -12,69 +11,22 @@ import pygame
 
 import config
 import utils
+import panel
 import rules
 from ui_common import draw_screen_background, draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
 
-# Couleurs proposées pour les boutons d'arcade : (libellé, couleur)
-BUTTON_COLORS = {
-    "rouge": ("Rouge", (230, 45, 50)),
-    "bleu": ("Bleu", (40, 120, 255)),
-    "vert": ("Vert", (40, 205, 80)),
-    "jaune": ("Jaune", (255, 210, 0)),
-    "orange": ("Orange", (255, 135, 25)),
-    "violet": ("Violet", (165, 75, 235)),
-    "blanc": ("Blanc", (235, 235, 240)),
-    "noir": ("Noir", (45, 45, 55)),
-}
-# Action du jeu -> (clé dans controls.json / config.BUTTON_*, libellé)
-BUTTON_ACTIONS = [
-    ("PRIMARY", "Tirer / Valider"),
-    ("SECONDARY", "Dash / Retour"),
-    ("TERTIARY", "Bouclier"),
-    ("PAUSE", "Pause"),
-    ("BACK", "Pause / Quitter"),
-]
-DEFAULT_BUTTON_COLORS = {"PRIMARY": "rouge", "SECONDARY": "bleu", "TERTIARY": "vert", "PAUSE": "blanc", "BACK": "noir"}
-
-
-_colors_cache = {}
-
-
-def button_color_key(action):
-    if 'colors' not in _colors_cache:  # Lu une fois (et après chaque changement), pas à chaque image
-        try:
-            _colors_cache['colors'] = dict(utils.load_game_options().get("button_colors") or {})
-        except Exception:
-            _colors_cache['colors'] = {}
-    colors = _colors_cache['colors']
-    key = str(colors.get(action, DEFAULT_BUTTON_COLORS.get(action, "blanc"))).strip().lower()
-    return key if key in BUTTON_COLORS else DEFAULT_BUTTON_COLORS.get(action, "blanc")
-
-
 def button_name(action):
-    """« Bouton rouge » : nom d'un bouton de la borne d'après sa couleur (Options > Couleurs des boutons)."""
-    return "Bouton " + BUTTON_COLORS[button_color_key(action)][0].lower()
+    """Marque d'un bouton dans une aide : draw_hint la dessine à sa place sur le panneau de la borne."""
+    return panel.button_tag(action)
 
 
 def hint(*parts):
-    """Légende d'écran : parties séparées par des barres. Les boutons y sont nommés par leur couleur."""
-    return "  |  ".join(parts)
+    """Légende d'écran : parties séparées par des barres (à dessiner avec draw_hint)."""
+    return panel.hint(*parts)
 
 
-def draw_arcade_button(surface, center, radius, action, label=None, font=None):
-    """Bouton d'arcade vu de dessus, à la couleur choisie pour cette action."""
-    color = BUTTON_COLORS[button_color_key(action)][1]
-    cx, cy = int(center[0]), int(center[1])
-    dark = tuple(int(c * 0.45) for c in color)
-    light = tuple(min(255, int(c + (255 - c) * 0.55)) for c in color)
-    pygame.draw.circle(surface, (15, 15, 22), (cx, cy + 3), radius + 3)      # Bague / ombre
-    pygame.draw.circle(surface, (170, 175, 190), (cx, cy), radius + 3, 2)   # Bague chromée
-    pygame.draw.circle(surface, dark, (cx, cy), radius)
-    pygame.draw.circle(surface, color, (cx, cy - max(1, radius // 8)), int(radius * 0.86))
-    pygame.draw.ellipse(surface, light, pygame.Rect(cx - radius * 0.5, cy - radius * 0.72, radius * 0.7, radius * 0.38))
-    if label and font:
-        txt_col = (20, 20, 25) if sum(color) > 450 else (245, 245, 250)
-        utils.draw_text(surface, label, font, txt_col, (cx, cy), "center")
+def draw_hint(surface, text, font, color, pos, align="center"):
+    return panel.draw_hint(surface, text, font, color, pos, align)
 
 
 def _options():
@@ -142,15 +94,15 @@ def run_list_screen(events, screen, game_state, key, title, subtitle, items, bac
         utils.draw_text(screen, subtitle, font_small, (170, 200, 230), (sw // 2, int(sh * 0.08) + font_medium.get_height()), "midtop")
     list_w = int(sw * (0.52 if preview else 0.7))
     row_h = max(font_default.get_linesize() + 14, 38)
-    panel = pygame.Rect(0, 0, list_w, row_h * len(rows) + 24)
-    panel.topleft = ((sw - list_w) // 2 if not preview else int(sw * 0.05), int(sh * 0.2))
-    if panel.bottom > sh - 60:
-        row_h = max(font_default.get_linesize() + 4, (sh - 60 - panel.top - 24) // len(rows))
-        panel.height = row_h * len(rows) + 24
-    draw_ui_panel(screen, panel)
+    box = pygame.Rect(0, 0, list_w, row_h * len(rows) + 24)
+    box.topleft = ((sw - list_w) // 2 if not preview else int(sw * 0.05), int(sh * 0.2))
+    if box.bottom > sh - 60:
+        row_h = max(font_default.get_linesize() + 4, (sh - 60 - box.top - 24) // len(rows))
+        box.height = row_h * len(rows) + 24
+    draw_ui_panel(screen, box)
     now = pygame.time.get_ticks()
     for i, (label, value, _fn) in enumerate(rows):
-        r = pygame.Rect(panel.left + 12, panel.top + 12 + i * row_h, panel.width - 24, row_h - 6)
+        r = pygame.Rect(box.left + 12, box.top + 12 + i * row_h, box.width - 24, row_h - 6)
         selected = i == sel
         if selected:
             hl = pygame.Surface(r.size, pygame.SRCALPHA)
@@ -164,14 +116,14 @@ def run_list_screen(events, screen, game_state, key, title, subtitle, items, bac
             utils.draw_text(screen, text, font_default, config.COLOR_PVP_SETUP_VALUE if selected else (200, 210, 230),
                             (r.right - 12, r.centery), "midright")
     if preview:
-        prect = pygame.Rect(panel.right + int(sw * 0.03), panel.top, sw - panel.right - int(sw * 0.08), panel.height)
+        prect = pygame.Rect(box.right + int(sw * 0.03), box.top, sw - box.right - int(sw * 0.08), box.height)
         draw_ui_panel(screen, prect)
         try:
             preview(screen, prect)
         except Exception:
             logging.debug("Aperçu indisponible", exc_info=True)
-    utils.draw_text(screen, "Haut/Bas : choisir  |  Gauche/Droite ou Valider : changer  |  Retour : quitter",
-                    font_small, (150, 170, 200), (sw // 2, sh - 24), "center")
+    draw_hint(screen, hint("Haut / Bas : choisir", f"Gauche / Droite ou {button_name('PRIMARY')} : changer",
+                           f"{button_name('SECONDARY')} : retour"), font_small, (150, 170, 200), (sw // 2, sh - 24), "center")
     return None
 
 
@@ -181,40 +133,6 @@ def _cycle(values, current, delta):
     except ValueError:
         i = 0
     return values[(i + delta) % len(values)]
-
-
-# ---------------------------------------------------------------------------
-# Couleurs des boutons de la borne
-# ---------------------------------------------------------------------------
-def run_button_colors(events, dt, screen, game_state):
-    back = game_state.get('button_colors_return_state', config.OPTIONS)
-    color_keys = list(BUTTON_COLORS.keys())
-
-    def setter(action):
-        def change(delta):
-            opts = _options()
-            colors = dict(opts.get("button_colors") or {})
-            colors[action] = _cycle(color_keys, button_color_key(action), delta)
-            opts["button_colors"] = colors
-            _save(opts)
-            _colors_cache.clear()
-        return change
-
-    items = [(label, BUTTON_COLORS[button_color_key(a)][0], setter(a)) for a, label in BUTTON_ACTIONS]
-
-    def preview(surface, rect):
-        font = game_state.get('font_small')
-        r = max(14, min(rect.width // 9, rect.height // 8))
-        y = rect.top + r + 20
-        for a, label in BUTTON_ACTIONS:
-            draw_arcade_button(surface, (rect.left + r + 24, y), r, a)
-            utils.draw_text(surface, label, font, config.COLOR_TEXT_MENU, (rect.left + 2 * r + 40, y), "midleft")
-            y += 2 * r + 18
-
-    result = run_list_screen(events, screen, game_state, '_sel_button_colors', "COULEURS DES BOUTONS",
-                             "Choisis la couleur de chaque bouton de la borne (utilisée par « Comment jouer »)",
-                             items, back, preview)
-    return config.BUTTON_COLORS_SCREEN if result is None else result
 
 
 # ---------------------------------------------------------------------------
@@ -248,11 +166,14 @@ def run_background_screen(events, dt, screen, game_state):
     import backgrounds
     back = game_state.get('background_return_state', config.OPTIONS)
     p1_id, _p2 = get_joystick_ids(game_state)
-    keys = [k for k, _l in backgrounds.choices()]
-    labels = dict(backgrounds.choices())
+    base_path = game_state.get('base_path', '')
+    if '_bg_choices' not in game_state:  # Liste lue à l'ouverture (dont les images de mes_fonds/)
+        game_state['_bg_choices'] = backgrounds.choices(base_path)
+    keys = [k for k, _l in game_state['_bg_choices']]
+    labels = dict(game_state['_bg_choices'])
     current = game_state.get('_bg_choice')
     if current not in keys:
-        current = backgrounds.normalize(_options().get("menu_background"))
+        current = backgrounds.normalize(_options().get("menu_background"), base_path)
         game_state['_bg_choice'] = current
 
     def change(delta):
@@ -261,7 +182,7 @@ def run_background_screen(events, dt, screen, game_state):
         opts = _options()
         opts["menu_background"] = new
         _save(opts)
-        img = backgrounds.load(game_state.get('base_path', ''), new, screen.get_size())
+        img = backgrounds.load(base_path, new, screen.get_size())
         if img is not None:
             game_state['menu_background_image'] = img
         utils.play_sound("menu_move")
@@ -276,26 +197,26 @@ def run_background_screen(events, dt, screen, game_state):
         elif ev.type == pygame.JOYBUTTONDOWN and ev.instance_id == p1_id and (is_confirm_button(ev.button) or is_back_button(ev.button)):
             utils.play_sound("menu_select" if is_confirm_button(ev.button) else "menu_back")
             game_state.pop('_bg_choice', None)
+            game_state.pop('_bg_choices', None)
             return back
         elif ev.type == pygame.KEYDOWN and ev.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
             game_state.pop('_bg_choice', None)
+            game_state.pop('_bg_choices', None)
             return back
 
     sw, sh = screen.get_size()
-    bg = game_state.get('menu_background_image')
-    if bg is not None:
-        screen.blit(bg, (0, 0))
-    else:
-        draw_screen_background(screen, game_state)
+    draw_screen_background(screen, game_state)
     font_medium = game_state.get('font_medium')
     font_small = game_state.get('font_small')
-    panel = pygame.Rect(0, 0, int(sw * 0.62), font_medium.get_height() + font_small.get_height() + 40)
-    panel.midbottom = (sw // 2, sh - 24)
-    draw_ui_panel(screen, panel)
+    box = pygame.Rect(0, 0, int(sw * 0.7), font_medium.get_height() + 2 * font_small.get_linesize() + 44)
+    box.midbottom = (sw // 2, sh - 24)
+    draw_ui_panel(screen, box)
     choice = game_state['_bg_choice']
     idx = keys.index(choice)
     utils.draw_text_with_shadow(screen, f"Fond des menus :  <  {labels[choice]}  >   ({idx + 1}/{len(keys)})", font_medium,
-                                config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (panel.centerx, panel.top + 12), "midtop")
-    utils.draw_text(screen, "Gauche / Droite : changer   |   Valider ou Retour : terminer", font_small, (170, 200, 230),
-                    (panel.centerx, panel.bottom - 10), "midbottom")
+                                config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (box.centerx, box.top + 12), "midtop")
+    draw_hint(screen, hint("Gauche / Droite : changer", f"{button_name('PRIMARY')} ou {button_name('SECONDARY')} : terminer"),
+              font_small, (170, 200, 230), (box.centerx, box.bottom - 12), "midbottom")
+    utils.draw_text(screen, "Tes images : dépose des .jpg / .png dans \\\\BATOCERA\\share\\roms\\ports\\cybersnake_data\\mes_fonds",
+                    font_small, (140, 160, 190), (box.centerx, box.bottom - 16 - font_small.get_linesize()), "midbottom")
     return config.BACKGROUND_SCREEN

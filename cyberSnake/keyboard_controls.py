@@ -8,9 +8,9 @@ En jeu :
 - Échap ou P : pause.
 Dans les menus, flèches / Entrée / Espace deviennent la croix et le bouton « valider » de J1.
 
-Sur la borne, Batocera (evmapy) double le stick et les boutons en touches clavier : toutes
-ces touches passent par menu_input.KeyboardEchoFilter, qui retire celles qui arrivent en
-même temps qu'une action manette. Sans manette branchée, le clavier fonctionne normalement.
+Sur la borne, Batocera (evmapy) double le stick et les boutons en touches clavier (flèches,
+lettres...) : menu_input.KeyboardEchoFilter retire toute touche qui arrive en même temps
+qu'une action manette. Sans manette branchée, le clavier fonctionne normalement.
 """
 import pygame
 
@@ -41,12 +41,6 @@ HELP = [
     ("J1", [("Z Q S D", "Diriger"), ("Espace", "Tirer"), ("Maj gauche", "Dash"), ("E", "Bouclier")]),
     ("J2", [("Flèches", "Diriger"), ("Ctrl droit", "Tirer"), ("Maj droit", "Dash"), ("Entrée", "Bouclier")]),
 ]
-
-
-def game_keys():
-    """Toutes les touches de jeu (filtrées comme échos possibles des manettes)."""
-    p1, p2 = _tables()
-    return set(p1) | set(p2) | {pygame.K_ESCAPE, pygame.K_p}
 
 
 def is_pause_key(key):

@@ -529,11 +529,12 @@ class TestNewScreensFuzz(unittest.TestCase):
     def test_fuzz(self):
         import random as _random
         import settings_screens
+        import panel
         import screens as screens_mod
         rng = _random.Random(3)
         surf = pygame.Surface((800, 600))
         with MemoryOptions():
-            for fn in (settings_screens.run_rules, settings_screens.run_button_colors, screens_mod.run_how_to_play):
+            for fn in (settings_screens.run_rules, panel.run_buttons_screen, screens_mod.run_how_to_play):
                 gs = {'base_path': GAME_DIR, 'font_small': FONTS['small'], 'font_default': FONTS['default'],
                       'font_medium': FONTS['medium'], 'font_large': FONTS['large'], 'font_title': FONTS['title']}
                 for _ in range(400):

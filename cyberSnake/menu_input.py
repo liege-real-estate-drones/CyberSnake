@@ -12,7 +12,6 @@ import pygame
 
 import config
 import joy_map
-import keyboard_controls
 
 REPEAT_INITIAL_DELAY_MS = 400
 # > 200 ms : les menus ignorent les mouvements plus rapprochés que 200 ms
@@ -132,32 +131,22 @@ class MenuInputTranslator:
         return out
 
 
-# Touches que Batocera (evmapy) fabrique à partir du stick et des boutons pendant un jeu.
-_ECHO_KEYS = None
-
-
-def _echo_keys():
-    global _ECHO_KEYS
-    if _ECHO_KEYS is None:
-        _ECHO_KEYS = {pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT,
-                      pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE, pygame.K_ESCAPE}
-        # Touches de jeu au clavier (keyboard_controls) : evmapy peut aussi les produire
-        _ECHO_KEYS |= keyboard_controls.game_keys()
-    return _ECHO_KEYS
-
-
 class KeyboardEchoFilter:
     """Supprime les « échos clavier » des manettes.
 
     Sur Batocera, evmapy convertit les mouvements du stick et les boutons en touches
     clavier (flèches, Entrée, Échap...). Le jeu recevait donc chaque action deux fois,
     parfois dans un sens différent : navigation qui « s'annule » dans les menus.
-    Une touche de navigation arrivée à moins de ECHO_WINDOW_MS d'une action manette est
-    ignorée. Les touches sont retenues une image pour voir si l'action manette arrive
-    juste après. Sans manette branchée, le clavier fonctionne normalement.
+    Toute touche arrivée à moins de ECHO_WINDOW_MS d'une action manette est ignorée, pas
+    seulement la navigation : evmapy envoie aussi des lettres (le bouton « b » de la borne
+    tapait un « b » en trop dans la saisie des noms, et effacer une lettre en retapait une).
+    Les touches sont retenues une image pour voir si l'action manette arrive juste après.
+    Sans manette branchée, le clavier fonctionne normalement.
     """
 
     ECHO_WINDOW_MS = 150
+    # Un stick analogique au repos tremble un peu : ce n'est pas une action du joueur
+    AXIS_ACTIVITY = 0.3
 
     def __init__(self):
         self._pending = []      # (événement, instant)
@@ -173,8 +162,9 @@ class KeyboardEchoFilter:
             self._echo_held.discard(ev.key)
 
     def process(self, events, now, joystick_present):
-        joy_types = (pygame.JOYAXISMOTION, pygame.JOYHATMOTION, pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP)
-        if any(ev.type in joy_types for ev in events):
+        joy_types = (pygame.JOYHATMOTION, pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP)
+        if any(ev.type in joy_types or (ev.type == pygame.JOYAXISMOTION and abs(getattr(ev, 'value', 0)) >= self.AXIS_ACTIVITY)
+               for ev in events):
             self._last_joy = now
         out = []
         # Touches retenues à l'image précédente : écho si une action manette est proche
@@ -185,12 +175,14 @@ class KeyboardEchoFilter:
                 out.append(ev)
         self._pending = []
         for ev in events:
-            if joystick_present and ev.type in (pygame.KEYDOWN, pygame.KEYUP) and \
-                    getattr(ev, 'key', None) in _echo_keys():
+            if joystick_present and ev.type in (pygame.KEYDOWN, pygame.KEYUP):
                 if ev.key in self._echo_held or abs(now - self._last_joy) <= self.ECHO_WINDOW_MS:
                     self._drop(ev)  # Écho (ou répétition automatique d'un écho)
                 else:
                     self._pending.append((ev, now))
+                continue
+            if joystick_present and ev.type == pygame.TEXTINPUT and abs(now - self._last_joy) <= self.ECHO_WINDOW_MS:
+                self.dropped += 1  # Texte produit par le même écho
                 continue
             out.append(ev)
         return out
