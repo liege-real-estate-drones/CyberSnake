@@ -74,5 +74,28 @@ class TestFrenzy(unittest.TestCase):
         self.assertFalse(gs['player_snake'].frenzy_active)
 
 
+class TestPlayerArtworkBackgrounds(unittest.TestCase):
+    """Les 7 illustrations du joueur : dans la galerie, sans agrandissement à l'écran de la borne."""
+
+    KEYS = ("duel_neon", "double_helice", "grille_retro", "coucher_de_soleil", "blizzard", "projecteurs", "desert_peint")
+
+    def test_files_exist_and_fill_the_borne_screen(self):
+        import backgrounds
+        for key in self.KEYS:
+            label, filename, _area, _focus, animated = backgrounds.BACKGROUNDS[key]
+            path = os.path.join(GAME_DIR, filename)
+            self.assertTrue(os.path.exists(path), path)  # load() retomberait sur la couverture sans le dire
+            src = pygame.image.load(path)
+            k = max(1908 / src.get_width(), 1080 / src.get_height())
+            self.assertLessEqual(k, 1.0, key)  # Jamais agrandie (floue) en 1908 x 1080
+            self.assertLess(os.path.getsize(path), 900 * 1024, key)  # Mise à jour légère
+            self.assertIn(key, dict(backgrounds.choices(GAME_DIR)))
+
+    def test_share_path_points_to_the_real_install(self):
+        import backgrounds
+        self.assertEqual(backgrounds.share_path("/userdata/roms/pygame/cyberSnake"),
+                         r"\\BATOCERA\share\roms\pygame\cyberSnake\mes_fonds")
+
+
 if __name__ == "__main__":
     unittest.main()
