@@ -3693,6 +3693,8 @@ class Food:
             scaled_size = config.GRID_SIZE
         draw_rect = pygame.Rect(0, 0, scaled_size, scaled_size)
         draw_rect.center = self.rect.center
+        if getattr(self, 'frenzy', False):  # Nourriture de la frénésie : halo doré
+            fx.draw_glow(surface, self.rect.center, (255, 205, 70), config.GRID_SIZE * 1.1, 3)
 
         # --- Check for Image ---
         image_file = self.type_data.get('image_file')
