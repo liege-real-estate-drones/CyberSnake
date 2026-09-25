@@ -10,9 +10,14 @@ import utils
 import progress
 import screens
 import pvp_rounds
+import rules
 from gameplay import reset_game
 from render import draw_game_elements_on_surface
 from ui_common import draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
+
+
+PAUSE_QUIT_DELAY_MS = 800      # Back ignoré juste après l'ouverture de la pause (double appui accidentel)
+PAUSE_QUIT_CONFIRM_MS = 2500   # Délai pour confirmer avec un second appui sur Back
 
 
 def run_pause(events, dt, screen, game_state):
@@ -116,27 +121,10 @@ def run_pause(events, dt, screen, game_state):
             return _quit_to_menu()
         return config.PAUSED
 
-    threshold = getattr(config, "JOYSTICK_THRESHOLD", 0.6)
-
     for event in events:
         if event.type == pygame.QUIT:
             return False
 
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                if int(getattr(event, "axis", -1)) == axis_v:  # Vertical
-                    value = float(getattr(event, "value", 0.0))
-                    value = (-value) if inv_v else value
-                    if value < -threshold:
-                        selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time
-                    elif value > threshold:
-                        selection_index = (selection_index + 1) % len(menu_items)
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -159,7 +147,16 @@ def run_pause(events, dt, screen, game_state):
 
                 # Raccourcis rapides
                 if button == menu_button:
-                    return _quit_to_menu()
+                    # Back ouvre la pause en jeu : un double appui ne doit pas faire perdre la partie.
+                    # Il faut un appui (au moins 0,8 s après l'ouverture) puis un second pour confirmer.
+                    armed = int(game_state.get('pause_quit_armed_until', 0) or 0)
+                    if current_time <= armed:
+                        game_state.pop('pause_quit_armed_until', None)
+                        return _quit_to_menu()
+                    if current_time - int(game_state.get('pause_opened_at', 0) or 0) >= PAUSE_QUIT_DELAY_MS:
+                        game_state['pause_quit_armed_until'] = current_time + PAUSE_QUIT_CONFIRM_MS
+                        utils.play_sound("denied")
+                    continue
                 if button in (pause_button, back_button):
                     return _resume_game(play_sound=False)
                 if button == tertiary_button:
@@ -295,10 +292,18 @@ def run_pause(events, dt, screen, game_state):
         # Légendes contrôles (uniformisées)
         instruction_y = config.SCREEN_HEIGHT * 0.90
         gap = max(18, int(font_small.get_linesize() * 1.05))
-        l1 = "Stick : choisir  |  Bouton : valider  |  Start : reprendre  |  Back : quitter la partie"
+        l1 = "Stick : choisir  |  Bouton : valider  |  Start : reprendre  |  Back deux fois : quitter la partie"
         l2 = "Bouton Bouclier : HUD normal/minimal  |  Bouton 4 : changer de musique"
         utils.draw_text(screen, l1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
         utils.draw_text(screen, l2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + gap), "center")
+        if current_time <= int(game_state.get('pause_quit_armed_until', 0) or 0):
+            band = pygame.Rect(0, 0, config.SCREEN_WIDTH, font_medium.get_height() + 24)
+            band.center = (config.SCREEN_WIDTH // 2, int(config.SCREEN_HEIGHT * 0.12))
+            veil = pygame.Surface(band.size, pygame.SRCALPHA)
+            veil.fill((60, 0, 10, 200))
+            screen.blit(veil, band.topleft)
+            utils.draw_text_with_shadow(screen, "Appuie encore sur Back pour quitter la partie", font_medium,
+                                        (255, 120, 120), config.COLOR_UI_SHADOW, band.center, "center")
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin de run_pause: {e}", exc_info=True)
 
@@ -367,7 +372,7 @@ def run_game_over(events, dt, screen, game_state):
         # En Survie, le score est le numéro de la vague atteinte
         mode_key, mode_name = "survie", "Survie"; score_to_check = survival_wave; name_for_hs = p1_name
         if game_state.get('coop') and player2_snake:
-            mode_name = "Survie Coop"
+            mode_key, mode_name = "survie_coop", "Survie Coop"  # Classement à part (Hall of Fame)
             name_for_hs = f"{p1_name}&{p2_name}"[:15]
 
     hs_list = utils.high_scores.get(mode_key, [])
@@ -382,6 +387,9 @@ def run_game_over(events, dt, screen, game_state):
     is_daily = bool(game_state.get('daily_challenge', False))
     if is_daily:
         is_high_score = False  # Le Défi du jour a son propre classement
+    custom_rules = rules.game_is_custom()
+    if custom_rules:
+        is_high_score = False  # Règles personnalisées (ex. sans mines) : pas de record au Hall of Fame
 
     if is_high_score and not hs_saved:
         try:
@@ -449,7 +457,7 @@ def run_game_over(events, dt, screen, game_state):
             continue
             
         # --- Gestion Joystick Game Over et Navigation Menu ---
-        elif event.type == pygame.JOYAXISMOTION or event.type == pygame.JOYHATMOTION:
+        elif event.type == pygame.JOYHATMOTION:
             # --- FIX: Restreindre les inputs au joueur concerné pour éviter les inputs fantômes (drift J2) ---
             allow_input = False
             if current_game_mode == config.MODE_PVP:
@@ -458,26 +466,8 @@ def run_game_over(events, dt, screen, game_state):
                 allow_input = True # En Solo/VsAI/Survie, seul J1 peut naviguer
 
             if allow_input and current_time - last_axis_move_time > axis_repeat_delay:
-                # Navigation haut/bas entre les options
-                if event.type == pygame.JOYAXISMOTION:
-                    axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                    inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                    if int(getattr(event, "axis", -1)) == axis_v:
-                        value = float(getattr(event, "value", 0.0))
-                        value = (-value) if inv_v else value
-                        threshold = 0.8  # Higher threshold for game over menu to prevent drift issues
-                        if value < -threshold: # Haut - option précédente
-                            gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
-                            utils.play_sound("menu_move")
-                            game_state['gameover_menu_selection'] = gameover_menu_selection
-                            last_axis_move_time = current_time
-                        elif value > threshold: # Bas - option suivante
-                            gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
-                            utils.play_sound("menu_move")
-                            game_state['gameover_menu_selection'] = gameover_menu_selection
-                            last_axis_move_time = current_time
-                # Navigation avec le hat (croix directionnelle)
-                elif event.type == pygame.JOYHATMOTION and event.hat == 0:
+                # Navigation à la croix (le stick est converti en croix dans les menus)
+                if event.hat == 0:
                     hat_x, hat_y = event.value
                     # Boutons côte à côte : gauche/droite (haut/bas fonctionnent aussi)
                     if hat_y == 0 and hat_x != 0:
@@ -532,20 +522,10 @@ def run_game_over(events, dt, screen, game_state):
                         except Exception as e_names:
                             logging.warning(f"Erreur conservation noms: {e_names}")
 
-                        if current_game_mode == config.MODE_PVP:
-                            # BUG FIX: S'assurer que le stage est bien réinitialisé
-                            game_state['pvp_name_entry_stage'] = 1
-                            # Forcer la réinitialisation du timer d'entrée pour J1
-                            game_state.pop('name_entry_start_time_pvp', None)
-                            game_state.pop('input_active_pvp', None)
-
-                            next_state = config.NAME_ENTRY_PVP
-                            game_state['current_state'] = next_state
-                        else:
-                            # Direct Reset and Play for non-PvP modes
-                            reset_game(game_state)
-                            next_state = config.PLAYING
-                            game_state['current_state'] = next_state
+                        # Relance directe, mêmes joueurs et mêmes réglages (PvP compris : plus de ressaisie des noms)
+                        reset_game(game_state)
+                        next_state = config.PLAYING
+                        game_state['current_state'] = next_state
 
                         logging.info(f"run_game_over: Transitioning to {next_state} for replay.")
                         return next_state
@@ -587,12 +567,10 @@ def run_game_over(events, dt, screen, game_state):
                 try:
                     game_state['game_over_hs_saved'] = False # Réinitialise flag sauvegarde HS
                     game_state['game_over_start_time'] = 0 # Réinitialiser le timer
-                    if current_game_mode == config.MODE_PVP:
-                        # Pour PvP, on retourne à l'écran de saisie des noms
-                        next_state = config.NAME_ENTRY_PVP; game_state['pvp_name_entry_stage'] = 1; game_state['current_state'] = next_state
-                    else:
-                        # Pour les autres modes, on reset et on relance directement
-                        reset_game(game_state); next_state = config.PLAYING; game_state['current_state'] = next_state
+                    for key, snake in (('player1_name_input', player_snake), ('player2_name_input', player2_snake)):
+                        if snake:
+                            game_state[key] = snake.name
+                    reset_game(game_state); next_state = config.PLAYING; game_state['current_state'] = next_state
                     return next_state
                 except Exception as e:
                     logging.error(f"Erreur en tentant de rejouer: {e}", exc_info=True)
@@ -630,7 +608,7 @@ def run_game_over(events, dt, screen, game_state):
         record_text = f"Record ({mode_name}) : ---"
         if hs_list:
             try:
-                prefix = "Vague max" if mode_key == "survie" else "Record"
+                prefix = "Vague max" if mode_key.startswith("survie") else "Record"
                 record_text = f"{prefix} ({mode_name}) : {hs_list[0]['name']} {hs_list[0]['score']}"
             except Exception:
                 pass
@@ -641,6 +619,8 @@ def run_game_over(events, dt, screen, game_state):
             best = f"{board[0]['name']} {board[0]['score']}" if board else "---"
             daily_text = f"Défi du jour : {'#' + str(rank) if rank else 'hors classement'}  (meilleur du jour : {best})"
             record_text = None
+        if custom_rules:
+            record_text = "Règles personnalisées : score non enregistré au Hall of Fame"
         pvp_title = current_game_mode == config.MODE_PVP
         screens.draw_game_over(screen, game_state, {
             'title': winner_text.upper() if pvp_title else "GAME OVER",

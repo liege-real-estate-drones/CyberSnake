@@ -391,6 +391,7 @@ def main():
     # --- Fin Chargement Assets ---
 
     # --- Initialisation de l'État du Jeu ---
+    last_names = utils.last_player_names(base_path_assets)  # Derniers noms saisis sur cette borne
     game_state = {
         'current_state': config.TITLE,  # Écran titre façon borne d'arcade
         'current_game_mode': config.MODE_VS_AI, # Mode par défaut
@@ -402,7 +403,7 @@ def main():
         'selected_map_key': config.DEFAULT_MAP_KEY,
         'map_selection_index': 0, 'menu_selection_index': 0, # Index commence à 0
         'pvp_setup_index': 0, 'hall_of_fame_index': 0,
-        'player1_name_input': "Thib", 'player2_name_input': "Alex",
+        'player1_name_input': last_names[0], 'player2_name_input': last_names[1],
         'pvp_name_entry_stage': 1,
         'pvp_condition_type': config.PVP_DEFAULT_CONDITION,
         'pvp_target_time': config.PVP_DEFAULT_TIME_SECONDS,
@@ -471,6 +472,7 @@ def main():
         config.RULES: settings_screens.run_rules,
         config.ROUND_SCORE: pvp_rounds.run_round_score,
         config.BUTTON_COLORS_SCREEN: settings_screens.run_button_colors,
+        config.BACKGROUND_SCREEN: settings_screens.run_background_screen,
     }
     # --- Fin Mappage États ---
 

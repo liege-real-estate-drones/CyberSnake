@@ -372,6 +372,9 @@ def update_boss(game_state, current_time):
             except Exception:
                 logging.warning("Boss: récompense non appliquée", exc_info=True)
     game_state['boss_banner_text'] = "BOSS VAINCU ! +2 ARMURE +20 MUNITIONS"
+    if game_state.get('demo_mode'):
+        game_state['boss_banner_until'] = current_time + BOSS_BANNER_MS
+        return  # Démo : l'IA joue seule, rien n'est compté dans la progression du joueur
     try:
         import progress
         new = progress.record_boss_defeat()

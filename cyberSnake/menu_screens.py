@@ -172,27 +172,6 @@ def run_menu(events, dt, screen, game_state):
                 elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
                     return False # Quitte le jeu
-        elif event.type == pygame.JOYAXISMOTION:
-            # Vérifie si l'événement vient du joystick J1 et si assez de temps s'est écoulé
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = config.JOYSTICK_THRESHOLD # Utilise la valeur de config
-
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-
-                # Axe vertical pour HAUT/BAS
-                if axis == axis_v:
-                    value = (-value) if inv_v else value
-                    if value < -threshold: # HAUT
-                        menu_selection_index = (menu_selection_index - 1 + num_options) % num_options
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time # Met à jour le temps
-                    elif value > threshold: # BAS
-                        menu_selection_index = (menu_selection_index + 1) % num_options
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time # Met à jour le temps
 
         elif event.type == pygame.JOYHATMOTION:
             # Vérifie si l'événement vient du joystick J1, hat 0 et si assez de temps s'est écoulé
@@ -745,6 +724,7 @@ def run_options(events, dt, screen, game_state):
         ("Volume effets", sound_volume_display),
         ("Contrôles", ""),
         ("Couleurs des boutons", ""),
+        ("Fond des menus", ""),
         ("Réinitialiser", ""),
         ("Appliquer", ""),
         ("Retour", ""),
@@ -770,9 +750,10 @@ def run_options(events, dt, screen, game_state):
     IDX_SOUND_VOL = 17
     IDX_CONTROLS = 18
     IDX_BUTTON_COLORS = 19
-    IDX_RESET = 20
-    IDX_APPLY = 21
-    IDX_BACK = 22
+    IDX_BACKGROUND = 20
+    IDX_RESET = 21
+    IDX_APPLY = 22
+    IDX_BACK = 23
 
     def cycle_visual_fx(delta):
         nonlocal pending_visual_fx
@@ -1186,6 +1167,12 @@ def run_options(events, dt, screen, game_state):
             next_state = config.BUTTON_COLORS_SCREEN
             return True
 
+        if selection_index == IDX_BACKGROUND:
+            utils.play_sound("menu_select")
+            game_state['background_return_state'] = config.OPTIONS
+            next_state = config.BACKGROUND_SCREEN
+            return True
+
         if selection_index == IDX_RESET:
             if current_time <= reset_confirm_until:
                 reset_confirm_until = 0
@@ -1212,41 +1199,6 @@ def run_options(events, dt, screen, game_state):
         if event.type == pygame.QUIT:
             return False
 
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-                logging.debug(f"[run_options] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
-
-                moved = False
-                if axis == axis_v:  # Vertical
-                    value = (-value) if inv_v else value
-                    if value < -threshold:
-                        selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold:
-                        selection_index = (selection_index + 1) % len(menu_items)
-                        utils.play_sound("menu_move")
-                        moved = True
-                elif axis == axis_h:  # Horizontal
-                    value = (-value) if inv_h else value
-                    if value < -threshold:
-                        adjust_current(-1)
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold:
-                        adjust_current(1)
-                        utils.play_sound("menu_move")
-                        moved = True
-
-                if moved:
-                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -1381,7 +1333,7 @@ def run_options(events, dt, screen, game_state):
         reset_armed = current_time <= reset_confirm_until
         reset_label = "Réinitialiser" if not reset_armed else "Réinitialiser (CONFIRMER)"
 
-        # Rebuild menu text (no 1-frame lag)
+        # Rebuild menu text (no 1-frame lag). Doit suivre menu_items ligne pour ligne (vérifié ci-dessous).
         menu_items_draw = [
             ("Quadrillage", "Oui" if pending_show_grid else "Non"),
             ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
@@ -1403,10 +1355,14 @@ def run_options(events, dt, screen, game_state):
             ("Volume effets", sound_volume_display),
             ("Contrôles", ""),
             ("Couleurs des boutons", ""),
+            ("Fond des menus", ""),
             (reset_label, ""),
             ("Appliquer", ""),
             ("Retour", ""),
         ]
+
+        if len(menu_items_draw) != len(menu_items):
+            logging.error("Options : la liste affichée ne correspond plus à la liste des réglages")
 
         # --- Layout ---
         margin = max(24, int(sw * 0.04))

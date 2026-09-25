@@ -34,6 +34,17 @@ import boss  # noqa: E402
 import demo_mode  # noqa: E402
 
 utils.load_assets(GAME_DIR)
+# Les tests n'écrivent jamais dans les fichiers du joueur (cyberSnake/*.json) :
+# noms mémorisés ignorés, progression et records dans un dossier temporaire.
+_real_remember = utils.remember_player_names
+utils.remember_player_names = lambda *a, **k: None
+import tempfile  # noqa: E402
+import progress  # noqa: E402
+TEST_DATA_DIR = tempfile.mkdtemp(prefix="cybersnake_tests_")
+progress._base_path = TEST_DATA_DIR
+progress._cache = None
+_real_save_high_score = utils.save_high_score
+utils.save_high_score = lambda name, score, mode_key, base_path: _real_save_high_score(name, score, mode_key, TEST_DATA_DIR)
 FONTS = utils.load_fonts(GAME_DIR, 1.0)
 
 

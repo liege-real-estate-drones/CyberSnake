@@ -23,7 +23,6 @@ import game_objects
 logger = logging.getLogger(__name__)
 
 DEFAULT_GAME_OPTIONS = {
-    "speed": "normal",
     "growth_per_food": 1,
     "mine_density": "normal",
     "powerups": {
@@ -64,6 +63,7 @@ DEFAULT_GAME_OPTIONS = {
     "visual_fx": "standard",
     "ui_scale": "normal",
     "hud_mode": "normal",
+    "menu_background": "cover",  # backgrounds.py : cover, synthwave, ville, circuit, nebuleuse, tunnel, random
 }
 
 DEFAULT_CONTROLS = {
@@ -161,6 +161,34 @@ def load_game_options(base_path=""):
     file_path = os.path.join(base_path, config.GAME_OPTIONS_FILE)
     loaded = read_json_or_default(file_path, DEFAULT_GAME_OPTIONS)
     return _deep_merge_dict(DEFAULT_GAME_OPTIONS, loaded)
+
+
+def last_player_names(base_path=""):
+    """(nom J1, nom J2) : derniers noms utilisés, sinon « Joueur 1 » / « Joueur 2 »."""
+    try:
+        names = load_game_options(base_path).get("last_names") or {}
+    except Exception:
+        names = {}
+    p1 = str(names.get("p1") or "").strip()[:15] or config.DEFAULT_NAME_P1
+    p2 = str(names.get("p2") or "").strip()[:15] or config.DEFAULT_NAME_P2
+    return p1, p2
+
+
+def remember_player_names(p1_name, p2_name=None, base_path=""):
+    """Mémorise les noms pour les proposer à la prochaine partie (écrit seulement s'ils changent)."""
+    try:
+        opts = load_game_options(base_path)
+        names = dict(opts.get("last_names") or {})
+        new = dict(names)
+        if p1_name:
+            new["p1"] = str(p1_name)[:15]
+        if p2_name:
+            new["p2"] = str(p2_name)[:15]
+        if new != names:
+            opts["last_names"] = new
+            save_game_options(opts, base_path)
+    except Exception:
+        logger.warning("Noms des joueurs non mémorisés", exc_info=True)
 
 
 def save_game_options(options, base_path=""):
@@ -270,7 +298,8 @@ def apply_controls_to_config(controls):
 sounds = {}
 images = {}
 images_hd = {}  # Images d'origine (192 px), pour les icônes affichées plus grand que la grille
-high_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": [], "classic": []}
+HIGH_SCORE_MODES = ("solo", "vs_ai", "pvp", "survie", "survie_coop", "classic")
+high_scores = {k: [] for k in HIGH_SCORE_MODES}
 particles = []
 kill_feed = deque(maxlen=config.MAX_KILL_FEED_MESSAGES)
 screen_shake_intensity = 0
@@ -317,14 +346,13 @@ def load_assets(base_path):
     sounds = loaded_sounds
     _apply_sound_volume_internal()
 
-    menu_bg = None
-    menu_bg_path = os.path.join(base_path, config.MENU_BACKGROUND_IMAGE_FILE)
+    # Fond des menus choisi dans les Options (backgrounds.py : cadrage adapté à l'écran)
+    import backgrounds
     try:
-        if os.path.exists(menu_bg_path):
-            img = pygame.image.load(menu_bg_path).convert()
-            menu_bg = cover_scale(img, (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        choice = load_game_options(base_path).get("menu_background", backgrounds.DEFAULT)
     except Exception:
-        pass
+        choice = backgrounds.DEFAULT
+    menu_bg = backgrounds.load(base_path, choice, (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
 
     # --- Chargement et Optimisation des Images ---
     global images, images_hd
@@ -465,7 +493,7 @@ def load_high_scores(base_path):
     """Charge les high scores depuis le fichier JSON. Met à jour la globale `high_scores`."""
     global high_scores # Modifie la globale
     file_path = os.path.join(base_path, config.HIGH_SCORE_FILE)
-    default_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": [], "classic": []}
+    default_scores = {k: [] for k in HIGH_SCORE_MODES}
     loaded_high_scores = default_scores.copy()
 
     if os.path.exists(file_path):
@@ -514,6 +542,14 @@ def load_high_scores(base_path):
                 loaded_high_scores[mode] = validated_list[:config.MAX_HIGH_SCORES]
             else:
                 loaded_high_scores[mode] = [] # Garde vide si clé absente ou type incorrect
+        # Ancienne version : la Survie à deux était classée avec la Survie solo, sous « J1&J2 ».
+        # Première lecture sans colonne Coop : ces entrées y sont déplacées.
+        if "survie_coop" not in loaded_data:
+            coop = [e for e in loaded_high_scores["survie"] if "&" in e["name"]]
+            if coop:
+                loaded_high_scores["survie"] = [e for e in loaded_high_scores["survie"] if "&" not in e["name"]]
+                loaded_high_scores["survie_coop"] = sorted(coop, key=lambda x: x['score'], reverse=True)[:config.MAX_HIGH_SCORES]
+                logging.info(f"Hall of Fame : {len(coop)} score(s) de Survie à deux déplacé(s) dans leur colonne")
     else:
         logging.warning(f"Fichier high score non trouvé ({file_path}), initialisation.")
 
@@ -1191,7 +1227,9 @@ def select_new_objective(current_game_mode, player_current_score):
             new_objective['target_value'] = actual_target_score # Cible réelle
             display_text = chosen_template['text'].format(actual_target_score)
         elif obj_id:
-            display_text = chosen_template['text'].format(target_value)
+            # Singulier quand la cible vaut 1 (« Trouver 1 bouclier », pas « 1 boucliers »)
+            text = chosen_template.get('text_one') if target_value == 1 and chosen_template.get('text_one') else chosen_template['text']
+            display_text = text.format(target_value)
         else:
             display_text = "Objectif Inconnu"
 

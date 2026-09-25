@@ -799,7 +799,7 @@ class Snake:
         logging.debug(f"RESPAWN START: Snake {self.name}. Current state: alive={self.alive}, pos={self.positions}") # Added debug log
         self.reset(current_game_mode, walls) # Réinitialise les stats de base
         self.invincible_timer = current_time + config.PLAYER_INITIAL_INVINCIBILITY_DURATION # Donne une invincibilité temporaire
-        logging.warning(f"RESPAWN called for {self.name}. New pos: {self.positions}, Alive: {self.alive}")
+        logging.info(f"Réapparition de {self.name} en {self.positions[0] if self.positions else None}")
         self.alive = True
         self.last_move_time = current_time
         self.invincible_timer = current_time + config.PVP_RESPAWN_INVINCIBILITY_DURATION

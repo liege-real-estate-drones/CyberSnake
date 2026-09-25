@@ -276,8 +276,95 @@ def _apply_dash_loot(game_state, snake, dash_result, current_time):
             _take_powerup(game_state, snake, pu, current_time)
 
 
+RESPAWN_CANDIDATES = 60
+
+
+def _wrap_dist(a, b):
+    dx = abs(a[0] - b[0])
+    dy = abs(a[1] - b[1])
+    return min(dx, config.GRID_WIDTH - dx) + min(dy, config.GRID_HEIGHT - dy)
+
+
+def safe_respawn_spot(game_state, snake, opponent):
+    """Case de réapparition PvP : loin de l'adversaire, des mines et des murs, avec de la place devant.
+
+    Retourne ((x, y), direction) ou None (on garde alors le point de départ de la carte).
+    """
+    gw, gh = config.GRID_WIDTH, config.GRID_HEIGHT
+    walls = set(game_state.get('current_map_walls', []) or [])
+    mines = [m.position for m in game_state.get('mines', []) if getattr(m, 'position', None)]
+    blocked = walls | set(mines)
+    if opponent is not None and opponent.alive:
+        blocked |= set(opponent.positions)
+    opp_head = opponent.get_head_position() if opponent is not None and opponent.alive and opponent.positions else None
+    body = max(1, int(getattr(config, "PLAYER_INITIAL_SIZE", 3)))
+    best, best_score = None, None
+    for _ in range(RESPAWN_CANDIDATES):
+        pos = (random.randint(1, gw - 2), random.randint(1, gh - 2))
+        if pos in blocked or pos in utils.EXTRA_BLOCKED_CELLS or utils._under_hud(pos):
+            continue
+        if any(_wrap_dist(pos, m) < 3 for m in mines):
+            continue
+        for d in random.sample(config.DIRECTIONS, len(config.DIRECTIONS)):
+            ahead = [((pos[0] + d[0] * k) % gw, (pos[1] + d[1] * k) % gh) for k in range(1, 5)]
+            behind = [(pos[0] - d[0] * k, pos[1] - d[1] * k) for k in range(1, body)]
+            if any(c in blocked for c in ahead) or any(c in blocked or not (0 <= c[0] < gw and 0 <= c[1] < gh) for c in behind):
+                continue
+            score = _wrap_dist(pos, opp_head) if opp_head else 0
+            if opp_head:
+                # Ne pas réapparaître face à l'adversaire, dans sa ligne de tir
+                if (pos[0] == opp_head[0] or pos[1] == opp_head[1]) and _wrap_dist(pos, opp_head) < 12:
+                    score -= 6
+            if best_score is None or score > best_score:
+                best, best_score = (pos, d), score
+            break
+    return best
+
+
+def _place_respawn(game_state, snake, opponent):
+    spot = safe_respawn_spot(game_state, snake, opponent)
+    if spot:
+        snake.start_pos, snake.initial_direction = spot
+
+
+WAVE_CLEAR_MIN_MS = 4000     # Une vague ne peut pas être « nettoyée » dans ses 4 premières secondes
+WAVE_CLEAR_NEXT_MS = 3000    # La vague suivante arrive 3 s après le nettoyage
+WAVE_CLEAR_BONUS = 20        # Points par numéro de vague
+
+
+def _check_wave_cleared(game_state, current_time):
+    """Survie : plus d'ennemi, de nid, de boss ni de mine mobile -> prime et vague suivante avancée.
+
+    Retourne True si la vague vient d'être nettoyée (le départ de la vague suivante a été avancé).
+    """
+    wave = int(game_state.get('survival_wave', 0) or 0)
+    start = int(game_state.get('survival_wave_start_time', 0) or 0)
+    if wave <= 0 or game_state.get('wave_cleared') == wave or current_time - start < WAVE_CLEAR_MIN_MS:
+        return False
+    if any(e is not None and e.alive for e in game_state.get('active_enemies', [])):
+        return False
+    if any(n.is_active for n in game_state.get('nests', [])):
+        return False
+    if game_state.get('moving_mines') or (game_state.get('boss') is not None and game_state['boss'].alive):
+        return False
+    game_state['wave_cleared'] = wave
+    bonus = WAVE_CLEAR_BONUS * wave
+    for snake in (game_state.get('player_snake'), game_state.get('player2_snake') if game_state.get('coop') else None):
+        if snake is not None and snake.alive:
+            snake.add_score(bonus)
+    next_start = current_time - config.SURVIVAL_WAVE_DURATION + WAVE_CLEAR_NEXT_MS
+    game_state['survival_wave_start_time'] = min(start, next_start)
+    game_state['boss_banner_text'] = f"VAGUE {wave} NETTOYÉE !  +{bonus}"
+    game_state['boss_banner_until'] = current_time + 2200
+    utils.play_sound("objective_complete")
+    logging.info(f"Survie : vague {wave} nettoyée, prime {bonus}")
+    return True
+
+
 def _enter_pause(game_state):
     game_state['previous_state'] = config.PLAYING
+    game_state['pause_opened_at'] = pygame.time.get_ticks()
+    game_state.pop('pause_quit_armed_until', None)
     game_state['pause_menu_selection'] = 0
     game_state['current_state'] = config.PAUSED
     return config.PAUSED
@@ -361,6 +448,11 @@ def reset_game(game_state):
     fx.clear_shockwaves()
     bonuses.reset()
     custom_rules = rules.begin(game_state)  # Règles personnalisées (figées pour la partie)
+    if not game_state.get('demo_mode'):
+        two = game_state.get('current_game_mode') == config.MODE_PVP or game_state.get('coop')
+        utils.remember_player_names(game_state.get('player1_name_input'),
+                                    game_state.get('player2_name_input') if two else None,
+                                    game_state.get('base_path', ""))
     game_state['game_start_time'] = current_time_reset
     game_state.pop('game_end_time', None)
     game_state['boss'] = None
@@ -411,7 +503,7 @@ def reset_game(game_state):
         current_game_mode = config.MODE_SOLO
         game_state['current_game_mode'] = current_game_mode
     selected_map_key = game_state.get('selected_map_key', config.DEFAULT_MAP_KEY)
-    player1_name = game_state.get('player1_name_input', "Thib")
+    player1_name = game_state.get('player1_name_input', config.DEFAULT_NAME_P1)
     base_path = game_state.get('base_path', "")
     pvp_start_armor = game_state.get('pvp_start_armor', config.pvp_start_armor)
     pvp_start_ammo = game_state.get('pvp_start_ammo', config.pvp_start_ammo)
@@ -549,7 +641,7 @@ def reset_game(game_state):
         if game_state.get('coop'):
             try:
                 game_state['player2_snake'] = game_objects.Snake(
-                    player_num=2, name=game_state.get('player2_name_input', "Alex"), start_pos=p2_start,
+                    player_num=2, name=game_state.get('player2_name_input', config.DEFAULT_NAME_P2), start_pos=p2_start,
                     current_game_mode=current_game_mode, walls=current_map_walls_list,
                     start_armor=start_armor_p1, start_ammo=start_ammo_p1
                 )
@@ -561,7 +653,7 @@ def reset_game(game_state):
         num_initial_nests = min(1, config.MAX_NESTS_SURVIVAL) # Vague 1 = 1 nid
         # =======================================================
     elif current_game_mode == config.MODE_PVP:
-        player2_name = game_state.get('player2_name_input', "Alex")
+        player2_name = game_state.get('player2_name_input', config.DEFAULT_NAME_P2)
         logging.debug(f"DEBUG PVP RESET: Tentative de création de player2_snake avec nom: {player2_name}, start_pos: {p2_start}")
         try:
             game_state['player2_snake'] = game_objects.Snake(
@@ -808,6 +900,7 @@ def run_game(events, dt, screen, game_state):
             if game_state.get('p1_death_time', 0) > 0 and current_time - game_state.get('p1_death_time', 0) >= config.PVP_RESPAWN_DELAY:
                 logging.info(f"Respawn delay met for P1 ({player_snake.name if player_snake else 'N/A'}). Current time: {current_time}, Death time: {game_state.get('p1_death_time', 0)}")
                 if player_snake:
+                    _place_respawn(game_state, player_snake, player2_snake)
                     player_snake.respawn(current_time, current_game_mode, current_map_walls)
                     game_state['p1_death_time'] = 0 # Reset death time after respawn
                 else:
@@ -817,6 +910,7 @@ def run_game(events, dt, screen, game_state):
             if game_state.get('p2_death_time', 0) > 0 and current_time - game_state.get('p2_death_time', 0) >= config.PVP_RESPAWN_DELAY:
                  logging.info(f"Respawn delay met for P2 ({player2_snake.name if player2_snake else 'N/A'}). Current time: {current_time}, Death time: {game_state.get('p2_death_time', 0)}")
                  if player2_snake:
+                     _place_respawn(game_state, player2_snake, player_snake)
                      player2_snake.respawn(current_time, current_game_mode, current_map_walls)
                      game_state['p2_death_time'] = 0 # Reset death time after respawn
                  else:
@@ -851,6 +945,8 @@ def run_game(events, dt, screen, game_state):
                 game_state['objective_display_text'] = new_objective.get('display_text', '') if new_objective else ''
 
         elif current_game_mode == config.MODE_SURVIVAL:
+            if _check_wave_cleared(game_state, current_time):
+                survival_wave_start_time = game_state['survival_wave_start_time']
             if survival_wave > 0 and current_time >= survival_wave_start_time + config.SURVIVAL_WAVE_DURATION:
                 survival_wave += 1; game_state['survival_wave'] = survival_wave
                 game_state['survival_wave_start_time'] = current_time

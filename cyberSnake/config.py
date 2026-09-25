@@ -473,14 +473,14 @@ SNAKE_TRAIL_SPEED_FACTOR = 2
 
 # --- Constantes Objectifs (Solo/Vs AI) ---
 OBJECTIVE_TYPES = [
-    {"id": "collect_normal", "text": "Manger {} nourriture normale", "target_key": "food_normal", "min_val": 3, "max_val": 7},
-    {"id": "collect_speed", "text": "Prendre {} boost vitesse", "target_key": "food_speed", "min_val": 2, "max_val": 4},
-    {"id": "collect_ammo", "text": "Ramasser {} pack munitions", "target_key": "food_ammo", "min_val": 2, "max_val": 5},
-    {"id": "destroy_mines", "text": "Détruire {} mines", "target_key": "destroy_mine", "min_val": 5, "max_val": 10},
+    {"id": "collect_normal", "text": "Manger {} énergies", "text_one": "Manger 1 énergie", "target_key": "food_normal", "min_val": 3, "max_val": 7},
+    {"id": "collect_speed", "text": "Prendre {} boosts de vitesse", "text_one": "Prendre 1 boost de vitesse", "target_key": "food_speed", "min_val": 2, "max_val": 4},
+    {"id": "collect_ammo", "text": "Ramasser {} packs de munitions", "text_one": "Ramasser 1 pack de munitions", "target_key": "food_ammo", "min_val": 2, "max_val": 5},
+    {"id": "destroy_mines", "text": "Détruire {} mines", "text_one": "Détruire 1 mine", "target_key": "destroy_mine", "min_val": 5, "max_val": 10},
     {"id": "hit_opponent", "text": "Toucher l'adversaire {} fois", "target_key": "hit_opponent", "min_val": 5, "max_val": 12},
     {"id": "kill_opponent", "text": "Tuer l'adversaire {} fois", "target_key": "kill_opponent", "min_val": 1, "max_val": 3},
-    {"id": "get_powerup", "text": "Ramasser {} power-ups", "target_key": "powerup_generic", "min_val": 2, "max_val": 4},
-    {"id": "get_shield", "text": "Trouver {} boucliers", "target_key": "powerup_shield", "min_val": 1, "max_val": 2},
+    {"id": "get_powerup", "text": "Ramasser {} bonus", "target_key": "powerup_generic", "min_val": 2, "max_val": 4},
+    {"id": "get_shield", "text": "Trouver {} boucliers", "text_one": "Trouver 1 bouclier", "target_key": "powerup_shield", "min_val": 1, "max_val": 2},
     {"id": "reach_score", "text": "Atteindre {} points", "target_key": "score", "min_val": 50, "max_val": 200, "step": 10},
     {"id": "death", "text": "Survivre (objectif secret)", "target_key": "death", "min_val": 999, "max_val": 999}, # Objectif secret
 ]
@@ -662,6 +662,9 @@ GAME_OPTIONS_FILE = "game_options.json"
 FAVORITE_MAP_FILE = "favorite_maps.json" # NOUVEAU
 CONTROLS_FILE = "controls.json"
 MAX_HIGH_SCORES = 10
+# Noms proposés tant qu'aucun joueur n'a saisi le sien (ensuite : les derniers noms, game_options.json)
+DEFAULT_NAME_P1 = "Joueur 1"
+DEFAULT_NAME_P2 = "Joueur 2"
 
 
 # --- États du Jeu & Game Modes ---
@@ -689,6 +692,7 @@ STICK_WIZARD = 109 # Assistant sticks J1 / J2 (Options > Contrôles)
 RULES = 110 # Règles personnalisées (mutateurs), menu principal
 BUTTON_COLORS_SCREEN = 111 # Couleur de chaque bouton de la borne (Options)
 ROUND_SCORE = 112 # Score entre deux manches (PvP en manches)
+BACKGROUND_SCREEN = 113 # Choix du fond des menus (Options)
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)
@@ -732,4 +736,4 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.1.0'
+VERSION = '2.2.0'

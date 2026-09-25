@@ -26,6 +26,7 @@ HOF_CATEGORIES = [
     ("vs_ai", "Vs IA"),
     ("pvp", "PvP"),
     ("survie", "Survie"),
+    ("survie_coop", "Survie Coop"),
 ]
 PODIUM_COLORS = [(255, 215, 0), (200, 210, 225), (205, 127, 50)]
 
@@ -91,6 +92,15 @@ def _glow_text(font, text, color, glow_color, glow_px=10):
     return out
 
 
+def _fit_text(font, text, max_width):
+    """Raccourcit un texte (avec « … ») pour qu'il tienne dans max_width pixels."""
+    if font.size(text)[0] <= max_width:
+        return text
+    while len(text) > 1 and font.size(text + "…")[0] > max_width:
+        text = text[:-1]
+    return text + "…"
+
+
 def _draw_background(screen, game_state, now, darken=150):
     bg = game_state.get('menu_background_image')
     if bg is not None:
@@ -127,7 +137,7 @@ def _best_scores_line():
         scores = utils.high_scores.get(key, [])
         if scores:
             top = scores[0]
-            prefix = "Vague" if key == "survie" else ""
+            prefix = "Vague" if key.startswith("survie") else ""
             parts.append(f"{label}: {top.get('name', '?')} {prefix}{top.get('score', 0)}")
     return "   •   ".join(parts) if parts else "Aucun record : à toi de jouer !"
 
@@ -263,7 +273,8 @@ def run_hall_of_fame(events, dt, screen, game_state):
         if i == highlight_idx:
             fx.draw_glow(screen, (rect.centerx, rect.top), config.COLOR_TEXT_HIGHLIGHT, col_w * 0.35, 3)
 
-        utils.draw_text_with_shadow(screen, label.upper(), font_medium, config.COLOR_HOF_CATEGORY, config.COLOR_UI_SHADOW,
+        head_font = font_medium if font_medium.size(label.upper())[0] <= col_w - 12 else font_default
+        utils.draw_text_with_shadow(screen, label.upper(), head_font, config.COLOR_HOF_CATEGORY, config.COLOR_UI_SHADOW,
                                     (rect.centerx, rect.top + 14 + font_medium.get_height() // 2), "center")
         y = rect.top + font_medium.get_height() + 34
         scores = utils.high_scores.get(key, [])
@@ -273,12 +284,13 @@ def run_hall_of_fame(events, dt, screen, game_state):
         for rank, entry in enumerate(scores[:config.MAX_HIGH_SCORES]):
             color = PODIUM_COLORS[rank] if rank < 3 else config.COLOR_HOF_ENTRY
             font = font_default if rank < 3 else font_small
-            name = str(entry.get('name', '?'))[:12]
             score = entry.get('score', 0)
-            score_txt = f"V{score}" if key == "survie" else str(score)
+            score_txt = f"V{score}" if key.startswith("survie") else str(score)
+            name_x = rect.left + 12 + font.size("10. ")[0]
+            name = _fit_text(font, str(entry.get('name', '?'))[:15], rect.right - 12 - font.size(score_txt)[0] - 8 - name_x)
             cy = y + row_h // 2
             utils.draw_text(screen, f"{rank + 1}.", font, color, (rect.left + 12, cy), "midleft")
-            utils.draw_text(screen, name, font, color, (rect.left + 12 + font.size("10. ")[0], cy), "midleft")
+            utils.draw_text(screen, name, font, color, (name_x, cy), "midleft")
             utils.draw_text(screen, score_txt, font, color, (rect.right - 12, cy), "midright")
             if rank < 3:
                 pygame.draw.line(screen, tuple(c // 3 for c in color), (rect.left + 10, y + row_h - 2), (rect.right - 10, y + row_h - 2))

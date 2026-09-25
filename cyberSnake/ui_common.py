@@ -134,8 +134,35 @@ def _hud_end(target_surface):
     _hud_state['under'] = []
 
 
+_panel_cache = {}
+
+
+def _build_panel(size, accent):
+    """Fond d'un panneau (voile, lignes de balayage, coins, bordure), calculé une fois par taille."""
+    w, h = size
+    base_color = tuple(config.COLOR_UI_SHADOW[:3])
+    panel_surf = pygame.Surface(size, pygame.SRCALPHA)
+    panel_surf.fill(base_color + (180,))
+    border_thickness = getattr(config, 'ui_border_thickness', 2)
+    panel_radius = getattr(config, 'ui_panel_radius', 5)
+    # Lignes de balayage discrètes
+    for y in range(0, h, 6):
+        pygame.draw.line(panel_surf, (0, 0, 0, 14), (0, y), (w, y))
+    # Liseré du haut et coins en crochets, à la couleur de J1
+    pad = max(int(border_thickness) + 3, 6)
+    corner_len = max(10, int(min(w, h) * 0.14))
+    corner_col = accent + (48,)
+    pygame.draw.line(panel_surf, accent + (22,), (pad, pad), (w - pad - 1, pad), 1)
+    lw = 2 if min(w, h) >= 120 else 1
+    for (x, y, sx, sy) in ((pad, pad, 1, 1), (w - pad - 1, pad, -1, 1), (pad, h - pad - 1, 1, -1), (w - pad - 1, h - pad - 1, -1, -1)):
+        pygame.draw.line(panel_surf, corner_col, (x, y), (x + sx * corner_len, y), lw)
+        pygame.draw.line(panel_surf, corner_col, (x, y), (x, y + sy * corner_len), lw)
+    pygame.draw.rect(panel_surf, config.COLOR_GRID, panel_surf.get_rect(), border_thickness, border_radius=panel_radius)
+    return panel_surf
+
+
 def draw_ui_panel(surface, rect):
-    """Dessine un panneau UI semi-transparent avec bordure."""
+    """Dessine un panneau UI semi-transparent avec bordure (fond mis en cache par taille)."""
     if _hud_state['recording']:
         try:
             _hud_state['rects'].append(pygame.Rect(rect))
@@ -144,71 +171,22 @@ def draw_ui_panel(surface, rect):
     try:
         if rect.width <= 0 or rect.height <= 0:
             return
-
-        ui_alpha = max(0, min(255, 180))
-        if len(config.COLOR_UI_SHADOW) == 4:
-            base_color = config.COLOR_UI_SHADOW[:3]
-        else:
-            base_color = config.COLOR_UI_SHADOW
-        ui_panel_color = base_color + (ui_alpha,)
-        panel_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
-        panel_surf.fill(ui_panel_color)
-        border_thickness = getattr(config, 'ui_border_thickness', 2)
-        panel_radius = getattr(config, 'ui_panel_radius', 5)
-
-        # --- Subtle "cyber" details (scanlines + accents) ---
+        accent = getattr(config, "COLOR_SNAKE_P1", (0, 255, 150))
         try:
-            w, h = panel_surf.get_size()
-            scan_step = 6
-            scan_col = (0, 0, 0, 14)
-            for y in range(0, h, scan_step):
-                pygame.draw.line(panel_surf, scan_col, (0, y), (w, y))
-        except Exception:
-            pass
-
-        try:
-            accent = getattr(config, "COLOR_SNAKE_P1", (0, 255, 150))
-            if not isinstance(accent, (tuple, list)):
-                accent = (0, 255, 150)
             accent = tuple(max(0, min(255, int(c))) for c in accent[:3])
-
-            w, h = panel_surf.get_size()
-            pad = max(int(border_thickness) + 3, 6)
-            corner_len = max(10, int(min(w, h) * 0.14))
-            corner_col = (accent[0], accent[1], accent[2], 48)
-
-            # Top highlight
-            pygame.draw.line(
-                panel_surf,
-                (accent[0], accent[1], accent[2], 22),
-                (pad, pad),
-                (w - pad - 1, pad),
-                1,
-            )
-
-            # Corner brackets
-            lw = 2 if min(w, h) >= 120 else 1
-            # Top-left
-            pygame.draw.line(panel_surf, corner_col, (pad, pad), (pad + corner_len, pad), lw)
-            pygame.draw.line(panel_surf, corner_col, (pad, pad), (pad, pad + corner_len), lw)
-            # Top-right
-            pygame.draw.line(panel_surf, corner_col, (w - pad - 1, pad), (w - pad - 1 - corner_len, pad), lw)
-            pygame.draw.line(panel_surf, corner_col, (w - pad - 1, pad), (w - pad - 1, pad + corner_len), lw)
-            # Bottom-left
-            pygame.draw.line(panel_surf, corner_col, (pad, h - pad - 1), (pad + corner_len, h - pad - 1), lw)
-            pygame.draw.line(panel_surf, corner_col, (pad, h - pad - 1), (pad, h - pad - 1 - corner_len), lw)
-            # Bottom-right
-            pygame.draw.line(panel_surf, corner_col, (w - pad - 1, h - pad - 1), (w - pad - 1 - corner_len, h - pad - 1), lw)
-            pygame.draw.line(panel_surf, corner_col, (w - pad - 1, h - pad - 1), (w - pad - 1, h - pad - 1 - corner_len), lw)
         except Exception:
-            pass
-
-        pygame.draw.rect(panel_surf, config.COLOR_GRID, panel_surf.get_rect(), border_thickness, border_radius=panel_radius)
+            accent = (0, 255, 150)
+        key = (int(rect.width), int(rect.height), accent, tuple(config.COLOR_GRID), tuple(config.COLOR_UI_SHADOW))
+        panel_surf = _panel_cache.get(key)
+        if panel_surf is None:
+            if len(_panel_cache) > 48:  # Tailles changeantes (fil des kills, textes) : cache borné
+                _panel_cache.clear()
+            panel_surf = _panel_cache[key] = _build_panel((int(rect.width), int(rect.height)), accent)
         surface.blit(panel_surf, rect.topleft)
     except Exception as e:
         if not getattr(draw_ui_panel, 'has_warned', False):
-             logging.error(f"Warning: Error drawing UI panel (will warn only once): {e}")
-             draw_ui_panel.has_warned = True
+            logging.error(f"Warning: Error drawing UI panel (will warn only once): {e}")
+            draw_ui_panel.has_warned = True
 
 
 def _clamp_color_rgb(color):
