@@ -25,6 +25,9 @@ def run_pause(events, dt, screen, game_state):
     """Gère l'écran de pause (menu)."""
     base_path = game_state.get('base_path', '')
     p1_id, p2_id = get_joystick_ids(game_state)
+    # À deux (PvP, Survie à deux), les deux joueurs pilotent la pause : J2 peut l'avoir ouverte
+    two_players = game_state.get('current_game_mode') == config.MODE_PVP or bool(game_state.get('coop'))
+    pause_ids = {p1_id, p2_id} if two_players else {p1_id}
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')
@@ -128,7 +131,7 @@ def run_pause(events, dt, screen, game_state):
 
 
         elif event.type == pygame.JOYHATMOTION:
-            if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
+            if event.instance_id in pause_ids and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
                 hat_x, hat_y = event.value
                 if hat_y > 0:
                     selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
@@ -143,7 +146,7 @@ def run_pause(events, dt, screen, game_state):
                     pass
 
         elif event.type == pygame.JOYBUTTONDOWN:
-            if event.instance_id == p1_id:
+            if event.instance_id in pause_ids:
                 button = event.button
 
                 # Raccourcis rapides

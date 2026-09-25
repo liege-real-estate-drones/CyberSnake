@@ -72,5 +72,23 @@ class TestNameEntry(unittest.TestCase):
             self.assertEqual(gs['player2_name_input'], "B")
 
 
+class TestPauseTwoPlayers(unittest.TestCase):
+    def test_player_two_can_resume_pvp_pause(self):
+        import game_states
+        surf = pygame.display.get_surface() or pygame.display.set_mode((800, 600))
+        start = pygame.event.Event(pygame.JOYBUTTONDOWN, button=config.BUTTON_PAUSE, instance_id=1, joy=1)
+        with FakeClock() as clock:
+            gs = new_game(config.MODE_PVP)
+            gs['screen'] = surf
+            gameplay._enter_pause(gs)
+            clock.tick(200)
+            self.assertEqual(game_states.run_pause([start], 16, surf, gs), config.PLAYING)
+            gs = new_game(config.MODE_SOLO)
+            gs['screen'] = surf
+            gameplay._enter_pause(gs)
+            clock.tick(200)
+            self.assertEqual(game_states.run_pause([start], 16, surf, gs), config.PAUSED)  # Seul J1 en solo
+
+
 if __name__ == "__main__":
     unittest.main()
