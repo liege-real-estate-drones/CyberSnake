@@ -10,6 +10,7 @@ import utils
 import progress
 import screens
 import pvp_rounds
+import rules
 from gameplay import reset_game
 from render import draw_game_elements_on_surface
 from ui_common import draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
@@ -388,7 +389,7 @@ def run_game_over(events, dt, screen, game_state):
         # En Survie, le score est le numéro de la vague atteinte
         mode_key, mode_name = "survie", "Survie"; score_to_check = survival_wave; name_for_hs = p1_name
         if game_state.get('coop') and player2_snake:
-            mode_name = "Survie Coop"
+            mode_key, mode_name = "survie_coop", "Survie Coop"  # Classement à part (Hall of Fame)
             name_for_hs = f"{p1_name}&{p2_name}"[:15]
 
     hs_list = utils.high_scores.get(mode_key, [])
@@ -403,6 +404,9 @@ def run_game_over(events, dt, screen, game_state):
     is_daily = bool(game_state.get('daily_challenge', False))
     if is_daily:
         is_high_score = False  # Le Défi du jour a son propre classement
+    custom_rules = rules.game_is_custom()
+    if custom_rules:
+        is_high_score = False  # Règles personnalisées (ex. sans mines) : pas de record au Hall of Fame
 
     if is_high_score and not hs_saved:
         try:
@@ -639,7 +643,7 @@ def run_game_over(events, dt, screen, game_state):
         record_text = f"Record ({mode_name}) : ---"
         if hs_list:
             try:
-                prefix = "Vague max" if mode_key == "survie" else "Record"
+                prefix = "Vague max" if mode_key.startswith("survie") else "Record"
                 record_text = f"{prefix} ({mode_name}) : {hs_list[0]['name']} {hs_list[0]['score']}"
             except Exception:
                 pass
@@ -650,6 +654,8 @@ def run_game_over(events, dt, screen, game_state):
             best = f"{board[0]['name']} {board[0]['score']}" if board else "---"
             daily_text = f"Défi du jour : {'#' + str(rank) if rank else 'hors classement'}  (meilleur du jour : {best})"
             record_text = None
+        if custom_rules:
+            record_text = "Règles personnalisées : score non enregistré au Hall of Fame"
         pvp_title = current_game_mode == config.MODE_PVP
         screens.draw_game_over(screen, game_state, {
             'title': winner_text.upper() if pvp_title else "GAME OVER",

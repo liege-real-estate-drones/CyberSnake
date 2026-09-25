@@ -66,5 +66,46 @@ class TestPvpRespawn(unittest.TestCase):
             self.assertTrue(seen - {start}, "toujours au point de départ")
 
 
+class TestHallOfFame(unittest.TestCase):
+    def setUp(self):
+        self._scores = utils.high_scores
+
+    def tearDown(self):
+        utils.high_scores = self._scores
+
+    def test_old_coop_scores_move_to_their_column(self):
+        import json
+        import tempfile
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, config.HIGH_SCORE_FILE), "w", encoding="utf-8") as f:
+            json.dump({"survie": [{"name": "Thib&Alex", "score": 9}, {"name": "Solo", "score": 7}], "solo": []}, f)
+        utils.load_high_scores(d)
+        self.assertEqual([e["name"] for e in utils.high_scores["survie"]], ["Solo"])
+        self.assertEqual([e["name"] for e in utils.high_scores["survie_coop"]], ["Thib&Alex"])
+
+    def test_coop_game_over_uses_coop_column_and_custom_rules_skip_records(self):
+        import ingame_screens
+        import rules
+        saved = []
+        orig = utils.save_high_score
+        utils.save_high_score = lambda name, score, key, base: saved.append((name, score, key))
+        utils.high_scores = {k: [] for k in utils.HIGH_SCORE_MODES}
+        try:
+            gs = new_game(config.MODE_SURVIVAL, coop=True)
+            gs['survival_wave'] = 4
+            gs['current_state'] = config.GAME_OVER
+            ingame_screens.run_game_over([], 16, pygame.Surface((800, 600)), gs)
+            self.assertEqual(saved[-1][2], "survie_coop")
+            saved.clear()
+            with MemoryOptions():
+                rules.set_value("mine_density", "none")
+                gs = new_game(config.MODE_SOLO)
+                gs['player_snake'].score = 500
+                ingame_screens.run_game_over([], 16, pygame.Surface((800, 600)), gs)
+                self.assertEqual(saved, [])
+        finally:
+            utils.save_high_score = orig
+
+
 if __name__ == "__main__":
     unittest.main()

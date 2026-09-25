@@ -298,7 +298,8 @@ def apply_controls_to_config(controls):
 sounds = {}
 images = {}
 images_hd = {}  # Images d'origine (192 px), pour les icônes affichées plus grand que la grille
-high_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": [], "classic": []}
+HIGH_SCORE_MODES = ("solo", "vs_ai", "pvp", "survie", "survie_coop", "classic")
+high_scores = {k: [] for k in HIGH_SCORE_MODES}
 particles = []
 kill_feed = deque(maxlen=config.MAX_KILL_FEED_MESSAGES)
 screen_shake_intensity = 0
@@ -493,7 +494,7 @@ def load_high_scores(base_path):
     """Charge les high scores depuis le fichier JSON. Met à jour la globale `high_scores`."""
     global high_scores # Modifie la globale
     file_path = os.path.join(base_path, config.HIGH_SCORE_FILE)
-    default_scores = {"solo": [], "vs_ai": [], "pvp": [], "survie": [], "classic": []}
+    default_scores = {k: [] for k in HIGH_SCORE_MODES}
     loaded_high_scores = default_scores.copy()
 
     if os.path.exists(file_path):
@@ -542,6 +543,14 @@ def load_high_scores(base_path):
                 loaded_high_scores[mode] = validated_list[:config.MAX_HIGH_SCORES]
             else:
                 loaded_high_scores[mode] = [] # Garde vide si clé absente ou type incorrect
+        # Ancienne version : la Survie à deux était classée avec la Survie solo, sous « J1&J2 ».
+        # Première lecture sans colonne Coop : ces entrées y sont déplacées.
+        if "survie_coop" not in loaded_data:
+            coop = [e for e in loaded_high_scores["survie"] if "&" in e["name"]]
+            if coop:
+                loaded_high_scores["survie"] = [e for e in loaded_high_scores["survie"] if "&" not in e["name"]]
+                loaded_high_scores["survie_coop"] = sorted(coop, key=lambda x: x['score'], reverse=True)[:config.MAX_HIGH_SCORES]
+                logging.info(f"Hall of Fame : {len(coop)} score(s) de Survie à deux déplacé(s) dans leur colonne")
     else:
         logging.warning(f"Fichier high score non trouvé ({file_path}), initialisation.")
 

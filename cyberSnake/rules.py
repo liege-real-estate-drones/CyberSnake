@@ -109,6 +109,11 @@ def begin(game_state):
     return applies and is_custom(_active['values'])
 
 
+def game_is_custom():
+    """La partie en cours (ou qui vient de finir) utilise-t-elle des règles personnalisées ?"""
+    return bool(_active['on']) and is_custom(_active['values'])
+
+
 def value(key):
     return _active['values'].get(key, DEFAULTS[key])
 
