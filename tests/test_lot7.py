@@ -169,6 +169,8 @@ class TestTrophies(unittest.TestCase):
         screens.run_hall_of_fame([right], 16, surf, gs)
         self.assertEqual(gs['_hof_page'], 2)  # Lot 13 : page « Statistiques »
         screens.run_hall_of_fame([right], 16, surf, gs)
+        self.assertEqual(gs['_hof_page'], 3)  # Lot 14 : page « Défi du jour »
+        screens.run_hall_of_fame([right], 16, surf, gs)
         self.assertEqual(gs['_hof_page'], 0)
 
     def test_attract_loop_shows_trophies_then_how_to_play(self):

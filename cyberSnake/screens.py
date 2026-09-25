@@ -32,7 +32,8 @@ HOF_CATEGORIES = [
     ("survie_coop", "Survie Coop"),
     ("chrono", "Chrono"),
 ]
-HOF_PAGES = 3  # Records, Trophées, Statistiques
+HOF_PAGES = 4  # Records, Trophées, Statistiques, Défi du jour
+HOF_PAGE_NAMES = ["records", "trophées", "statistiques", "défi du jour"]
 PODIUM_COLORS = [(255, 215, 0), (200, 210, 225), (205, 127, 50)]
 
 _title_glow_cache = {}
@@ -267,15 +268,15 @@ def run_hall_of_fame(events, dt, screen, game_state):
             game_state['_hof_page'] = 0
             return config.HOW_TO_PLAY
         page = 1 if elapsed >= ATTRACT_HOF_MS * 0.6 else 0  # Boucle d'attente : records puis trophées
-    if page in (1, 2):
+    if page in (1, 2, 3):
         _draw_background(screen, game_state, now, darken=185)
-        (draw_trophies if page == 1 else draw_stats)(screen, game_state, now)
+        {1: draw_trophies, 2: draw_stats, 3: draw_daily}[page](screen, game_state, now)
         if attract:
             if (now // 550) % 2 == 0:
                 utils.draw_text_with_shadow(screen, "APPUIE SUR UN BOUTON", game_state.get('font_default'), config.COLOR_TEXT_MENU,
                                             config.COLOR_UI_SHADOW, (screen.get_width() // 2, int(screen.get_height() * 0.95)), "center")
         else:
-            panel.draw_hint(screen, panel.hint("Gauche / Droite : " + ("statistiques" if page == 1 else "records"),
+            panel.draw_hint(screen, panel.hint("Gauche / Droite : " + HOF_PAGE_NAMES[(page + 1) % HOF_PAGES],
                                                f"{panel.button_tag('PRIMARY')} ou {panel.button_tag('SECONDARY')} : retour au menu"),
                             game_state.get('font_default'), config.COLOR_TEXT_MENU, (screen.get_width() // 2, int(screen.get_height() * 0.95)), "center")
         return config.HALL_OF_FAME
@@ -372,6 +373,62 @@ def _wrap(font, text, max_width):
     if cur:
         lines.append(cur)
     return lines
+
+
+def draw_daily(screen, game_state, now):
+    """Page « Défi du jour » : le défi d'aujourd'hui, son classement, et les vainqueurs des jours passés."""
+    import datetime
+    import progress
+    sw, sh = screen.get_size()
+    font_large = game_state.get('font_large')
+    font_medium = game_state.get('font_medium')
+    font_default = game_state.get('font_default')
+    font_small = game_state.get('font_small')
+    title = _glow_text(font_large, "DÉFI DU JOUR", (255, 240, 180), (255, 170, 0), 10)
+    screen.blit(title, title.get_rect(center=(sw // 2, int(sh * 0.10))))
+    try:
+        name, desc = progress.daily_modifier()
+    except Exception:
+        name, desc = "", ""
+    utils.draw_text(screen, f"Aujourd'hui : {name}  —  {desc}" if name else "", font_default, config.COLOR_TEXT_HIGHLIGHT,
+                    (sw // 2, int(sh * 0.18)), "center")
+    margin, gap = int(sw * 0.05), int(sw * 0.03)
+    top, bottom = int(sh * 0.24), int(sh * 0.88)
+    left = pygame.Rect(margin, top, int((sw - 2 * margin - gap) * 0.6), bottom - top)
+    right = pygame.Rect(left.right + gap, top, sw - margin - left.right - gap, bottom - top)
+    for r, head in ((left, "Classement du jour"), (right, "Jours passés")):
+        _draw_panel(screen, r, alpha=210)
+        utils.draw_text(screen, head, font_medium, config.COLOR_HOF_CATEGORY, (r.centerx, r.top + 12), "midtop")
+    board = progress.daily_scores()
+    y0 = left.top + 24 + font_medium.get_linesize()
+    row_h = (left.bottom - 12 - y0) // 10
+    if not board:
+        utils.draw_text(screen, "Personne encore : à toi de jouer !", font_default, config.COLOR_HOF_ENTRY,
+                        (left.centerx, y0 + row_h), "center")
+    for rank, entry in enumerate(board[:10]):
+        color = PODIUM_COLORS[rank] if rank < 3 else config.COLOR_HOF_ENTRY
+        font = font_default if rank < 3 else font_small
+        cy = y0 + rank * row_h + row_h // 2
+        utils.draw_text(screen, f"{rank + 1}.", font, color, (left.left + 24, cy), "midleft")
+        utils.draw_text(screen, _fit_text(font, str(entry.get('name', '?')), left.width // 2), font, color, (left.left + 80, cy), "midleft")
+        utils.draw_text(screen, str(entry.get('score', 0)), font, color, (left.right - 24, cy), "midright")
+    days = sorted((k for k in (progress._data().get("daily") or {}) if k != progress.today_key()), reverse=True)[:6]
+    y = right.top + 24 + font_medium.get_linesize()
+    line = max(font_small.get_linesize() * 2 + 6, (right.bottom - 12 - y) // 6)
+    if not days:
+        utils.draw_text(screen, "Pas encore d'historique", font_small, config.COLOR_HOF_ENTRY, (right.centerx, y + line // 2), "center")
+    for day in days:
+        entries = (progress._data().get("daily") or {}).get(day) or []
+        try:
+            label = datetime.date.fromisoformat(day).strftime("%d/%m")
+        except ValueError:
+            label = day
+        best = entries[0] if entries else None
+        utils.draw_text(screen, label, font_small, (150, 180, 210), (right.left + 20, y + line // 2), "midleft")
+        text = f"{best.get('name', '?')}  {best.get('score', 0)}" if best else "---"
+        utils.draw_text(screen, _fit_text(font_default, text, right.width - 110), font_default, config.COLOR_TEXT_HIGHLIGHT,
+                        (right.right - 20, y + line // 2), "midright")
+        y += line
 
 
 def draw_stats(screen, game_state, now):

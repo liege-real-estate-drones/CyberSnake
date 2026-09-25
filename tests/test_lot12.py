@@ -135,12 +135,12 @@ class TestCareerStats(unittest.TestCase):
         self.assertEqual((st["best_combo"], st["best_wave"]), (6, 7))
         self.assertEqual(st["games_by_mode"], {"solo": 1, "survie": 1})
 
-    def test_hall_of_fame_has_three_pages(self):
+    def test_hall_of_fame_has_four_pages(self):
         import screens
         surf = pygame.Surface((1280, 720))
         gs = _state()
         right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
-        for expected in (1, 2, 0):
+        for expected in (1, 2, 3, 0):  # Records, Trophées, Statistiques, Défi du jour
             screens.run_hall_of_fame([right], 16, surf, gs)
             self.assertEqual(gs['_hof_page'], expected)
 
