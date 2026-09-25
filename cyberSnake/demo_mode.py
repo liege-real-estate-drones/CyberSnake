@@ -16,6 +16,7 @@ import game_clock
 import utils
 import game_objects
 import screens
+import announcer
 from gameplay import reset_game, run_game, _apply_dash_loot
 from ui_common import draw_ui_panel
 
@@ -96,6 +97,7 @@ def run_demo(events, dt, screen, game_state):
             for key, value in saved.items():
                 game_state[key] = value
         game_state.pop('demo_mode', None)
+        announcer.set_quiet(False)
         game_state.pop('_demo_initialized', None)
         game_state.pop('_demo_start_time', None)
         game_state.pop('_demo_scenario', None)
@@ -121,6 +123,7 @@ def run_demo(events, dt, screen, game_state):
         # Sauvegarde les réglages de la session pour ne pas les « polluer »
         game_state['_demo_saved'] = {k: game_state.get(k) for k in SAVED_KEYS}
         game_state['demo_mode'] = True
+        announcer.set_quiet(True)  # Pas de voix pendant la démo
         game_state['_demo_initialized'] = True
         game_state['_demo_round_boosted'] = False
         scenario = next_scenario(game_state)
