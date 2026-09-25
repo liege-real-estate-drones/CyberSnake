@@ -11,6 +11,7 @@ import logging
 import pygame
 
 import config
+from ui_common import darken as darken_screen
 import backgrounds
 import utils
 import fx
@@ -111,9 +112,7 @@ def _draw_background(screen, game_state, now, darken=150):
             screen.fill(config.COLOR_BACKGROUND)
     else:
         screen.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, True), (0, 0))
-    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    overlay.fill((0, 0, 8, darken))
-    screen.blit(overlay, (0, 0))
+    darken_screen(screen, darken)
 
 
 def _draw_attract_snake(screen, now, color, phase, length=26):

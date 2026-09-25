@@ -18,7 +18,7 @@ import stick_wizard
 from setup_screens import invalidate_map_selection_cache
 import walls as walls_mod
 import game_objects
-from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
+from ui_common import darken, draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
 def _activate_menu_option(game_state, menu_options, menu_selection_index):
@@ -232,7 +232,7 @@ def run_menu(events, dt, screen, game_state):
             try: backgrounds.draw(screen, menu_background_image)
             except Exception as e: logging.error(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
         else: screen.fill(config.COLOR_BACKGROUND)
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
+        darken(screen, 150)
         
         if pvp_error_msg:
             error_y = config.SCREEN_HEIGHT * 0.05 # En haut de l'écran
@@ -363,9 +363,7 @@ def run_menu(events, dt, screen, game_state):
         # --- Draw Version Popup Overlay ---
         if game_state.get('show_version_popup'):
             # Semi-transparent background
-            overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 200))
-            screen.blit(overlay, (0, 0))
+            darken(screen, 200)
 
             # Fenêtre : titre, version, puis les nouveautés de cette version (config.WHATS_NEW)
             news = list(getattr(config, "WHATS_NEW", []))[:6]
@@ -1322,9 +1320,7 @@ def run_options(events, dt, screen, game_state):
         else:
             screen.fill(config.COLOR_BACKGROUND)
 
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
 
@@ -2169,9 +2165,7 @@ def run_controls_remap(events, dt, screen, game_state):
     # Draw
     try:
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 150)
 
         utils.draw_text_with_shadow(
             screen,

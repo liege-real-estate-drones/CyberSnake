@@ -14,7 +14,7 @@ from gameplay import reset_game
 import walls as walls_mod
 import pvp_rounds
 import settings_screens
-from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
+from ui_common import darken, draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
 VIRTUAL_KEYBOARD_CHARS = [
@@ -287,9 +287,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
     # Dessin de l'écran
     try: # Bloc try autour du dessin
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 190)) # Overlay plus sombre
-        screen.blit(overlay, (0, 0))
+        darken(screen, 190)
 
 
         # Affichage du nom
@@ -739,9 +737,7 @@ def run_map_selection(events, dt, screen, game_state):
     # --- MODIFIÉ: Dessin de l'écran ---
     try: # Bloc try autour du dessin
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 150)
 
         utils.draw_text_with_shadow(screen, "Choix de l'Arène", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
 
@@ -1279,9 +1275,7 @@ def run_classic_setup(events, dt, screen, game_state):
         else:
             screen.fill(config.COLOR_BACKGROUND)
 
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
         utils.draw_text_with_shadow(
@@ -1692,9 +1686,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
     # --- Dessin ---
     try:
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
         title = "VS IA - DIFFICULTÉ (PARTIE)"
@@ -1965,7 +1957,7 @@ def run_pvp_setup(events, dt, screen, game_state):
     # Dessin de l'écran
     try:
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
+        darken(screen, 150)
         utils.draw_text_with_shadow(screen, "Configuration PvP", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
         y_start, item_gap = config.SCREEN_HEIGHT * 0.26, min(60, int(config.SCREEN_HEIGHT * 0.085))
         label_x, value_x = config.SCREEN_WIDTH * 0.35, config.SCREEN_WIDTH * 0.65
@@ -2287,7 +2279,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     # Dessin de l'écran
     try: # Bloc try autour du dessin
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 190)); screen.blit(overlay, (0, 0))
+        darken(screen, 190)
 
         
         # Affichage du titre et du nom

@@ -15,7 +15,7 @@ import settings_screens
 import panel
 from gameplay import reset_game
 from render import draw_game_elements_on_surface
-from ui_common import draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
+from ui_common import darken, draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
 
 
 PAUSE_QUIT_DELAY_MS = 800      # Back ignoré juste après l'ouverture de la pause (double appui accidentel)
@@ -222,9 +222,7 @@ def run_pause(events, dt, screen, game_state):
     # Dessin de l'écran de pause
     try:
         draw_game_elements_on_surface(screen, game_state, game_clock.ticks())  # Partie figée
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 180)
 
         try:
             pause_title = screens._glow_text(font_large, "PAUSE", (235, 250, 255), (0, 200, 255), 10)
