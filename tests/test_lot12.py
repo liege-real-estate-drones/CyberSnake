@@ -145,5 +145,26 @@ class TestCareerStats(unittest.TestCase):
             self.assertEqual(gs['_hof_page'], expected)
 
 
+class TestBackgroundPickerCache(unittest.TestCase):
+    def test_going_back_and_forth_does_not_reload(self):
+        import backgrounds
+        import settings_screens
+        loads = []
+        orig = backgrounds.load
+        backgrounds.load = lambda *a, **k: loads.append(a[1]) or orig(*a, **k)
+        right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
+        left = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(-1, 0), instance_id=0, joy=0)
+        try:
+            with MemoryOptions():
+                gs = _state(_bg_choice="cover_anim")
+                surf = pygame.Surface((640, 360))
+                settings_screens.run_background_screen([], 16, surf, gs)
+                for ev in (right, right, left, right):  # duel_neon, double_helice, duel_neon, double_helice
+                    settings_screens.run_background_screen([ev], 16, surf, gs)
+        finally:
+            backgrounds.load = orig
+        self.assertEqual(loads, ["duel_neon", "double_helice"])
+
+
 if __name__ == "__main__":
     unittest.main()
