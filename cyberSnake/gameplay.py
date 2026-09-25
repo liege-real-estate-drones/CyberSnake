@@ -276,6 +276,57 @@ def _apply_dash_loot(game_state, snake, dash_result, current_time):
             _take_powerup(game_state, snake, pu, current_time)
 
 
+RESPAWN_CANDIDATES = 60
+
+
+def _wrap_dist(a, b):
+    dx = abs(a[0] - b[0])
+    dy = abs(a[1] - b[1])
+    return min(dx, config.GRID_WIDTH - dx) + min(dy, config.GRID_HEIGHT - dy)
+
+
+def safe_respawn_spot(game_state, snake, opponent):
+    """Case de réapparition PvP : loin de l'adversaire, des mines et des murs, avec de la place devant.
+
+    Retourne ((x, y), direction) ou None (on garde alors le point de départ de la carte).
+    """
+    gw, gh = config.GRID_WIDTH, config.GRID_HEIGHT
+    walls = set(game_state.get('current_map_walls', []) or [])
+    mines = [m.position for m in game_state.get('mines', []) if getattr(m, 'position', None)]
+    blocked = walls | set(mines)
+    if opponent is not None and opponent.alive:
+        blocked |= set(opponent.positions)
+    opp_head = opponent.get_head_position() if opponent is not None and opponent.alive and opponent.positions else None
+    body = max(1, int(getattr(config, "PLAYER_INITIAL_SIZE", 3)))
+    best, best_score = None, None
+    for _ in range(RESPAWN_CANDIDATES):
+        pos = (random.randint(1, gw - 2), random.randint(1, gh - 2))
+        if pos in blocked or pos in utils.EXTRA_BLOCKED_CELLS or utils._under_hud(pos):
+            continue
+        if any(_wrap_dist(pos, m) < 3 for m in mines):
+            continue
+        for d in random.sample(config.DIRECTIONS, len(config.DIRECTIONS)):
+            ahead = [((pos[0] + d[0] * k) % gw, (pos[1] + d[1] * k) % gh) for k in range(1, 5)]
+            behind = [(pos[0] - d[0] * k, pos[1] - d[1] * k) for k in range(1, body)]
+            if any(c in blocked for c in ahead) or any(c in blocked or not (0 <= c[0] < gw and 0 <= c[1] < gh) for c in behind):
+                continue
+            score = _wrap_dist(pos, opp_head) if opp_head else 0
+            if opp_head:
+                # Ne pas réapparaître face à l'adversaire, dans sa ligne de tir
+                if (pos[0] == opp_head[0] or pos[1] == opp_head[1]) and _wrap_dist(pos, opp_head) < 12:
+                    score -= 6
+            if best_score is None or score > best_score:
+                best, best_score = (pos, d), score
+            break
+    return best
+
+
+def _place_respawn(game_state, snake, opponent):
+    spot = safe_respawn_spot(game_state, snake, opponent)
+    if spot:
+        snake.start_pos, snake.initial_direction = spot
+
+
 def _enter_pause(game_state):
     game_state['previous_state'] = config.PLAYING
     game_state['pause_opened_at'] = pygame.time.get_ticks()
@@ -815,6 +866,7 @@ def run_game(events, dt, screen, game_state):
             if game_state.get('p1_death_time', 0) > 0 and current_time - game_state.get('p1_death_time', 0) >= config.PVP_RESPAWN_DELAY:
                 logging.info(f"Respawn delay met for P1 ({player_snake.name if player_snake else 'N/A'}). Current time: {current_time}, Death time: {game_state.get('p1_death_time', 0)}")
                 if player_snake:
+                    _place_respawn(game_state, player_snake, player2_snake)
                     player_snake.respawn(current_time, current_game_mode, current_map_walls)
                     game_state['p1_death_time'] = 0 # Reset death time after respawn
                 else:
@@ -824,6 +876,7 @@ def run_game(events, dt, screen, game_state):
             if game_state.get('p2_death_time', 0) > 0 and current_time - game_state.get('p2_death_time', 0) >= config.PVP_RESPAWN_DELAY:
                  logging.info(f"Respawn delay met for P2 ({player2_snake.name if player2_snake else 'N/A'}). Current time: {current_time}, Death time: {game_state.get('p2_death_time', 0)}")
                  if player2_snake:
+                     _place_respawn(game_state, player2_snake, player_snake)
                      player2_snake.respawn(current_time, current_game_mode, current_map_walls)
                      game_state['p2_death_time'] = 0 # Reset death time after respawn
                  else:
