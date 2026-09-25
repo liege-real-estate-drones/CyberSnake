@@ -3,9 +3,11 @@
 import pygame
 import random
 import math
+import colorsys
 import logging
 
 import config
+import backgrounds
 import utils
 import progress
 import music
@@ -15,6 +17,7 @@ import borne_install
 import stick_wizard
 from setup_screens import invalidate_map_selection_cache
 import walls as walls_mod
+import game_objects
 from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
@@ -217,7 +220,7 @@ def run_menu(events, dt, screen, game_state):
     # --- Dessin de l'écran du menu ---
     try:
         if menu_background_image:
-            try: screen.blit(menu_background_image, (0, 0))
+            try: backgrounds.draw(screen, menu_background_image)
             except Exception as e: logging.error(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
         else: screen.fill(config.COLOR_BACKGROUND)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
@@ -237,20 +240,12 @@ def run_menu(events, dt, screen, game_state):
         )
 
         # --- Légende contrôles (joystick only) ---
-        confirm_btn = getattr(config, "BUTTON_PRIMARY_ACTION", 1)
-        back_btn = getattr(config, "BUTTON_SECONDARY_ACTION", 2)
-        music_btn = 4
-        quit_btn = 8
-        def _btn(action, number):  # Nom du bouton par sa couleur sur la borne (Options > Couleurs des boutons)
-            try:
-                return "Bouton " + settings_screens.BUTTON_COLORS[settings_screens.button_color_key(action)][0].lower()
-            except Exception:
-                return f"Bouton {number}"
+        # Boutons dessinés à leur place sur le panneau de la borne (panel.py)
         legend_lines = [
-            f"Stick/Croix: Naviguer   |   {_btn('PRIMARY', confirm_btn)}: Valider   |   {_btn('SECONDARY', back_btn)}: Retour",
-            f"Bouton {music_btn}: Musique   |   {_btn('BACK', quit_btn)}: Quitter   |   Inactivité: Démo (3 min)",
+            settings_screens.hint("Stick : naviguer", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
+            settings_screens.hint(f"{settings_screens.button_name('MUSIC')} : musique", f"{settings_screens.button_name('BACK')} : quitter", "Inactivité : démo (3 min)"),
         ]
-        legend_h = (font_small.get_height() + 6) * len(legend_lines) + 14
+        legend_h = (int(font_small.get_height() * 1.45) + 4) * len(legend_lines) + 14
         legend_w = min(int(config.SCREEN_WIDTH * 0.92), 900)
         legend_x = (config.SCREEN_WIDTH - legend_w) // 2
         legend_y = config.SCREEN_HEIGHT - legend_h - 10
@@ -330,8 +325,8 @@ def run_menu(events, dt, screen, game_state):
         draw_ui_panel(screen, legend_rect)
         y_text = legend_rect.top + 10
         for line in legend_lines:
-            utils.draw_text(screen, line, font_small, config.COLOR_TEXT_MENU, (legend_rect.centerx, y_text), "midtop")
-            y_text += font_small.get_height() + 6
+            settings_screens.draw_hint(screen, line, font_small, config.COLOR_TEXT_MENU, (legend_rect.centerx, y_text), "midtop")
+            y_text += int(font_small.get_height() * 1.45) + 4  # Place pour les dessins des boutons
 
         # Petit rappel musique
         try:
@@ -366,7 +361,7 @@ def run_menu(events, dt, screen, game_state):
             version_text = f"Version: {getattr(config, 'VERSION', 'Inconnue')}"
             utils.draw_text_with_shadow(screen, version_text, font_large, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (center_x, center_y), "center")
 
-            utils.draw_text_with_shadow(screen, f"Appuie sur le {settings_screens.button_name('PRIMARY').lower()} pour fermer", font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (center_x, center_y + 80), "center")
+            settings_screens.draw_hint(screen, f"{settings_screens.button_name('PRIMARY')} : fermer", font_small, config.COLOR_TEXT, (center_x, center_y + 80), "center")
 
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin du menu: {e}")
@@ -723,7 +718,7 @@ def run_options(events, dt, screen, game_state):
         ("Volume musique", music_volume_display),
         ("Volume effets", sound_volume_display),
         ("Contrôles", ""),
-        ("Couleurs des boutons", ""),
+        ("Boutons de la borne", ""),
         ("Fond des menus", ""),
         ("Réinitialiser", ""),
         ("Appliquer", ""),
@@ -749,7 +744,7 @@ def run_options(events, dt, screen, game_state):
     IDX_MUSIC_VOL = 16
     IDX_SOUND_VOL = 17
     IDX_CONTROLS = 18
-    IDX_BUTTON_COLORS = 19
+    IDX_BUTTONS = 19
     IDX_BACKGROUND = 20
     IDX_RESET = 21
     IDX_APPLY = 22
@@ -1170,10 +1165,10 @@ def run_options(events, dt, screen, game_state):
             next_state = config.CONTROLS
             return True
 
-        if selection_index == IDX_BUTTON_COLORS:
+        if selection_index == IDX_BUTTONS:
             utils.play_sound("menu_select")
-            game_state['button_colors_return_state'] = config.OPTIONS
-            next_state = config.BUTTON_COLORS_SCREEN
+            game_state['buttons_return_state'] = config.OPTIONS
+            next_state = config.BUTTONS_SCREEN
             return True
 
         if selection_index == IDX_BACKGROUND:
@@ -1291,7 +1286,7 @@ def run_options(events, dt, screen, game_state):
         menu_background_image = game_state.get('menu_background_image')
         if menu_background_image:
             try:
-                screen.blit(menu_background_image, (0, 0))
+                backgrounds.draw(screen, menu_background_image)
             except Exception:
                 screen.fill(config.COLOR_BACKGROUND)
         else:
@@ -1363,7 +1358,7 @@ def run_options(events, dt, screen, game_state):
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
             ("Contrôles", ""),
-            ("Couleurs des boutons", ""),
+            ("Boutons de la borne", ""),
             ("Fond des menus", ""),
             (reset_label, ""),
             ("Appliquer", ""),
@@ -1562,11 +1557,18 @@ def run_options(events, dt, screen, game_state):
             except Exception:
                 eff_style = global_style_key
 
-            try:
-                presets = getattr(config, "SNAKE_COLOR_PRESETS", {})
-                base_color = presets.get(str(color_key).strip().lower(), fallback_color) if isinstance(presets, dict) else fallback_color
-            except Exception:
-                base_color = fallback_color
+            presets = getattr(config, "SNAKE_COLOR_PRESETS", {})
+            if not isinstance(presets, dict):
+                presets = {}
+            color_key = str(color_key).strip().lower()
+            base_color = presets.get(color_key, fallback_color)
+            if color_key == "rainbow":  # Arc-en-ciel : teinte animée, comme en jeu
+                rr, gg, bb = colorsys.hsv_to_rgb((pygame.time.get_ticks() * 0.00025) % 1.0, 0.85, 1.0)
+                base_color = (int(rr * 255), int(gg * 255), int(bb * 255))
+            # Les sprites sont dessinés en vert (J1) / rose (J2) : recolorés dans la couleur choisie,
+            # comme en jeu (avant, l'aperçu restait vert et rose quelle que soit la couleur)
+            drawn_rgb = presets.get("cyber" if sprite_prefix == "p1" else "pink")
+            recolor = bool(drawn_rgb) and tuple(base_color[:3]) != tuple(drawn_rgb[:3])
 
             head_color = tuple(min(255, c + 40) for c in base_color[:3])
 
@@ -1603,6 +1605,13 @@ def run_options(events, dt, screen, game_state):
                 head = _get_sprite(f"snake_{sprite_prefix}_head.png")
                 body = _get_sprite(f"snake_{sprite_prefix}_body.png")
                 tail = _get_sprite(f"snake_{sprite_prefix}_tail.png")
+
+                if recolor:
+                    try:
+                        head, body, tail = (game_objects._hue_shifted(img, drawn_rgb, base_color) if img else None
+                                            for img in (head, body, tail))
+                    except Exception:
+                        logging.debug("Aperçu : recoloration impossible", exc_info=True)
 
                 for idx, r in enumerate(seg_rects):
                     if idx == 0 and head:
@@ -1768,7 +1777,7 @@ def run_options(events, dt, screen, game_state):
             hint = settings_screens.hint(f"{settings_screens.button_name('PRIMARY')} deux fois : réinitialiser", f"{settings_screens.button_name('SECONDARY')} : retour")
             if reset_armed:
                 hint = settings_screens.hint(f"{settings_screens.button_name('PRIMARY')} : CONFIRMER la réinitialisation", f"{settings_screens.button_name('SECONDARY')} : retour")
-        utils.draw_text(screen, hint, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
+        settings_screens.draw_hint(screen, hint, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception as e:
         logging.error(f"Erreur dessin run_options: {e}")
 
@@ -2164,7 +2173,11 @@ def run_controls_remap(events, dt, screen, game_state):
             prefix = "> " if is_sel else "  "
             value = get_value_display(item_id)
             utils.draw_text_with_shadow(screen, f"{prefix}{label}", font_default, color, config.COLOR_UI_SHADOW, (left_rect.left + 16, y), "topleft")
-            if value:
+            if _t == "button":  # Le bouton dessiné à sa place sur le panneau de la borne
+                num = _get_int(pending_buttons, item_id, 0)
+                settings_screens.draw_hint(screen, f"{value}  {settings_screens.button_name(num)}", font_default, color,
+                                           (left_rect.right - 16, y + font_default.get_height() // 2), "midright")
+            elif value:
                 utils.draw_text(screen, value, font_default, color, (left_rect.right - 16, y), "topright")
             y += row_h
             if y > left_rect.bottom - 30:
@@ -2221,7 +2234,7 @@ def run_controls_remap(events, dt, screen, game_state):
         else:
             help_1 = settings_screens.hint("Stick : naviguer", f"{settings_screens.button_name('PRIMARY')} : modifier", "Gauche / Droite : ajuster", f"{settings_screens.button_name('SECONDARY')} : retour")
         help_2 = "Sauvegarder applique immédiatement (menus + jeu)."
-        utils.draw_text(screen, help_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y), "center")
+        settings_screens.draw_hint(screen, help_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y), "center")
         utils.draw_text(screen, help_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y + line_gap), "center")
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin de run_controls_remap: {e}", exc_info=True)

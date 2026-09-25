@@ -12,6 +12,7 @@ import screens
 import pvp_rounds
 import rules
 import settings_screens
+import panel
 from gameplay import reset_game
 from render import draw_game_elements_on_surface
 from ui_common import draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
@@ -161,12 +162,12 @@ def run_pause(events, dt, screen, game_state):
                         game_state['pause_quit_armed_until'] = current_time + PAUSE_QUIT_CONFIRM_MS
                         utils.play_sound("denied")
                     continue
-                if button in (pause_button, back_button):
+                if button in (pause_button, back_button, panel.BUTTON_START):
                     return _resume_game(play_sound=False)
                 if button == tertiary_button:
                     _toggle_hud_mode()
                     continue
-                if button == 4:
+                if button == panel.BUTTON_MUSIC:
                     # Cycle musique 1-9
                     music_num = (utils.selected_music_index % 9) + 1
                     if utils.select_and_load_music(music_num, base_path):
@@ -286,7 +287,7 @@ def run_pause(events, dt, screen, game_state):
         music_label = "Défaut" if utils.selected_music_index == 0 else f"Piste {utils.selected_music_index}"
         desc_lines.append(f"Musique: {music_label} | Vol musique: {utils.music_volume:.1f} | Vol effets: {utils.sound_volume:.1f}")
         hud_label = "Minimal" if str(getattr(config, "HUD_MODE", "normal")).strip().lower() == "minimal" else "Normal"
-        desc_lines.append(f"HUD : {hud_label} ({settings_screens.button_name('TERTIARY')})")
+        desc_lines.append(f"HUD : {hud_label} ({panel.button_text('TERTIARY')})")
 
         dy = desc_rect.top + pad
         for line in desc_lines[:3]:
@@ -295,18 +296,20 @@ def run_pause(events, dt, screen, game_state):
 
         # Légendes contrôles (uniformisées)
         instruction_y = config.SCREEN_HEIGHT * 0.90
-        gap = max(18, int(font_small.get_linesize() * 1.05))
-        l1 = "Stick : choisir  |  Bouton : valider  |  Start : reprendre  |  Back deux fois : quitter la partie"
-        l2 = settings_screens.hint(f"{settings_screens.button_name('TERTIARY')} : HUD normal / minimal", "Bouton 4 : changer de musique")
-        utils.draw_text(screen, l1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
-        utils.draw_text(screen, l2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + gap), "center")
+        gap = max(18, int(font_small.get_linesize() * 1.45))  # Place pour les dessins des boutons
+        l1 = panel.hint("Stick : choisir", f"{panel.button_tag('PRIMARY')} : valider",
+                        f"{panel.button_tag('PAUSE')} ou {panel.button_tag('START')} : reprendre",
+                        f"{panel.button_tag('BACK')} deux fois : quitter la partie")
+        l2 = panel.hint(f"{panel.button_tag('TERTIARY')} : HUD normal / minimal", f"{panel.button_tag('MUSIC')} : changer de musique")
+        panel.draw_hint(screen, l1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
+        panel.draw_hint(screen, l2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + gap), "center")
         if current_time <= int(game_state.get('pause_quit_armed_until', 0) or 0):
             band = pygame.Rect(0, 0, config.SCREEN_WIDTH, font_medium.get_height() + 24)
             band.center = (config.SCREEN_WIDTH // 2, int(config.SCREEN_HEIGHT * 0.12))
             veil = pygame.Surface(band.size, pygame.SRCALPHA)
             veil.fill((60, 0, 10, 200))
             screen.blit(veil, band.topleft)
-            utils.draw_text_with_shadow(screen, "Appuie encore sur Back pour quitter la partie", font_medium,
+            utils.draw_text_with_shadow(screen, f"Appuie encore sur {panel.button_text('BACK')} pour quitter la partie", font_medium,
                                         (255, 120, 120), config.COLOR_UI_SHADOW, band.center, "center")
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin de run_pause: {e}", exc_info=True)

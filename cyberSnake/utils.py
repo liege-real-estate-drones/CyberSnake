@@ -6,6 +6,7 @@ import sys
 import random
 import math
 import os
+import shutil
 import json
 from collections import defaultdict, deque
 import logging
@@ -63,7 +64,7 @@ DEFAULT_GAME_OPTIONS = {
     "visual_fx": "standard",
     "ui_scale": "normal",
     "hud_mode": "normal",
-    "menu_background": "cover",  # backgrounds.py : cover, synthwave, ville, circuit, nebuleuse, tunnel, random
+    "menu_background": "cover",  # backgrounds.py : cover, cover_anim, perso:<image de mes_fonds/>, random
 }
 
 DEFAULT_CONTROLS = {
@@ -586,6 +587,25 @@ def save_high_score(name, score, mode_key, base_path):
         logging.error(f"Erreur: Données de score invalides - Nom: {name}, Score: {score}, Erreur: {e}")
     except Exception as e:
         logging.error(f"Erreur inattendue sauvegarde high scores: {e}", exc_info=True)
+
+def reset_high_scores(base_path):
+    """Efface tous les records (Hall of Fame). L'ancien fichier est gardé en highscores.json.bak."""
+    global high_scores
+    file_path = os.path.join(base_path, config.HIGH_SCORE_FILE)
+    try:
+        if os.path.exists(file_path):
+            shutil.copyfile(file_path, file_path + ".bak")
+    except Exception:
+        logging.warning("Records : copie de sauvegarde impossible", exc_info=True)
+    high_scores = {k: [] for k in HIGH_SCORE_MODES}
+    try:
+        safe_write_json(file_path, high_scores)
+        logging.info("Hall of Fame remis à zéro (ancien fichier : highscores.json.bak)")
+        return True
+    except Exception:
+        logging.error("Records : remise à zéro impossible", exc_info=True)
+        return False
+
 
 # --- NOUVEAU: Fonctions Favorite Maps ---
 def load_favorite_maps(base_path):

@@ -1055,6 +1055,12 @@ class Snake:
                  if not self.handle_damage(current_time, killer_snake=None, damage_source_pos=obs_center_px):
                      died_in_move = True
                      death_cause_detail = 'wall' # Cause: collision mur
+                 else:
+                     # Choc encaissé (armure, bouclier, invincibilité) : on n'entre pas dans le mur,
+                     # on glisse le long (sinon le serpent traversait les murs)
+                     new_head = self._slide_along_wall(cur_pos)
+                     if new_head is None:
+                         return False, cur_pos, None  # Coincé : il reste sur place ce tour-ci
 
             if not died_in_move:
                 self._prev_positions = list(self.positions)
@@ -1091,6 +1097,31 @@ class Snake:
         # Retourne 3 valeurs: si un mouvement a eu lieu, la nouvelle position de la tête (ou l'ancienne si pas de mouvement), et la cause de la mort si mort.
         return moved, new_head if moved else self.get_head_position(), death_cause_detail if not self.alive else None
 
+
+    def _slide_along_wall(self, cur_pos):
+        """Case libre à gauche ou à droite de la direction courante (None si aucune) ; tourne le serpent."""
+        dx, dy = self.current_direction
+        walls = self.current_walls
+        body = self.positions[1:-1] if len(self.positions) > 2 else []
+        options = [(dy, dx), (-dy, -dx)]  # Perpendiculaires
+        queued = getattr(self, 'next_direction', None)
+        if queued in options:
+            options.remove(queued)
+            options.insert(0, queued)  # Le virage déjà demandé par le joueur passe en premier
+        classic = self.game_mode == getattr(config, "MODE_CLASSIC", None)
+        for d in options:
+            x, y = cur_pos[0] + d[0], cur_pos[1] + d[1]
+            if classic:
+                if not (0 <= x < config.GRID_WIDTH and 0 <= y < config.GRID_HEIGHT):
+                    continue
+            else:
+                x, y = x % config.GRID_WIDTH, y % config.GRID_HEIGHT
+            if (x, y) in walls or (x, y) in body:
+                continue
+            self.current_direction = self.next_direction = d
+            self.direction_queue = []
+            return (x, y)
+        return None
 
     def grow(self):
         if self.alive:
@@ -3563,6 +3594,10 @@ class EnemySnake(Snake):
             elif new_head in self.current_walls:
                  if not self.handle_damage(current_time, killer_snake=None):
                      died_in_move = True
+                 else:
+                     new_head = self._slide_along_wall(cur_pos)  # Pas de traversée des murs (voir Snake.move)
+                     if new_head is None:
+                         return False, cur_pos, False
 
             if not died_in_move:
                 self._prev_positions = list(self.positions)

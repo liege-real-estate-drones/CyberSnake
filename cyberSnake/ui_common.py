@@ -5,6 +5,7 @@ import logging
 import pygame
 
 import config
+import backgrounds
 import utils
 import fx
 import walls
@@ -68,7 +69,7 @@ def draw_screen_background(screen, game_state, darken=0):
     bg = game_state.get('menu_background_image') if isinstance(game_state, dict) else None
     try:
         if bg is not None:
-            screen.blit(bg, (0, 0))
+            backgrounds.draw(screen, bg)
         else:
             screen.blit(fx.get_arena_background(config.SCREEN_WIDTH, config.SCREEN_HEIGHT, config.GRID_SIZE, True), (0, 0))
     except Exception:

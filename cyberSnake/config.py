@@ -690,7 +690,7 @@ HOW_TO_PLAY = 107 # Écran « Comment jouer » (boucle d'attente)
 COOP_SURVIVAL = 108 # Entrée de menu : Survie à deux (Coop)
 STICK_WIZARD = 109 # Assistant sticks J1 / J2 (Options > Contrôles)
 RULES = 110 # Règles personnalisées (mutateurs), menu principal
-BUTTON_COLORS_SCREEN = 111 # Couleur de chaque bouton de la borne (Options)
+BUTTONS_SCREEN = 111 # Boutons de la borne : dessin du panneau, test et disposition (Options)
 ROUND_SCORE = 112 # Score entre deux manches (PvP en manches)
 BACKGROUND_SCREEN = 113 # Choix du fond des menus (Options)
 
@@ -736,4 +736,4 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.3.0'
+VERSION = '2.4.0'

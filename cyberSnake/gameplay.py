@@ -20,6 +20,7 @@ import rules
 import pvp_rounds
 import progress
 import screens
+import panel
 from render import draw_game_elements_on_surface
 from ui_common import get_joystick_ids
 
@@ -1075,13 +1076,13 @@ def run_game(events, dt, screen, game_state):
 
         # --- Boutons des manettes : pause, puis tir / Dash / Bouclier ---
         elif event.type == pygame.JOYBUTTONDOWN:
-            # Pause (Start) / Back : J1 ou J2, même si le serpent est mort (respawn).
+            # Pause / Back / Player (Start) : J1 ou J2, même si le serpent est mort (respawn).
             # Back ouvre aussi la pause (au lieu de quitter directement) pour éviter
             # de perdre une partie sur un appui accidentel. "Quitter" reste dans le menu Pause.
             pause_button = int(getattr(config, 'BUTTON_PAUSE', 7))
             menu_button = int(getattr(config, 'BUTTON_BACK', 8))
             pause_allowed = event.instance_id == p1_id or (two_players and event.instance_id == p2_id)
-            if pause_allowed and event.button in (pause_button, menu_button):
+            if pause_allowed and event.button in (pause_button, menu_button, panel.BUTTON_START):
                 logging.info(f"Joystick button {event.button} pressed, pausing game.")
                 return _enter_pause(game_state)
             actions = {int(getattr(config, 'BUTTON_SECONDARY_ACTION', 0)): 'dash',

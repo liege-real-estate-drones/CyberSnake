@@ -11,10 +11,11 @@ import logging
 import pygame
 
 import config
+import backgrounds
 import utils
 import fx
 import keyboard_controls
-import settings_screens
+import panel
 
 ATTRACT_TITLE_MS = 12000   # Durée de l'écran titre avant la démo
 ATTRACT_DEMO_MS = 45000    # Durée de la démo dans la boucle d'attente
@@ -105,7 +106,7 @@ def _draw_background(screen, game_state, now, darken=150):
     bg = game_state.get('menu_background_image')
     if bg is not None:
         try:
-            screen.blit(bg, (0, 0))
+            backgrounds.draw(screen, bg, now)
         except Exception:
             screen.fill(config.COLOR_BACKGROUND)
     else:
@@ -213,6 +214,13 @@ def run_title(events, dt, screen, game_state):
 # ---------------------------------------------------------------------------
 # Hall of Fame
 # ---------------------------------------------------------------------------
+HOF_RESET_CONFIRM_MS = 6000
+
+
+def _hof_reset_armed(game_state, now):
+    return now <= int(game_state.get('_hof_reset_until', 0) or 0)
+
+
 def run_hall_of_fame(events, dt, screen, game_state):
     now = pygame.time.get_ticks()
     attract = bool(game_state.get('attract_mode', False))
@@ -222,19 +230,31 @@ def run_hall_of_fame(events, dt, screen, game_state):
             leave_attract(game_state)
             return config.MENU
         if ev.type == pygame.JOYBUTTONDOWN:
-            try:
-                back = int(ev.button) in (int(getattr(config, "BUTTON_SECONDARY_ACTION", 0)),
-                                          int(getattr(config, "BUTTON_BACK", 8)),
-                                          int(getattr(config, "BUTTON_PRIMARY_ACTION", 1)))
-            except Exception:
-                back = True
-            if back:
+            button = int(getattr(ev, 'button', -1))
+            # Remise à zéro des records : bouton Bouclier, puis Valider pour confirmer
+            if _hof_reset_armed(game_state, now):
+                game_state.pop('_hof_reset_until', None)
+                if button == panel.action_button('PRIMARY'):
+                    utils.reset_high_scores(game_state.get('base_path', ''))
+                    game_state['_hof_reset_done_until'] = now + 2500
+                    utils.play_sound("menu_select")
+                else:
+                    utils.play_sound("menu_back")  # Tout autre bouton annule
+                continue
+            if button == panel.action_button('TERTIARY') and int(game_state.get('_hof_page', 0) or 0) == 0:
+                game_state['_hof_reset_until'] = now + HOF_RESET_CONFIRM_MS
+                utils.play_sound("denied")
+                continue
+            if button in (panel.action_button('SECONDARY'), panel.action_button('BACK'), panel.action_button('PRIMARY')):
                 utils.play_sound("menu_back")
+                game_state.pop('_hof_reset_until', None)
                 return config.MENU
         elif ev.type == pygame.KEYDOWN and ev.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_BACKSPACE):
             utils.play_sound("menu_back")
+            game_state.pop('_hof_reset_until', None)
             return config.MENU
         elif ev.type == pygame.JOYHATMOTION and ev.value[0]:
+            game_state.pop('_hof_reset_until', None)
             game_state['_hof_page'] = 1 - int(game_state.get('_hof_page', 0) or 0)  # Records <-> Trophées
             utils.play_sound("menu_move")
 
@@ -248,10 +268,13 @@ def run_hall_of_fame(events, dt, screen, game_state):
     if page == 1:
         _draw_background(screen, game_state, now, darken=185)
         draw_trophies(screen, game_state, now)
-        hint = "APPUIE SUR UN BOUTON" if attract else "Gauche / Droite : records  |  Un bouton : retour au menu"
-        if not attract or (now // 550) % 2 == 0:
-            utils.draw_text_with_shadow(screen, hint, game_state.get('font_default'), config.COLOR_TEXT_MENU,
-                                        config.COLOR_UI_SHADOW, (screen.get_width() // 2, int(screen.get_height() * 0.95)), "center")
+        if attract:
+            if (now // 550) % 2 == 0:
+                utils.draw_text_with_shadow(screen, "APPUIE SUR UN BOUTON", game_state.get('font_default'), config.COLOR_TEXT_MENU,
+                                            config.COLOR_UI_SHADOW, (screen.get_width() // 2, int(screen.get_height() * 0.95)), "center")
+        else:
+            panel.draw_hint(screen, panel.hint("Gauche / Droite : records", f"{panel.button_tag('PRIMARY')} ou {panel.button_tag('SECONDARY')} : retour au menu"),
+                            game_state.get('font_default'), config.COLOR_TEXT_MENU, (screen.get_width() // 2, int(screen.get_height() * 0.95)), "center")
         return config.HALL_OF_FAME
 
     font_large = game_state.get('font_large')
@@ -280,9 +303,9 @@ def run_hall_of_fame(events, dt, screen, game_state):
     for i, (key, label) in enumerate(HOF_CATEGORIES):
         x = margin + i * (col_w + gap)
         rect = pygame.Rect(x, top, col_w, panel_h)
-        panel = pygame.Surface(rect.size, pygame.SRCALPHA)
-        panel.fill((6, 10, 24, 200))
-        screen.blit(panel, rect.topleft)
+        box = pygame.Surface(rect.size, pygame.SRCALPHA)
+        box.fill((6, 10, 24, 200))
+        screen.blit(box, rect.topleft)
         border_col = config.COLOR_TEXT_HIGHLIGHT if i == highlight_idx else (40, 90, 140)
         pygame.draw.rect(screen, border_col, rect, 2, border_radius=8)
         if i == highlight_idx:
@@ -313,10 +336,26 @@ def run_hall_of_fame(events, dt, screen, game_state):
             if y > rect.bottom - row_h:
                 break
 
-    hint = "APPUIE SUR UN BOUTON" if attract else "Gauche / Droite : trophées  |  Un bouton : retour au menu"
-    if not attract or (now // 550) % 2 == 0:
-        utils.draw_text_with_shadow(screen, hint, font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW,
-                                    (sw // 2, int(sh * 0.95)), "center")
+    if attract:
+        if (now // 550) % 2 == 0:
+            utils.draw_text_with_shadow(screen, "APPUIE SUR UN BOUTON", font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW,
+                                        (sw // 2, int(sh * 0.95)), "center")
+        return config.HALL_OF_FAME
+    panel.draw_hint(screen, panel.hint("Gauche / Droite : trophées", f"{panel.button_tag('TERTIARY')} : effacer les records",
+                                       f"{panel.button_tag('PRIMARY')} ou {panel.button_tag('SECONDARY')} : retour"),
+                    font_default, config.COLOR_TEXT_MENU, (sw // 2, int(sh * 0.95)), "center")
+    band_text = None
+    if _hof_reset_armed(game_state, now):
+        band_text = (panel.hint(f"Effacer TOUS les records ?   {panel.button_tag('PRIMARY')} : oui", "autre bouton : non"), (255, 120, 120))
+    elif now <= int(game_state.get('_hof_reset_done_until', 0) or 0):
+        band_text = ("Records effacés (ancienne liste gardée dans highscores.json.bak)", config.COLOR_TEXT_HIGHLIGHT)
+    if band_text:
+        band = pygame.Rect(0, 0, sw, font_medium.get_height() + 28)
+        band.center = (sw // 2, sh // 2)
+        veil = pygame.Surface(band.size, pygame.SRCALPHA)
+        veil.fill((40, 0, 10, 225) if band_text[1] != config.COLOR_TEXT_HIGHLIGHT else (0, 20, 30, 225))
+        screen.blit(veil, band.topleft)
+        panel.draw_hint(screen, band_text[0], font_default, band_text[1], band.center, "center")
     return config.HALL_OF_FAME
 
 
@@ -404,9 +443,9 @@ def _fmt_duration(ms):
 
 
 def _draw_panel(screen, rect, border=(40, 90, 140), alpha=200):
-    panel = pygame.Surface(rect.size, pygame.SRCALPHA)
-    panel.fill((6, 10, 24, alpha))
-    screen.blit(panel, rect.topleft)
+    box = pygame.Surface(rect.size, pygame.SRCALPHA)
+    box.fill((6, 10, 24, alpha))
+    screen.blit(box, rect.topleft)
     pygame.draw.rect(screen, border, rect, 2, border_radius=10)
 
 
@@ -441,11 +480,11 @@ def draw_game_over(screen, game_state, info):
     if stats:
         content_h += 20 + tile_h
     content_h += 20 + (font_small.get_height() + 16 if info.get('record_text') else 0)
-    panel = pygame.Rect(0, 0, int(sw * 0.62), content_h)
-    panel.midtop = (sw // 2, int(sh * 0.22))
-    _draw_panel(screen, panel, border=(255, 200, 60) if info.get('is_high_score') else (40, 90, 140))
+    box = pygame.Rect(0, 0, int(sw * 0.62), content_h)
+    box.midtop = (sw // 2, int(sh * 0.22))
+    _draw_panel(screen, box, border=(255, 200, 60) if info.get('is_high_score') else (40, 90, 140))
 
-    y = panel.top + 18
+    y = box.top + 18
     utils.draw_text(screen, info.get('main_label', "SCORE"), font_default, (160, 190, 230), (sw // 2, y), "midtop")
     y += font_default.get_height() + 4
     # Chiffres en Share Tech Mono : en Orbitron, « 7 » et « 0 » ressemblent à des symboles
@@ -469,7 +508,7 @@ def draw_game_over(screen, game_state, info):
     # Tuiles de statistiques
     if stats:
         tile_gap = 10
-        tile_w = min(int((panel.width - 40 - tile_gap * (len(stats) - 1)) / len(stats)), int(sw * 0.13))
+        tile_w = min(int((box.width - 40 - tile_gap * (len(stats) - 1)) / len(stats)), int(sw * 0.13))
         total_w = tile_w * len(stats) + tile_gap * (len(stats) - 1)
         tx = sw // 2 - total_w // 2
         ty = y + 20
@@ -482,10 +521,10 @@ def draw_game_over(screen, game_state, info):
 
     rec = info.get('record_text')
     if rec:
-        utils.draw_text(screen, rec, font_small, config.COLOR_TEXT_HIGHLIGHT, (sw // 2, panel.bottom - 14), "midbottom")
+        utils.draw_text(screen, rec, font_small, config.COLOR_TEXT_HIGHLIGHT, (sw // 2, box.bottom - 14), "midbottom")
 
     # Lignes spéciales (défi du jour, couleurs débloquées)
-    y2 = panel.bottom + 18
+    y2 = box.bottom + 18
     if info.get('daily_text'):
         utils.draw_text(screen, info['daily_text'], font_default, (120, 230, 255), (sw // 2, y2), "midtop")
         y2 += font_default.get_linesize()
@@ -503,7 +542,7 @@ def draw_game_over(screen, game_state, info):
     gap = int(sw * 0.02)
     total = btn_w * len(options) + gap * (len(options) - 1)
     bx = sw // 2 - total // 2
-    by = max(y2 + 30, panel.bottom + int(sh * 0.08))
+    by = max(y2 + 30, box.bottom + int(sh * 0.08))
     ratio = max(0.0, min(1.0, float(info.get('lock_ratio', 1.0))))
     for i, opt in enumerate(options):
         r = pygame.Rect(bx, by, btn_w, btn_h)
@@ -574,27 +613,16 @@ def run_how_to_play(events, dt, screen, game_state):
     title = _glow_text(font_large, "COMMENT JOUER", (230, 255, 240), (0, 255, 150), 10)
     screen.blit(title, title.get_rect(center=(sw // 2, int(sh * 0.09))))
 
-    # Commandes : stick et boutons dessinés à la couleur des boutons de la borne
-    # (Options > Couleurs des boutons), puis rappel des touches du clavier
-    ctrl = pygame.Rect(int(sw * 0.04), int(sh * 0.18), int(sw * 0.34), int(sh * 0.68))
+    # Commandes : le panneau de la borne (stick + 8 boutons + Coin / Player), chaque bouton
+    # légendé à sa place (panel.py), puis rappel des touches du clavier
+    ctrl = pygame.Rect(int(sw * 0.03), int(sh * 0.18), int(sw * 0.40), int(sh * 0.68))
     _draw_panel(screen, ctrl)
     utils.draw_text(screen, "COMMANDES", font_medium, config.COLOR_HOF_CATEGORY, (ctrl.centerx, ctrl.top + 14), "midtop")
-    y = ctrl.top + 24 + font_medium.get_height()
-    row_h = max(font_default.get_linesize() + 12, int(ctrl.height * 0.095))
-    radius = max(10, int(row_h * 0.36))
-    cx = ctrl.left + 20 + radius + 4
-    # Stick d'arcade
-    pygame.draw.ellipse(screen, (40, 44, 60), pygame.Rect(cx - radius - 2, y + row_h // 2, 2 * radius + 4, radius))
-    pygame.draw.line(screen, (160, 165, 180), (cx, y + row_h // 2 + 4), (cx, y + row_h // 2 - radius // 2), max(3, radius // 3))
-    pygame.draw.circle(screen, (220, 40, 50), (cx, y + row_h // 2 - radius // 2), max(5, int(radius * 0.7)))
-    utils.draw_text(screen, "Diriger le serpent", font_default, config.COLOR_TEXT_MENU, (cx + radius + 16, y + row_h // 2), "midleft")
-    y += row_h
-    for action, label in (("PRIMARY", "Tirer"), ("SECONDARY", "Dash (ruée)"), ("TERTIARY", "Bouclier"),
-                          ("PAUSE", "Pause"), ("BACK", "Pause / quitter")):
-        settings_screens.draw_arcade_button(screen, (cx, y + row_h // 2), radius, action)
-        utils.draw_text(screen, label, font_default, config.COLOR_TEXT_MENU, (cx + radius + 16, y + row_h // 2), "midleft")
-        y += row_h
-    y += 4
+    y = ctrl.top + 22 + font_medium.get_height()
+    kb_h = font_small.get_linesize() * (len(keyboard_controls.HELP) + 2) + 12
+    panel_rect = pygame.Rect(ctrl.left + 12, y, ctrl.width - 24, ctrl.bottom - 12 - kb_h - y)
+    panel.draw_control_panel(screen, panel_rect, 1, font_small, show_menu=False, title=False)
+    y = panel_rect.bottom + 8
     utils.draw_text(screen, "Au clavier :", font_small, config.COLOR_TEXT_HIGHLIGHT, (ctrl.left + 20, y), "topleft")
     y += font_small.get_linesize()
     for who, keys in keyboard_controls.HELP:
@@ -624,7 +652,12 @@ def run_how_to_play(events, dt, screen, game_state):
             except Exception:
                 pass
         utils.draw_text(screen, name, font_default, config.COLOR_TEXT_HIGHLIGHT, (x + icon + 12, yy + cell_h // 2), "bottomleft")
-        utils.draw_text(screen, desc, font_small, config.COLOR_TEXT_MENU, (x + icon + 12, yy + cell_h // 2 + 2), "topleft")
+        # Colonne étroite (écrans 4:3) : la description est resserrée au lieu de déborder sur sa voisine
+        txt = font_small.render(desc, True, config.COLOR_TEXT_MENU)
+        avail = col_w - icon - 18
+        if txt.get_width() > avail:
+            txt = pygame.transform.smoothscale(txt, (avail, txt.get_height()))
+        screen.blit(txt, (x + icon + 12, yy + cell_h // 2 + 2))
 
     if (now // 550) % 2 == 0:
         utils.draw_text_with_shadow(screen, "APPUIE SUR UN BOUTON", font_default, config.COLOR_TEXT_MENU,

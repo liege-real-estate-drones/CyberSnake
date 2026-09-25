@@ -205,6 +205,9 @@ class TestBackgrounds(unittest.TestCase):
             for size in ((1280, 720), (1024, 768), (1280, 1024), (800, 600)):
                 img = backgrounds.load(GAME_DIR, key, size)
                 self.assertIsNotNone(img, key)
+                if backgrounds.BACKGROUNDS[key][4]:  # Fond animé : plus grand, il dérive dans sa marge
+                    m = backgrounds.ANIM_MARGIN
+                    size = (size[0] + 2 * int(size[0] * m), size[1] + 2 * int(size[1] * m))
                 self.assertEqual(img.get_size(), size)
 
     def test_cover_never_shows_its_logo_band(self):
@@ -235,7 +238,7 @@ class TestBackgrounds(unittest.TestCase):
             surf = pygame.Surface((800, 600))
             settings_screens.run_background_screen([], 16, surf, gs)
             settings_screens.run_background_screen([right], 16, surf, gs)
-            self.assertEqual(mem.data['menu_background'], 'synthwave')
+            self.assertEqual(mem.data['menu_background'], 'cover_anim')
             self.assertIsNotNone(gs['menu_background_image'])
             ok = pygame.event.Event(pygame.JOYBUTTONDOWN, button=config.BUTTON_PRIMARY_ACTION, instance_id=0, joy=0)
             self.assertEqual(settings_screens.run_background_screen([ok], 16, surf, gs), config.OPTIONS)
