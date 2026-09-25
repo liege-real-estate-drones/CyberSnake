@@ -111,22 +111,22 @@ def _run_death_cam(dt, screen, game_state, real_now):
     now = game_clock.ticks()
     utils.particles[:] = [p for p in utils.particles if not p.update(dt)]
     shake_x, shake_y = utils.apply_shake_offset(now)
-    surf = game_state.get('_shake_surface')
-    if surf is None or surf.get_size() != screen.get_size():
-        surf = pygame.Surface(screen.get_size()).convert()
-        game_state['_shake_surface'] = surf
-    draw_game_elements_on_surface(surf, game_state, now)
-    screen.fill(config.COLOR_BACKGROUND)
-    screen.blit(surf, (shake_x, shake_y))
-    # Assombrissement progressif vers l'écran de fin
-    t = 1.0 - (until - real_now) / float(DEATH_CAM_MS)
-    veil = game_state.get('_death_veil')
-    if veil is None or veil.get_size() != screen.get_size():
-        veil = pygame.Surface(screen.get_size())
-        veil.fill((0, 0, 0))
-        game_state['_death_veil'] = veil
-    veil.set_alpha(int(170 * max(0.0, min(1.0, t))))
-    screen.blit(veil, (0, 0))
+    if shake_x or shake_y:
+        surf = game_state.get('_shake_surface')
+        if surf is None or surf.get_size() != screen.get_size():
+            surf = pygame.Surface(screen.get_size()).convert()
+            game_state['_shake_surface'] = surf
+        draw_game_elements_on_surface(surf, game_state, now)
+        screen.fill(config.COLOR_BACKGROUND)
+        screen.blit(surf, (shake_x, shake_y))
+    else:
+        draw_game_elements_on_surface(screen, game_state, now)  # Sans secousse : directement à l'écran
+    # Assombrissement progressif vers l'écran de fin. Multiplier les pixels donne le même rendu
+    # qu'un voile noir transparent, pour 3 fois moins de calcul (la borne tombait à 30 images/s ici).
+    t = max(0.0, min(1.0, 1.0 - (until - real_now) / float(DEATH_CAM_MS)))
+    k = 255 - int(170 * t)
+    if k < 255:
+        screen.fill((k, k, k), special_flags=pygame.BLEND_RGB_MULT)
     return config.PLAYING
 
 

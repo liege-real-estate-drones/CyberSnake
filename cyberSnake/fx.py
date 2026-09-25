@@ -315,7 +315,6 @@ def nest_sprite(size, damage_ratio):
 # Flash plein écran (dégâts, kill, mort)
 # ---------------------------------------------------------------------------
 _flash = {'color': (255, 255, 255), 'start': -10**9, 'duration': 1, 'alpha': 0}
-_flash_surface_cache = {}
 
 
 def trigger_flash(color=(255, 255, 255), duration=180, alpha=110, now=None):
@@ -332,14 +331,9 @@ def draw_flash(surface, now):
         a = int(_flash['alpha'] * (1 - age / _flash['duration']))
         if a <= 0:
             return
-        size = surface.get_size()
-        surf = _flash_surface_cache.get(size)
-        if surf is None:
-            _flash_surface_cache.clear()
-            surf = pygame.Surface(size)
-            _flash_surface_cache[size] = surf
-        surf.fill(_flash['color'])
-        surf.set_alpha(a)
-        surface.blit(surf, (0, 0))
+        # Ajout de la couleur (proportionnel à l'intensité) : même effet de flash qu'un voile
+        # transparent en plein écran, mais 3 à 4 fois moins cher (le voile faisait sauter des images)
+        k = a / 255.0
+        surface.fill(tuple(int(c * k) for c in _flash['color'][:3]), special_flags=pygame.BLEND_RGB_ADD)
     except Exception:
         pass
