@@ -1438,16 +1438,10 @@ def run_options(events, dt, screen, game_state):
         cursor_y += int(font_default.get_height() * 1.4)
 
         # Summary lines
+        # Résumé court : les autres valeurs sont déjà dans la liste de gauche et dans les aperçus
         summary_lines = [
-            f"Fenêtre: {preview_px_w}x{preview_px_h}px",
-            f"Grille: {preview_w}x{preview_h} cases  (case: {pending_grid_size}px)",
-            f"J1: {snake_style_display_p1} | {snake_color_display_p1}",
-            f"J2: {snake_style_display_p2} | {snake_color_display_p2}",
-            f"Murs: {wall_style_display}",
-            f"Classique: {classic_arena_display}",
-            f"Vitesse: {game_speed_display} | Particules: {particle_density_display}",
-            f"Secousse: {'Oui' if pending_screen_shake else 'Non'} | UI: {ui_scale_display} | HUD: {hud_mode_display} | FPS: {'Oui' if pending_show_fps else 'Non'}",
-            f"Musique: {music_volume_display} | Effets: {sound_volume_display}",
+            f"Fenêtre : {preview_px_w}x{preview_px_h}px  |  Grille : {preview_w}x{preview_h} cases de {pending_grid_size}px",
+            f"Musique : {music_volume_display}  |  Effets : {sound_volume_display}  |  HUD : {hud_mode_display}",
         ]
         for line in summary_lines:
             utils.draw_text_with_shadow(screen, line, font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (inner.left, cursor_y), "topleft")
@@ -1455,8 +1449,11 @@ def run_options(events, dt, screen, game_state):
 
         cursor_y += 6
 
-        # Map preview (grid + classic arena)
-        map_h = max(110, int(inner.height * 0.40))
+        # Map preview (grid + classic arena) puis serpents : la place restante est partagée
+        # (des hauteurs minimales fixes faisaient déborder les serpents du panneau en 720p)
+        remaining_h = max(150, inner.bottom - cursor_y)
+        snake_h = max(70, int((remaining_h - 10) * 0.45))
+        map_h = max(70, remaining_h - 10 - snake_h)
         map_rect = pygame.Rect(inner.left, cursor_y, inner.width, map_h)
         cursor_y = map_rect.bottom + 10
 
@@ -1541,7 +1538,7 @@ def run_options(events, dt, screen, game_state):
             pass
 
         # Snake preview (J1/J2)
-        snake_rect = pygame.Rect(inner.left, cursor_y, inner.width, max(120, inner.bottom - cursor_y))
+        snake_rect = pygame.Rect(inner.left, cursor_y, inner.width, snake_h)
         try:
             pygame.draw.rect(screen, (12, 12, 18), snake_rect, border_radius=10)
             pygame.draw.rect(screen, config.COLOR_GRID, snake_rect, 2, border_radius=10)
