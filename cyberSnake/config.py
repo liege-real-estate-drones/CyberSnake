@@ -742,11 +742,10 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.10.0'
+VERSION = '2.11.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Mines : en Facile et Normal, elles disparaissent au bout de 30 / 45 s",
-    "Hall of Fame : page « Défi du jour » (classement et jours passés)",
-    "Boss : une mine mobile ne peut plus l'achever à ta place",
-    "« Comment jouer » bien plus fluide",
+    "Voix d'annonceur : « 3, 2, 1, Fight ! », « Game over », « Winner »...",
+    "Nouveaux sons : bouclier, EMP, élimination, queue coupée",
+    "Options > Voix de l'annonceur : Oui / Non",
 ]
