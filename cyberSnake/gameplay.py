@@ -327,6 +327,40 @@ def _place_respawn(game_state, snake, opponent):
         snake.start_pos, snake.initial_direction = spot
 
 
+WAVE_CLEAR_MIN_MS = 4000     # Une vague ne peut pas être « nettoyée » dans ses 4 premières secondes
+WAVE_CLEAR_NEXT_MS = 3000    # La vague suivante arrive 3 s après le nettoyage
+WAVE_CLEAR_BONUS = 20        # Points par numéro de vague
+
+
+def _check_wave_cleared(game_state, current_time):
+    """Survie : plus d'ennemi, de nid, de boss ni de mine mobile -> prime et vague suivante avancée.
+
+    Retourne True si la vague vient d'être nettoyée (le départ de la vague suivante a été avancé).
+    """
+    wave = int(game_state.get('survival_wave', 0) or 0)
+    start = int(game_state.get('survival_wave_start_time', 0) or 0)
+    if wave <= 0 or game_state.get('wave_cleared') == wave or current_time - start < WAVE_CLEAR_MIN_MS:
+        return False
+    if any(e is not None and e.alive for e in game_state.get('active_enemies', [])):
+        return False
+    if any(n.is_active for n in game_state.get('nests', [])):
+        return False
+    if game_state.get('moving_mines') or (game_state.get('boss') is not None and game_state['boss'].alive):
+        return False
+    game_state['wave_cleared'] = wave
+    bonus = WAVE_CLEAR_BONUS * wave
+    for snake in (game_state.get('player_snake'), game_state.get('player2_snake') if game_state.get('coop') else None):
+        if snake is not None and snake.alive:
+            snake.add_score(bonus)
+    next_start = current_time - config.SURVIVAL_WAVE_DURATION + WAVE_CLEAR_NEXT_MS
+    game_state['survival_wave_start_time'] = min(start, next_start)
+    game_state['boss_banner_text'] = f"VAGUE {wave} NETTOYÉE !  +{bonus}"
+    game_state['boss_banner_until'] = current_time + 2200
+    utils.play_sound("objective_complete")
+    logging.info(f"Survie : vague {wave} nettoyée, prime {bonus}")
+    return True
+
+
 def _enter_pause(game_state):
     game_state['previous_state'] = config.PLAYING
     game_state['pause_opened_at'] = pygame.time.get_ticks()
@@ -911,6 +945,8 @@ def run_game(events, dt, screen, game_state):
                 game_state['objective_display_text'] = new_objective.get('display_text', '') if new_objective else ''
 
         elif current_game_mode == config.MODE_SURVIVAL:
+            if _check_wave_cleared(game_state, current_time):
+                survival_wave_start_time = game_state['survival_wave_start_time']
             if survival_wave > 0 and current_time >= survival_wave_start_time + config.SURVIVAL_WAVE_DURATION:
                 survival_wave += 1; game_state['survival_wave'] = survival_wave
                 game_state['survival_wave_start_time'] = current_time

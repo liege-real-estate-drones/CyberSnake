@@ -107,5 +107,36 @@ class TestHallOfFame(unittest.TestCase):
             utils.save_high_score = orig
 
 
+class TestSurvivalWaves(unittest.TestCase):
+    def test_cleared_wave_gives_bonus_and_brings_next_wave(self):
+        with FakeClock() as clock:
+            gs = new_game(config.MODE_SURVIVAL)
+            p = gs['player_snake']
+            p.invincible_timer = 10 ** 12
+            surf = pygame.Surface((800, 600))
+            for _ in range(10):
+                gameplay.run_game([], 16, surf, gs)
+                clock.tick()
+            self.assertIsNone(gs.get('wave_cleared'))  # Le nid de la vague 1 est encore là
+            for n in gs['nests']:
+                n.is_active = False
+            gs['active_enemies'] = []
+            clock.tick(gameplay.WAVE_CLEAR_MIN_MS)
+            score = p.score
+            gameplay.run_game([], 16, surf, gs)
+            self.assertEqual(gs.get('wave_cleared'), 1)
+            self.assertGreater(p.score, score)
+            self.assertIn("NETTOYÉE", gs['boss_banner_text'])
+            clock.tick(gameplay.WAVE_CLEAR_NEXT_MS + 50)
+            gameplay.run_game([], 16, surf, gs)
+            self.assertEqual(gs['survival_wave'], 2)
+
+    def test_wave_with_enemies_is_not_cleared(self):
+        with FakeClock() as clock:
+            gs = new_game(config.MODE_SURVIVAL)
+            clock.tick(gameplay.WAVE_CLEAR_MIN_MS + 10)
+            self.assertFalse(gameplay._check_wave_cleared(gs, game_clock.ticks()))
+
+
 if __name__ == "__main__":
     unittest.main()
