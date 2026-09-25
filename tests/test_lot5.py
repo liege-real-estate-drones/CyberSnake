@@ -445,6 +445,8 @@ class TestBoss(unittest.TestCase):
         boss.draw_boss_ui(pygame.Surface((800, 600)), gs, now, FONTS['default'], FONTS['medium'])
 
     def test_boss_fight_runs_and_boss_can_be_beaten(self):
+        import random as _random
+        _random.seed(5)  # Indépendant des tirages des autres tests
         with FakeClock() as clock:
             gs = new_game(config.MODE_SURVIVAL)
             p = gs['player_snake']
@@ -457,6 +459,8 @@ class TestBoss(unittest.TestCase):
                 p.alive = True
                 gameplay.run_game([], 16, surf, gs)
                 b = gs.get('boss')
+                if b is not None:
+                    b.armor = max(b.armor, 2)  # Observé sans mourir (il peut s'user contre les murs) : on le bat ensuite
                 if b is not None and b.attack:
                     attacks.add(b.attack)
                 if b is not None and b.last_attack:

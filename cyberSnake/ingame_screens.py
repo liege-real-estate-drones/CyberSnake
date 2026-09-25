@@ -12,6 +12,7 @@ import screens
 import pvp_rounds
 import rules
 import settings_screens
+import level
 import panel
 from gameplay import reset_game
 from render import draw_game_elements_on_surface
@@ -604,6 +605,8 @@ def run_game_over(events, dt, screen, game_state):
         else:
             info_main_label, info_main_value = f"SCORE ({p1_name})", p1_score
             sub_lines = []
+        if current_game_mode not in (config.MODE_PVP, config.MODE_CLASSIC) and not is_daily:
+            sub_lines = list(sub_lines) + [f"Niveau : {level.label()}"]  # Le score dépend du niveau choisi
         if ps is not None and current_game_mode != config.MODE_PVP:
             stats += [("Nourriture", getattr(ps, 'foods_eaten', 0)), ("Bonus", getattr(ps, 'powerups_collected', 0)),
                       ("Combo max", getattr(ps, 'max_combo', 0))]

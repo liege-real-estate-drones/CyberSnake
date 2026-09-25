@@ -167,3 +167,11 @@ if __name__ == "__main__":
     # Manche gagnée (PvP) : trois notes montantes
     write("round_win.wav", seq(*[tone(0.1, note(n), None, "square", 0.28, 0.003, 0.06) for n in (67, 71, 74)],
                                tone(0.4, note(79), None, "square", 0.3, 0.003, 0.3)))
+    # Frénésie (pluie de nourriture, points x2) : arpège montant rapide et scintillant, puis fin descendante
+    write("frenzy_start.wav", mix(seq(*[tone(0.06, note(n), None, "square", 0.24, 0.002, 0.04) for n in (72, 76, 79, 84, 88, 91)],
+                                      tone(0.35, note(96), None, "tri", 0.3, 0.002, 0.3, vibrato=0.03)),
+                                  noise(0.7, 0.08, 0.5, 0.6, seed=21)))
+    write("frenzy_end.wav", seq(*[tone(0.07, note(n), None, "tri", 0.28, 0.002, 0.05) for n in (84, 79, 76)],
+                                tone(0.25, note(72), None, "tri", 0.28, 0.002, 0.2)))
+    # Tir ennemi dans le corps : la queue est coupée (petit « clac » et chute)
+    write("tail_cut.wav", mix(noise(0.12, 0.35, 0.1, 0.7, seed=23), tone(0.18, 900, 200, "square", 0.2, 0.001, 0.12)))

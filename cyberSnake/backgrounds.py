@@ -6,8 +6,11 @@ Le joueur choisit son fond dans Options > Fond des menus (game_options.json : me
   (le jeu affiche son propre titre) et on centre le cadrage sur les deux serpents, quel que
   soit le format de l'écran (16:9, 4:3, 5:4...).
 - « Couverture animée » : la même image, qui dérive lentement, avec des étincelles.
-- Tes propres images : tout .jpg / .png déposé dans le dossier mes_fonds/ du jeu (sur la borne :
-  \\\\BATOCERA\\share\\roms\\ports\\cybersnake_data\\mes_fonds). La mise à jour n'y touche pas.
+- Sept illustrations fournies par le joueur (Duel néon, Double hélice, Grille rétro, Coucher de
+  soleil, Blizzard, Projecteurs, Désert peint), préparées par tools/prepare_backgrounds.py.
+- Tes propres images : tout .jpg / .png déposé dans le dossier mes_fonds/ du jeu (depuis un PC,
+  sur la borne : \\\\BATOCERA\\share\\roms\\pygame\\cyberSnake\\mes_fonds, voir share_path()).
+  La mise à jour n'y touche pas.
 - « Aléatoire » : un fond différent à chaque lancement.
 
 (Les fonds néon générés par programme du lot 6 ont été retirés : ils ne plaisaient pas.)
@@ -23,6 +26,14 @@ import pygame
 BACKGROUNDS = {
     "cover": ("Couverture", "cover.jpg", (0.0, 0.0, 1.0, 0.85), (0.5, 0.62), False),
     "cover_anim": ("Couverture animée", "cover.jpg", (0.0, 0.0, 1.0, 0.85), (0.5, 0.62), True),
+    # Illustrations fournies par le joueur (tools/prepare_backgrounds.py : logo retiré, 1920 px)
+    "duel_neon": ("Duel néon", "backgrounds/duel_neon.jpg", (0.0, 0.0, 1.0, 1.0), (0.5, 0.45), False),
+    "double_helice": ("Double hélice", "backgrounds/double_helice.jpg", (0.0, 0.0, 1.0, 1.0), (0.5, 0.45), False),
+    "grille_retro": ("Grille rétro", "backgrounds/grille_retro.jpg", (0.0, 0.0, 1.0, 1.0), (0.5, 0.5), False),
+    "coucher_de_soleil": ("Coucher de soleil", "backgrounds/coucher_de_soleil.jpg", (0.0, 0.0, 1.0, 1.0), (0.5, 0.7), False),
+    "blizzard": ("Blizzard", "backgrounds/blizzard.jpg", (0.0, 0.0, 1.0, 1.0), (0.5, 0.5), False),
+    "projecteurs": ("Projecteurs", "backgrounds/projecteurs.jpg", (0.0, 0.0, 1.0, 1.0), (0.5, 0.6), False),
+    "desert_peint": ("Désert peint", "backgrounds/desert_peint.jpg", (0.0, 0.0, 1.0, 1.0), (0.5, 0.5), False),
 }
 DEFAULT = "cover"
 RANDOM = "random"
@@ -45,6 +56,14 @@ def user_dir(base_path=None, create=False):
         except OSError:
             logging.debug("Dossier mes_fonds impossible à créer", exc_info=True)
     return path
+
+
+def share_path(base_path=None):
+    """Chemin du dossier mes_fonds tel qu'on l'ouvre depuis un PC (partage réseau de la borne Batocera)."""
+    path = user_dir(base_path).replace("\\", "/")
+    if path.startswith("/userdata/"):
+        return r"\\BATOCERA\share" + "\\" + path[len("/userdata/"):].replace("/", "\\")
+    return user_dir(base_path)
 
 
 def user_images(base_path=None):

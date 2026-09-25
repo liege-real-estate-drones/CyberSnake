@@ -9,6 +9,7 @@ import game_clock
 import utils
 import fx
 import boss as boss_mod
+import frenzy
 import walls as walls_mod
 import arenas
 import hud
@@ -332,6 +333,7 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
         fx.draw_flash(target_surface, current_time)
         # Barre de vie du boss (Survie) + bannières d'annonce (boss, défi du jour)
         boss_mod.draw_boss_ui(target_surface, game_state, current_time, font_default, font_medium)
+        frenzy.draw(target_surface, game_state, current_time, font_default)
     except Exception:
         pass
 

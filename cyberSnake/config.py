@@ -638,6 +638,7 @@ SOUND_PATHS = {
     "skill_ready": "skill_ping.wav", "dash_sound": "dash.wav",
     "boss_charge": "boss_charge.wav", "boss_phase": "boss_phase.wav", "boss_fan": "boss_fan.wav",
     "round_win": "round_win.wav",
+    "frenzy_start": "frenzy_start.wav", "frenzy_end": "frenzy_end.wav", "tail_cut": "tail_cut.wav",
     # Sons synthétiques (tools/generate_sounds.py)
     "boss_spawn": "boss_spawn.wav", "boss_defeat": "boss_defeat.wav", "kill": "kill.wav",
     "unlock": "unlock.wav", "game_over_sfx": "game_over.wav", "new_record": "new_record.wav",
@@ -736,13 +737,12 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.6.0'
+VERSION = '2.7.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Niveau Facile / Normal / Difficile dans le menu principal",
-    "Normal : 1 armure au départ, 1 s de protection après un choc",
-    "Les mines s'arment en clignotant, jamais juste devant toi",
-    "Tir ennemi dans le corps : 2 anneaux en moins, pas la mort",
-    "Rejouer d'un appui : curseur sur OK, Player valide le nom",
-    "Boutons Coin / Player dessinés comme sur la borne",
+    "7 nouveaux fonds des menus (Options > Fond des menus)",
+    "Frénésie : toutes les minutes, 8 s de pluie de nourriture et points x2",
+    "Pendant la frénésie, aucune nouvelle mine : une respiration",
+    "Nouveaux sons : frénésie, queue coupée par un tir",
+    "Écran de fin : le niveau joué est affiché",
 ]

@@ -217,6 +217,6 @@ def run_background_screen(events, dt, screen, game_state):
                                 config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (box.centerx, box.top + 12), "midtop")
     draw_hint(screen, hint("Gauche / Droite : changer", f"{button_name('PRIMARY')} ou {button_name('SECONDARY')} : terminer"),
               font_small, (170, 200, 230), (box.centerx, box.bottom - 12), "midbottom")
-    utils.draw_text(screen, "Tes images : dépose des .jpg / .png dans \\\\BATOCERA\\share\\roms\\ports\\cybersnake_data\\mes_fonds",
+    utils.draw_text(screen, f"Tes images : dépose des .jpg / .png dans {backgrounds.share_path(base_path)}",
                     font_small, (140, 160, 190), (box.centerx, box.bottom - 16 - font_small.get_linesize()), "midbottom")
     return config.BACKGROUND_SCREEN
