@@ -89,10 +89,32 @@ def record_boss_defeat():
     return new
 
 
-def record_game(mode, score, kills=0, wave=0, pvp_won=False):
+def _add_stats(d, mode_key, duration_ms, foods, kills, best_combo, wave):
+    """Statistiques de carrière (page « Statistiques » du Hall of Fame)."""
+    st = d.setdefault("stats", {})
+    st["games"] = int(st.get("games", 0)) + 1
+    by_mode = st.setdefault("games_by_mode", {})
+    if mode_key:
+        by_mode[mode_key] = int(by_mode.get(mode_key, 0)) + 1
+    st["play_ms"] = int(st.get("play_ms", 0)) + max(0, int(duration_ms or 0))
+    st["foods"] = int(st.get("foods", 0)) + max(0, int(foods or 0))
+    st["kills"] = int(st.get("kills", 0)) + max(0, int(kills or 0))
+    st["best_combo"] = max(int(st.get("best_combo", 0)), int(best_combo or 0))
+    st["best_wave"] = max(int(st.get("best_wave", 0)), int(wave or 0))
+
+
+def stats():
+    return dict(_data().get("stats") or {})
+
+
+def record_game(mode, score, kills=0, wave=0, pvp_won=False, mode_key=None, duration_ms=0, foods=0, best_combo=0):
     """À appeler une fois par fin de partie. Retourne les couleurs débloquées."""
     new = []
     d = _data()
+    try:
+        _add_stats(d, mode_key, duration_ms, foods, kills, best_combo, wave if mode == config.MODE_SURVIVAL else 0)
+    except Exception:
+        logging.debug("Statistiques non mises à jour", exc_info=True)
     try:
         d["career_points"] = int(d.get("career_points", 0)) + max(0, int(score))
     except Exception:

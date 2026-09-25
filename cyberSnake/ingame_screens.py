@@ -445,8 +445,14 @@ def run_game_over(events, dt, screen, game_state):
         try:
             pvp_won = current_game_mode == config.MODE_PVP and "Gagne" in str(winner_text)
             career_score = max(p1_score, p2_score) if current_game_mode == config.MODE_PVP else p1_score
-            unlocked_now = progress.record_game(current_game_mode, career_score, kills=p1_kills,
-                                                wave=survival_wave, pvp_won=pvp_won)
+            if 'game_end_time' not in game_state:
+                game_state['game_end_time'] = game_clock.ticks()  # Même horloge que game_start_time
+            played_ms = game_state['game_end_time'] - int(game_state.get('game_start_time', game_state['game_end_time']) or 0)
+            players = [s for s in (player_snake, player2_snake) if s]
+            unlocked_now = progress.record_game(current_game_mode, career_score, kills=sum(s.kills for s in players),
+                                                wave=survival_wave, pvp_won=pvp_won, mode_key=mode_key, duration_ms=played_ms,
+                                                foods=sum(getattr(s, 'foods_eaten', 0) for s in players),
+                                                best_combo=max([getattr(s, 'max_combo', 0) for s in players] + [0]))
             game_state['new_unlocks'] = list(game_state.get('new_unlocks') or []) + list(unlocked_now)
             if is_daily:
                 game_state['daily_rank'] = progress.record_daily(p1_name, p1_score)

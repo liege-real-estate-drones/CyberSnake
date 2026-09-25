@@ -110,5 +110,40 @@ class TestCheaperScreens(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
 
+class TestCareerStats(unittest.TestCase):
+    """Page « Statistiques » du Hall of Fame : parties, temps de jeu, nourriture, combos..."""
+
+    def setUp(self):
+        import progress
+        import tempfile
+        self.dir = tempfile.mkdtemp(prefix="cybersnake_stats_")
+        self._old = (progress._base_path, progress._cache)
+        progress.load(self.dir)
+
+    def tearDown(self):
+        import progress
+        import shutil
+        progress._base_path, progress._cache = self._old
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_games_are_accumulated(self):
+        import progress
+        progress.record_game(config.MODE_SOLO, 120, kills=2, mode_key="solo", duration_ms=65000, foods=12, best_combo=4)
+        progress.record_game(config.MODE_SURVIVAL, 7, wave=7, mode_key="survie", duration_ms=30000, foods=3, best_combo=6)
+        st = progress.stats()
+        self.assertEqual((st["games"], st["play_ms"], st["foods"], st["kills"]), (2, 95000, 15, 2))
+        self.assertEqual((st["best_combo"], st["best_wave"]), (6, 7))
+        self.assertEqual(st["games_by_mode"], {"solo": 1, "survie": 1})
+
+    def test_hall_of_fame_has_three_pages(self):
+        import screens
+        surf = pygame.Surface((1280, 720))
+        gs = _state()
+        right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
+        for expected in (1, 2, 0):
+            screens.run_hall_of_fame([right], 16, surf, gs)
+            self.assertEqual(gs['_hof_page'], expected)
+
+
 if __name__ == "__main__":
     unittest.main()
