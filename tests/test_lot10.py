@@ -16,7 +16,6 @@ import config  # noqa: E402
 import panel  # noqa: E402
 import level  # noqa: E402
 import gameplay  # noqa: E402
-import game_clock  # noqa: E402
 import game_objects  # noqa: E402
 
 
@@ -82,7 +81,7 @@ class TestLevelNormal(_Level):
         gs = new_game(config.MODE_SOLO)
         p = gs['player_snake']
         p.invincible_timer = 0
-        now = game_clock.ticks()
+        now = 50000  # Heure explicite : l'horloge de jeu peut être négative après d'autres tests
         self.assertTrue(p.handle_damage(now))  # L'armure de départ encaisse
         self.assertGreaterEqual(p.invincible_timer - now, 1000)
         self.assertTrue(p.handle_damage(now + 500))  # Encore protégé : pas de mort
