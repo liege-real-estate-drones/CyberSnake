@@ -12,6 +12,7 @@ import arenas
 from gameplay import reset_game
 import walls as walls_mod
 import pvp_rounds
+import settings_screens
 from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
@@ -63,6 +64,39 @@ VK_PRESS_EFFECT_DURATION = 200  # Durée de l'effet de pression en ms
 VK_MOVE_EFFECT_DURATION = 150   # Durée de l'effet de déplacement en ms
 
 
+SELECT_ALL_KEY = '_name_select_all'
+
+
+def _edit_name(game_state, key, current, char=None):
+    """Modifie le nom en cours de saisie (char None = effacer).
+
+    Le nom proposé (dernier joueur, « Joueur 1 »...) est « tout sélectionné » : le premier
+    caractère saisi le remplace et le premier effacement le vide, au lieu d'obliger à
+    l'effacer lettre par lettre au joystick.
+    """
+    if game_state.get(SELECT_ALL_KEY) == key:
+        game_state.pop(SELECT_ALL_KEY, None)
+        current = ""
+        if char is None:
+            return ""
+    if char is None:
+        return current[:-1]
+    return (current + char)[:15]
+
+
+def _draw_name(screen, game_state, key, text, cursor_char, font, y):
+    """Nom en cours de saisie ; surligné tant qu'il est « tout sélectionné »."""
+    center = (config.SCREEN_WIDTH / 2, y)
+    if game_state.get(SELECT_ALL_KEY) == key and text:
+        w, h = font.size(text)
+        hl = pygame.Rect(0, 0, w + 16, h + 4)
+        hl.center = center
+        pygame.draw.rect(screen, (40, 90, 140), hl, border_radius=6)
+        utils.draw_text_with_shadow(screen, text, font, config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW, center, "center")
+        return
+    utils.draw_text_with_shadow(screen, text + cursor_char, font, config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW, center, "center")
+
+
 def run_name_entry_solo(events, dt, screen, game_state):
     """Gère l'écran de saisie du nom pour les modes Solo, Vs AI, Survie avec support manette."""
     player1_name_input = game_state.get('player1_name_input', config.DEFAULT_NAME_P1)
@@ -95,6 +129,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
         # Reset le nom SEULEMENT S'IL N'EXISTE PAS. Sinon, on le garde.
         if 'player1_name_input' not in game_state:
             game_state['player1_name_input'] = ""
+        game_state[SELECT_ALL_KEY] = 'player1_name_input'  # Le nom proposé sera remplacé d'un coup
         game_state['input_active_solo'] = True 
         input_active = True # Mettre à jour la variable locale aussi
         logging.debug("run_name_entry_solo: First entry, setting input_active_solo to True.")
@@ -211,14 +246,14 @@ def run_name_entry_solo(events, dt, screen, game_state):
 
                     if selected_char == "<-":  # Effacer
                         if player1_name_input:
-                            player1_name_input = player1_name_input[:-1]
+                            player1_name_input = _edit_name(game_state, 'player1_name_input', player1_name_input)
                             game_state['player1_name_input'] = player1_name_input
                             utils.play_sound("menu_back")
                         continue
 
                     # Ajout d'un caractère
-                    if len(player1_name_input) < 15:
-                        player1_name_input += selected_char
+                    if len(player1_name_input) < 15 or game_state.get(SELECT_ALL_KEY) == 'player1_name_input':
+                        player1_name_input = _edit_name(game_state, 'player1_name_input', player1_name_input, selected_char)
                         game_state['player1_name_input'] = player1_name_input
                         utils.play_sound("name_input_char")
 
@@ -234,7 +269,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 return next_state
             elif key == pygame.K_BACKSPACE:
                 if player1_name_input: # S'assurer qu'il y a quelque chose à effacer
-                    player1_name_input = player1_name_input[:-1]
+                    player1_name_input = _edit_name(game_state, 'player1_name_input', player1_name_input)
                     game_state['player1_name_input'] = player1_name_input
                     utils.play_sound("menu_back")
             elif key == pygame.K_ESCAPE:
@@ -242,8 +277,8 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 utils.play_sound("menu_back")
                 return next_state
             elif game_state.get('input_active_solo', False) and hasattr(event, 'unicode') and event.unicode.isprintable():
-                if len(player1_name_input) < 15:
-                    player1_name_input += event.unicode
+                if len(player1_name_input) < 15 or game_state.get(SELECT_ALL_KEY) == 'player1_name_input':
+                    player1_name_input = _edit_name(game_state, 'player1_name_input', player1_name_input, event.unicode)
                     game_state['player1_name_input'] = player1_name_input
                     utils.play_sound("name_input_char")
 
@@ -255,25 +290,12 @@ def run_name_entry_solo(events, dt, screen, game_state):
         overlay.fill((0, 0, 0, 190)) # Overlay plus sombre
         screen.blit(overlay, (0, 0))
 
-        # Message d'attente pendant l'initialisation
-        if init_period:
-            init_text = "Préparation clavier virtuel..."
-            utils.draw_text_with_shadow(screen, init_text, font_medium, 
-                                      config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW,
-                                      (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.2), "center")
-            
-            # Temps restant
-            remaining = max(0, (entry_delay - (current_time - game_state.get('name_entry_start_time_solo', 0))) // 1000 + 1)
-            countdown_text = f"({remaining}s)"
-            utils.draw_text(screen, countdown_text, font_medium, config.COLOR_TEXT_MENU,
-                         (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.28), "center")
 
         # Affichage du nom
         utils.draw_text_with_shadow(screen, prompt, font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, 
                                   (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.25), "center")
-        utils.draw_text_with_shadow(screen, game_state['player1_name_input'] + cursor_char, font_large, 
-                                  config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW, 
-                                  (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.35), "center")
+        _draw_name(screen, game_state, 'player1_name_input', game_state['player1_name_input'], cursor_char, font_large,
+                   config.SCREEN_HEIGHT * 0.35)
         
         # Mettre à jour l'animation de la touche sélectionnée
         if vk_row != game_state.get('last_vk_row', vk_row) or vk_col != game_state.get('last_vk_col', vk_col):
@@ -374,7 +396,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                                           (key_x + key_width/2, key_y + key_height/2), "center")
         
         # Instructions
-        utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour", 
+        utils.draw_text(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", "OK : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
         logging.error(f"Erreur lors du dessin de run_name_entry_solo: {e}")
@@ -920,7 +942,7 @@ def run_map_selection(events, dt, screen, game_state):
         # Instructions en bas (modifiées pour inclure 'F' pour Favori)
         instruction_y = config.SCREEN_HEIGHT * 0.88
         line_gap = max(18, int(font_small.get_linesize() * 1.05))
-        instruction_text_1 = "Haut/Bas ou Stick: Choisir | Entrée ou A: Confirmer | Échap ou B: Retour"
+        instruction_text_1 = settings_screens.hint("Stick : choisir", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour")
         instruction_text_2 = ""
         if _map_keys_display[current_selection_index] == "Aléatoire":
             instruction_text_2 = "G/D: Nouvelle | F: Sauver en favori"
@@ -1527,7 +1549,7 @@ def run_classic_setup(events, dt, screen, game_state):
         except Exception:
             pass
 
-        hint = "Haut/Bas: choisir | Gauche/Droite: changer | Entrée/A: valider | Echap/B: retour"
+        hint = settings_screens.hint("Haut / Bas : choisir", "Gauche / Droite : changer", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour")
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.92), "center")
         utils.draw_text(screen, "Astuce: 'Démarrer' = défaut si tu n'as rien changé", font_small, config.COLOR_TEXT, (sw / 2, sh * 0.955), "center")
     except Exception:
@@ -1677,7 +1699,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
         if desc:
             utils.draw_text(screen, desc, font_default, config.COLOR_TEXT, (panel_rect.centerx, panel_rect.centery + 10), "center")
 
-        hint = "Gauche/Droite: changer | Entrée/A: confirmer | Echap/B: retour"
+        hint = settings_screens.hint("Gauche / Droite : changer", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour")
         hint2 = "Astuce: Options = difficulté par défaut"
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT_MENU, (sw / 2, sh * 0.90), "center")
         utils.draw_text(screen, hint2, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
@@ -1930,7 +1952,7 @@ def run_pvp_setup(events, dt, screen, game_state):
             utils.draw_text_with_shadow(screen, label_text, font_medium, label_color, config.COLOR_UI_SHADOW, (label_x, item_y), "midright")
             utils.draw_text_with_shadow(screen, value_text, font_medium, value_color, config.COLOR_UI_SHADOW, (value_x, item_y), "midleft")
         instruction_y = config.SCREEN_HEIGHT * 0.90
-        utils.draw_text(screen, "HAUT/BAS: Sélection | GAUCHE/DROITE: Modifier | ENTRÉE: Noms Joueurs | ECHAP: Retour Carte", font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
+        utils.draw_text(screen, settings_screens.hint("Haut / Bas : choisir", "Gauche / Droite : changer", f"{settings_screens.button_name('PRIMARY')} : noms des joueurs", f"{settings_screens.button_name('SECONDARY')} : carte"), font_small,config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin de run_pvp_setup: {e}", exc_info=True)
         logging.debug("Exiting run_pvp_setup (Exception in draw), next_state: config.MAP_SELECTION") # NOUVEAU LOG
@@ -1947,6 +1969,9 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     player1_name_input = game_state.get('player1_name_input', config.DEFAULT_NAME_P1)
     player2_name_input = game_state.get('player2_name_input', config.DEFAULT_NAME_P2)
     stage = game_state.get('pvp_name_entry_stage', 1) # 1 pour J1, 2 pour J2
+    if 'name_entry_start_time_pvp' not in game_state or game_state.get('_name_select_stage') != stage:
+        game_state['_name_select_stage'] = stage
+        game_state[SELECT_ALL_KEY] = f'player{stage}_name_input'  # Le nom proposé sera remplacé d'un coup
 
     p1_id, p2_id = get_joystick_ids(game_state)
     # Joysticks autorisés pour cette étape (J1 puis J2). On garde J1 en secours si J2 est absent.
@@ -2132,7 +2157,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                 # Récupérer la valeur la plus à jour de game_state avant de modifier
                 temp_current_input = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
                 if temp_current_input:
-                    new_value = temp_current_input[:-1]
+                    new_value = _edit_name(game_state, f'player{stage}_name_input', temp_current_input)
                     if stage == 1:
                         game_state['player1_name_input'] = new_value
                         player1_name_input = new_value  # Mettre à jour la copie locale
@@ -2148,8 +2173,8 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                     temp_current_input = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
                     logging.debug(f"PVP Char Input: temp_current_input = '{temp_current_input}'")
 
-                    if len(temp_current_input) < 15:
-                        new_value = temp_current_input + selected_char
+                    if len(temp_current_input) < 15 or game_state.get(SELECT_ALL_KEY) == f'player{stage}_name_input':
+                        new_value = _edit_name(game_state, f'player{stage}_name_input', temp_current_input, selected_char)
                         logging.debug(f"PVP Char Input: new_value = '{new_value}'")
                         if stage == 1:
                             game_state['player1_name_input'] = new_value
@@ -2213,14 +2238,14 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                          return next_state # Important de retourner ici
 
                 elif key == pygame.K_BACKSPACE:
-                    new_value = current_input_value[:-1]
+                    new_value = _edit_name(game_state, f'player{stage}_name_input', current_input_value)
                     if stage == 1: game_state['player1_name_input'] = new_value
                     else: game_state['player2_name_input'] = new_value
                     utils.play_sound("menu_back")
                 elif game_state.get('input_active_pvp', False) and hasattr(event, 'unicode') and event.unicode.isprintable():
                  # current_input_value est ici la valeur avant cette modification
-                 if len(current_input_value) < 15:
-                    new_value = current_input_value + event.unicode
+                 if len(current_input_value) < 15 or game_state.get(SELECT_ALL_KEY) == f'player{stage}_name_input':
+                    new_value = _edit_name(game_state, f'player{stage}_name_input', current_input_value, event.unicode)
                     if stage == 1:
                         game_state['player1_name_input'] = new_value
                         player1_name_input = new_value # Mettre à jour la copie locale
@@ -2235,45 +2260,13 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 190)); screen.blit(overlay, (0, 0))
 
-        # Message d'attente pendant l'initialisation
-        if init_period:
-            init_text = f"Préparation clavier virtuel ({stage}/2)..."
-            utils.draw_text_with_shadow(screen, init_text, font_medium, 
-                                      config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW,
-                                      (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.2), "center")
-            
-            # Temps restant avec barre de progression
-            remaining = max(0, (entry_delay - (current_time - game_state.get('name_entry_start_time_pvp', 0))) / 1000)
-            progress = 1.0 - (remaining / (entry_delay / 1000))
-            bar_width = 200
-            bar_height = 10
-            bar_x = (config.SCREEN_WIDTH - bar_width) // 2
-            bar_y = config.SCREEN_HEIGHT * 0.28
-            
-            # Fond de la barre
-            pygame.draw.rect(screen, config.COLOR_UI_SHADOW, 
-                           (bar_x, bar_y, bar_width, bar_height), 
-                           border_radius=bar_height//2)
-            
-            # Barre de progression
-            if progress > 0:
-                progress_width = int(bar_width * progress)
-                pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT,
-                               (bar_x, bar_y, progress_width, bar_height),
-                               border_radius=bar_height//2)
-            
-            # Temps restant en texte
-            countdown_text = f"{remaining:.1f}s"
-            utils.draw_text(screen, countdown_text, font_medium, config.COLOR_TEXT_MENU,
-                         (config.SCREEN_WIDTH / 2, bar_y + bar_height + 15), "center")
         
         # Affichage du titre et du nom
         utils.draw_text_with_shadow(screen, current_prompt, font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, 
                                   (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.25), "center")
         input_display_value = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
-        utils.draw_text_with_shadow(screen, input_display_value + cursor_char, font_large, 
-                                  config.COLOR_INPUT_TEXT, config.COLOR_UI_SHADOW, 
-                                  (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.35), "center")
+        _draw_name(screen, game_state, f'player{stage}_name_input', input_display_value, cursor_char, font_large,
+                   config.SCREEN_HEIGHT * 0.35)
         
         # Affichage du nom du J1 si on est à l'étape 2
         if stage == 2:
@@ -2379,7 +2372,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                                          (key_x + key_width/2, key_y + key_height/2), "center")
         
         # Instructions
-        utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour", 
+        utils.draw_text(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", "OK : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
         logging.error(f"Erreur lors du dessin de run_name_entry_pvp: {e}")

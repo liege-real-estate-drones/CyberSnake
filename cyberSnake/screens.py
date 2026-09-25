@@ -298,7 +298,7 @@ def run_hall_of_fame(events, dt, screen, game_state):
             if y > rect.bottom - row_h:
                 break
 
-    hint = "APPUIE SUR UN BOUTON" if attract else "Bouton / Échap : retour au menu"
+    hint = "APPUIE SUR UN BOUTON" if attract else "Un bouton : retour au menu"
     if not attract or (now // 550) % 2 == 0:
         utils.draw_text_with_shadow(screen, hint, font_default, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW,
                                     (sw // 2, int(sh * 0.95)), "center")

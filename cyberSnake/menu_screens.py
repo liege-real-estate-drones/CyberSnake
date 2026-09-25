@@ -366,7 +366,7 @@ def run_menu(events, dt, screen, game_state):
             version_text = f"Version: {getattr(config, 'VERSION', 'Inconnue')}"
             utils.draw_text_with_shadow(screen, version_text, font_large, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (center_x, center_y), "center")
 
-            utils.draw_text_with_shadow(screen, "Appuyez sur Bouton 1 pour fermer", font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (center_x, center_y + 80), "center")
+            utils.draw_text_with_shadow(screen, f"Appuie sur le {settings_screens.button_name('PRIMARY').lower()} pour fermer", font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (center_x, center_y + 80), "center")
 
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin du menu: {e}")
@@ -1757,11 +1757,11 @@ def run_options(events, dt, screen, game_state):
         except Exception:
             pass
 
-        hint = "Haut/Bas: naviguer | Gauche/Droite: changer | Entrée/A: confirmer | Echap/B: retour"
+        hint = settings_screens.hint("Stick : naviguer", "Gauche / Droite : changer", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour")
         if selection_index == IDX_RESET:
-            hint = "Entrée/A: réinitialiser (x2) | Echap/B: retour"
+            hint = settings_screens.hint(f"{settings_screens.button_name('PRIMARY')} deux fois : réinitialiser", f"{settings_screens.button_name('SECONDARY')} : retour")
             if reset_armed:
-                hint = "Entrée/A: CONFIRMER réinitialisation | Echap/B: retour"
+                hint = settings_screens.hint(f"{settings_screens.button_name('PRIMARY')} : CONFIRMER la réinitialisation", f"{settings_screens.button_name('SECONDARY')} : retour")
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception as e:
         logging.error(f"Erreur dessin run_options: {e}")
@@ -2213,7 +2213,7 @@ def run_controls_remap(events, dt, screen, game_state):
         if listening_for:
             help_1 = "Mode mapping: bouge un axe / appuie un bouton (Échap pour annuler)"
         else:
-            help_1 = "Haut/Bas: naviguer | Entrée/A: modifier | Gauche/Droite: ajuster | Échap/B: retour"
+            help_1 = settings_screens.hint("Stick : naviguer", f"{settings_screens.button_name('PRIMARY')} : modifier", "Gauche / Droite : ajuster", f"{settings_screens.button_name('SECONDARY')} : retour")
         help_2 = "Sauvegarder applique immédiatement (menus + jeu)."
         utils.draw_text(screen, help_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y), "center")
         utils.draw_text(screen, help_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y + line_gap), "center")

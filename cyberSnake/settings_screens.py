@@ -51,6 +51,16 @@ def button_color_key(action):
     return key if key in BUTTON_COLORS else DEFAULT_BUTTON_COLORS.get(action, "blanc")
 
 
+def button_name(action):
+    """« Bouton rouge » : nom d'un bouton de la borne d'après sa couleur (Options > Couleurs des boutons)."""
+    return "Bouton " + BUTTON_COLORS[button_color_key(action)][0].lower()
+
+
+def hint(*parts):
+    """Légende d'écran : parties séparées par des barres. Les boutons y sont nommés par leur couleur."""
+    return "  |  ".join(parts)
+
+
 def draw_arcade_button(surface, center, radius, action, label=None, font=None):
     """Bouton d'arcade vu de dessus, à la couleur choisie pour cette action."""
     color = BUTTON_COLORS[button_color_key(action)][1]
