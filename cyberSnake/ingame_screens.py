@@ -26,9 +26,8 @@ def run_pause(events, dt, screen, game_state):
     """Gère l'écran de pause (menu)."""
     base_path = game_state.get('base_path', '')
     p1_id, p2_id = get_joystick_ids(game_state)
-    # À deux (PvP, Survie à deux), les deux joueurs pilotent la pause : J2 peut l'avoir ouverte
-    two_players = game_state.get('current_game_mode') == config.MODE_PVP or bool(game_state.get('coop'))
-    pause_ids = {p1_id, p2_id} if two_players else {p1_id}
+    # Les deux sticks pilotent la pause : à deux, J2 peut l'avoir ouverte ; seul, on peut jouer du côté J2
+    pause_ids = {p1_id, p2_id}
     font_small = game_state.get('font_small')
     font_medium = game_state.get('font_medium')
     font_large = game_state.get('font_large')

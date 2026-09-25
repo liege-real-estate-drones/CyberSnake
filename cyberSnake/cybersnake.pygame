@@ -484,6 +484,11 @@ def main():
     keyboard_echo_filter = menu_input.KeyboardEchoFilter()
     raw_axis_states = {config.PLAYING, config.DEMO, config.CONTROLS, config.STICK_WIZARD}
     text_entry_states = {config.NAME_ENTRY_SOLO, config.NAME_ENTRY_PVP}  # Saisie des noms au clavier
+    # Menus où le stick et les boutons de J2 font la même chose que ceux de J1 (joueur seul côté rouge).
+    # Pas la saisie des noms en PvP (chacun le sien), ni les écrans qui distinguent les deux joueurs.
+    p2_as_p1_states = {config.MENU, config.OPTIONS, config.NAME_ENTRY_SOLO, config.MAP_SELECTION, config.VS_AI_SETUP,
+                       config.CLASSIC_SETUP, config.PVP_SETUP, config.GAME_OVER, config.HALL_OF_FAME, config.UPDATE,
+                       config.RULES, config.BACKGROUND_SCREEN}
 
     # --- Boucle Principale ---
     running = True
@@ -561,6 +566,8 @@ def main():
             state_events = events
         else:
             state_events = menu_translator.process(events, now_ticks)
+            if game_state.get('current_state', config.MENU) in p2_as_p1_states:
+                state_events = menu_input.p2_as_p1(state_events, *ui_common.get_joystick_ids(game_state))
 
         # Horloge de la partie : elle ne tourne que pendant le jeu (la pause fige les minuteurs)
         game_clock.set_running(game_state.get('current_state') in (config.PLAYING, config.DEMO)
@@ -570,19 +577,8 @@ def main():
         fade_ms = int(getattr(config, "TRANSITION_FADE_MS", 260))
         fade_ms = max(60, fade_ms)
 
-        def _get_fade_overlay():
-            overlay = game_state.get('_transition_fade_overlay')
-            try:
-                if overlay is None or overlay.get_size() != screen.get_size():
-                    overlay = pygame.Surface(screen.get_size())
-                    overlay.fill((0, 0, 0))
-                    game_state['_transition_fade_overlay'] = overlay
-            except Exception:
-                overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
-                overlay.fill((0, 0, 0))
-                game_state['_transition_fade_overlay'] = overlay
-            return overlay
-
+        # Fondu au noir : pixels assombris (ui_common.darken), sans voile transparent plein écran
+        # qui coûtait ~15 ms par image en 1908x1080 (baisses d'images à chaque changement d'écran)
         transition_phase = game_state.get('_transition_phase')
         transition_alpha = float(game_state.get('_transition_alpha', 0.0) or 0.0)
         transition_from_surface = game_state.get('_transition_from_surface')
@@ -596,9 +592,7 @@ def main():
                 screen.fill((0, 0, 0))
 
             transition_alpha = min(255.0, transition_alpha + (255.0 * float(dt) / float(fade_ms)))
-            overlay = _get_fade_overlay()
-            overlay.set_alpha(int(transition_alpha))
-            screen.blit(overlay, (0, 0))
+            ui_common.darken(screen, transition_alpha)
             game_state['_transition_alpha'] = transition_alpha
 
             if transition_alpha >= 255.0:
@@ -623,9 +617,7 @@ def main():
             # Permet à un état (ex: Options) de recréer la surface écran
             screen = game_state.get('screen', screen)
 
-            overlay = _get_fade_overlay()
-            overlay.set_alpha(int(max(0.0, min(255.0, transition_alpha))))
-            screen.blit(overlay, (0, 0))
+            ui_common.darken(screen, transition_alpha)
 
             transition_alpha = max(0.0, transition_alpha - (255.0 * float(dt) / float(fade_ms)))
             game_state['_transition_alpha'] = transition_alpha

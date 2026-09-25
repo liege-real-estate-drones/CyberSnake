@@ -124,5 +124,59 @@ class TestWhatsNewPopup(unittest.TestCase):
             self.assertFalse(gs['show_version_popup'])
 
 
+class TestPlayingFromTheRedSide(unittest.TestCase):
+    """Un joueur seul du côté J2 (rouge) peut naviguer dans les menus et jouer en solo."""
+
+    def test_menu_events_of_p2_become_p1(self):
+        import menu_input
+        axis = pygame.event.Event(pygame.JOYAXISMOTION, axis=0, value=1.0, instance_id=1, joy=1)
+        out = menu_input.p2_as_p1([hat((0, -1), inst=1), joy_button(1, inst=1), axis, joy_button(1, inst=0)], 0, 1)
+        self.assertEqual([getattr(e, 'instance_id', None) for e in out], [0, 0, 1, 0])
+        self.assertEqual(out[0].value, (0, -1))
+        self.assertEqual(out[1].button, 1)
+        self.assertIs(menu_input.p2_as_p1(out, 0, 0), out)  # Une seule manette : rien à faire
+
+    def test_p2_stick_steers_the_solo_snake_but_not_in_pvp(self):
+        import gameplay
+        surf = pygame.Surface((800, 600))
+        gs = new_game(config.MODE_SOLO)
+        p = gs['player_snake']
+        p.current_direction = p.next_direction = config.RIGHT
+        p.direction_queue = []
+        gameplay.run_game([hat((0, 1), inst=1)], 16, surf, gs)
+        self.assertIn(config.UP, [p.next_direction] + list(p.direction_queue) + [p.current_direction])
+        gs = new_game(config.MODE_PVP)
+        p1, p2 = gs['player_snake'], gs['player2_snake']
+        p1.current_direction = p1.next_direction = config.RIGHT
+        p1.direction_queue = []
+        gameplay.run_game([hat((0, 1), inst=1)], 16, surf, gs)
+        self.assertNotIn(config.UP, [p1.next_direction] + list(p1.direction_queue))
+
+    def test_p2_buttons_shoot_in_solo(self):
+        import gameplay
+        gs = new_game(config.MODE_SOLO)
+        p = gs['player_snake']
+        p.ammo = 5
+        p.last_shot_time = -10 ** 9  # Pas de délai entre deux tirs hérité d'un autre test
+        gameplay.run_game([joy_button(config.BUTTON_PRIMARY_ACTION, inst=1)], 16, pygame.Surface((800, 600)), gs)
+        self.assertEqual(p.ammo, 4)
+
+
+class TestFullScreenDarkening(unittest.TestCase):
+    def test_darken_matches_a_black_veil(self):
+        import ui_common
+        a = pygame.Surface((40, 40))
+        a.fill((200, 100, 50))
+        b = a.copy()
+        veil = pygame.Surface((40, 40))
+        veil.fill((0, 0, 0))
+        veil.set_alpha(150)
+        a.blit(veil, (0, 0))
+        ui_common.darken(b, 150)
+        for x, y in ((0, 0), (20, 20)):
+            for ca, cb in zip(a.get_at((x, y))[:3], b.get_at((x, y))[:3]):
+                self.assertLessEqual(abs(ca - cb), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

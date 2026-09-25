@@ -1021,7 +1021,8 @@ def run_game(events, dt, screen, game_state):
         # --- Gestion Joystick Mouvement (AVEC LOGGING) ---
         elif event.type == pygame.JOYAXISMOTION:
             target_snake = None
-            if event.instance_id == p1_id and player_snake and player_snake.alive:
+            # Seul en jeu : le stick de J2 dirige aussi le serpent (on peut jouer du côté rouge)
+            if (event.instance_id == p1_id or (not two_players and event.instance_id == p2_id)) and player_snake and player_snake.alive:
                 target_snake = player_snake
             elif event.instance_id == p2_id and two_players and player2_snake and player2_snake.alive:
                 target_snake = player2_snake
@@ -1051,7 +1052,7 @@ def run_game(events, dt, screen, game_state):
 
         elif event.type == pygame.JOYHATMOTION:
             target_snake_hat = None
-            if event.instance_id == p1_id and player_snake and player_snake.alive:
+            if (event.instance_id == p1_id or (not two_players and event.instance_id == p2_id)) and player_snake and player_snake.alive:
                 target_snake_hat = player_snake
             elif event.instance_id == p2_id and two_players and player2_snake and player2_snake.alive:
                 target_snake_hat = player2_snake
@@ -1081,7 +1082,7 @@ def run_game(events, dt, screen, game_state):
             # de perdre une partie sur un appui accidentel. "Quitter" reste dans le menu Pause.
             pause_button = int(getattr(config, 'BUTTON_PAUSE', 7))
             menu_button = int(getattr(config, 'BUTTON_BACK', 8))
-            pause_allowed = event.instance_id == p1_id or (two_players and event.instance_id == p2_id)
+            pause_allowed = event.instance_id in (p1_id, p2_id)
             if pause_allowed and event.button in (pause_button, menu_button, panel.BUTTON_START):
                 logging.info(f"Joystick button {event.button} pressed, pausing game.")
                 return _enter_pause(game_state)
@@ -1090,8 +1091,8 @@ def run_game(events, dt, screen, game_state):
                        int(getattr(config, 'BUTTON_TERTIARY_ACTION', 3)): 'shield'}
             action = actions.get(event.button)
             snake = None
-            if event.instance_id == p1_id:
-                snake = player_snake
+            if event.instance_id == p1_id or (not two_players and event.instance_id == p2_id):
+                snake = player_snake  # Seul en jeu : les boutons de J2 servent aussi
             elif two_players and event.instance_id == p2_id:
                 snake = player2_snake
             if action and snake is not None and _player_action(game_state, snake, action, current_time, coop):

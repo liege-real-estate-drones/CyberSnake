@@ -131,6 +131,25 @@ class MenuInputTranslator:
         return out
 
 
+def p2_as_p1(events, p1_id, p2_id):
+    """Événements du stick et des boutons de J2 présentés comme ceux de J1.
+
+    Dans les menus, un joueur seul du côté J2 (rouge) peut tout faire. À appliquer après
+    MenuInputTranslator : les mouvements du stick y sont déjà convertis avec le réglage
+    d'axes de SON stick."""
+    if p2_id is None or p2_id == p1_id:
+        return events
+    kinds = (pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP, pygame.JOYHATMOTION)
+    out = []
+    for ev in events:
+        if ev.type in kinds and getattr(ev, 'instance_id', None) == p2_id:
+            attrs = dict(ev.dict)
+            attrs['instance_id'] = attrs['joy'] = p1_id
+            ev = pygame.event.Event(ev.type, attrs)
+        out.append(ev)
+    return out
+
+
 class KeyboardEchoFilter:
     """Supprime les « échos clavier » des manettes.
 
