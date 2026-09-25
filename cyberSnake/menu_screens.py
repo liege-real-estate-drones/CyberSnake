@@ -765,8 +765,15 @@ def run_options(events, dt, screen, game_state):
 
     selection_index = max(0, min(selection_index, len(menu_items) - 1))
 
+    # Ouvertes depuis la pause : la taille des cases ne peut pas changer en pleine partie
+    # (murs et serpents sont placés sur la grille actuelle : ils sortiraient de l'écran)
+    in_game = return_state == config.PAUSED
+
     def cycle_grid_size(delta):
         nonlocal pending_grid_size
+        if in_game:
+            utils.play_sound("denied")
+            return
         try:
             idx = grid_sizes.index(pending_grid_size)
         except ValueError:
@@ -1048,7 +1055,9 @@ def run_options(events, dt, screen, game_state):
         pending_show_grid = bool(defaults.get("show_grid", True))
 
         gs = defaults.get("grid_size", None)
-        if isinstance(gs, int) and gs > 0:
+        if in_game:
+            pass  # En pleine partie, la taille des cases ne change pas (voir cycle_grid_size)
+        elif isinstance(gs, int) and gs > 0:
             pending_grid_size = int(gs)
         else:
             pending_grid_size = int(getattr(config, "GRID_SIZE", 20))
@@ -1336,7 +1345,7 @@ def run_options(events, dt, screen, game_state):
         # Rebuild menu text (no 1-frame lag). Doit suivre menu_items ligne pour ligne (vérifié ci-dessous).
         menu_items_draw = [
             ("Quadrillage", "Oui" if pending_show_grid else "Non"),
-            ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
+            ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})" + ("  (hors partie)" if in_game else "")),
             ("Style serpent J1", snake_style_display_p1),
             ("Style serpent J2", snake_style_display_p2),
             ("Couleur J1", snake_color_display_p1),

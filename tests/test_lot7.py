@@ -123,5 +123,34 @@ class TestKillCredit(unittest.TestCase):
         self.assertEqual(p1.score, 0)
 
 
+class TestOptionsFromPause(unittest.TestCase):
+    def test_grid_size_is_locked_during_a_game(self):
+        import game_states
+        surf = pygame.display.get_surface() or pygame.display.set_mode((800, 600))
+        saved = {k: getattr(config, k) for k in ("GRID_SIZE", "SCREEN_WIDTH", "SCREEN_HEIGHT", "GRID_WIDTH", "GRID_HEIGHT")}
+        right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
+        try:
+            with MemoryOptions(), FakeClock() as clock:
+                gs = new_game(config.MODE_SOLO)
+                gs.update({'screen': surf, 'menu_background_image': None, 'options_return_state': config.PAUSED,
+                           'options_selection_index': 1})
+                game_states.run_options([], 16, surf, gs)
+                before = gs['pending_grid_size']
+                clock.tick(500)
+                game_states.run_options([right], 16, surf, gs)
+                self.assertEqual(gs['pending_grid_size'], before)
+                # Hors partie (depuis le menu), le réglage reste possible
+                for k in [k for k in gs if k.startswith('pending_')]:
+                    gs.pop(k)
+                gs['options_return_state'] = config.MENU
+                game_states.run_options([], 16, surf, gs)
+                clock.tick(500)
+                game_states.run_options([right], 16, surf, gs)
+                self.assertNotEqual(gs['pending_grid_size'], before)
+        finally:
+            for k, v in saved.items():
+                setattr(config, k, v)
+
+
 if __name__ == "__main__":
     unittest.main()
