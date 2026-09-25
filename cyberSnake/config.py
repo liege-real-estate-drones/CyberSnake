@@ -738,11 +738,10 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.8.0'
+VERSION = '2.9.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Contre-la-montre : 2 minutes pour le plus gros score (menu principal)",
-    "Hall of Fame : nouvelle colonne « Chrono »",
-    "Plus fluide : écran de fin, titre, Hall of Fame, Comment jouer, pause",
-    "Moins de saccades quand des mines apparaissent",
+    "Hall of Fame : nouvelle page « Statistiques » (gauche / droite)",
+    "« RECORD BATTU ! » annoncé en pleine partie",
+    "Choix des fonds plus fluide",
 ]
