@@ -388,7 +388,6 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
     # --- *** UI Elements *** ---
     ui_padding = 12
     ui_margin = 8
-    bar_radius = 3
 
     # --- ** Panneaux joueurs : J1 en haut à gauche, J2 (PvP / Coop) en bas à droite ** ---
     for _snake, _corner in ((player_snake, "topleft"), (player2_snake, "bottomright")):
@@ -397,150 +396,27 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
         except Exception as e:
             logging.error(f"Erreur dessin panneau joueur ({_corner}): {e}", exc_info=True)
 
-    # --- ** Panneau UI Top-Right (Kill Feed, HS, Effects) ** ---
-    
-    try:
-        # Ce panneau prenait beaucoup de place et masquait la vue (notamment en Vs IA).
-        # On le réserve au PvP (kill feed).
-        if current_game_mode != config.MODE_PVP:
-            raise StopIteration
-        top_right_panel_width = 280
-        top_right_panel_height = config.SCREEN_HEIGHT * 0.45
-        top_right_panel_x = config.SCREEN_WIDTH - top_right_panel_width - ui_margin
-        top_right_panel_y = ui_margin
-        top_right_panel_rect = pygame.Rect(top_right_panel_x, top_right_panel_y, top_right_panel_width,
-                                           top_right_panel_height)
-        draw_ui_panel(target_surface, top_right_panel_rect)
-        content_x_right = top_right_panel_rect.right - ui_padding
-        current_y_top_right = top_right_panel_rect.top + ui_padding // 2
-        if current_game_mode == config.MODE_PVP:
-            messages_to_draw = list(utils.kill_feed)
-            kf_line_height = font_small.get_height() + 3
-            for message, timestamp in messages_to_draw:
-                try:
+    # --- ** Fil des kills (PvP) : petit panneau en haut à droite, seulement s'il y a des messages ** ---
+    # (les effets actifs sont déjà affichés près de la tête de chaque serpent, et le record
+    #  est sur l'écran de fin : l'ancien grand panneau masquait 45 % du bord droit de la carte)
+    if current_game_mode == config.MODE_PVP:
+        try:
+            recent = [(m, t) for m, t in list(utils.kill_feed) if current_time - t < config.KILL_FEED_MESSAGE_DURATION]
+            if recent:
+                line_h = font_small.get_height() + 4
+                width = max(font_small.size(m)[0] for m, _t in recent) + 2 * ui_padding
+                rect = pygame.Rect(0, 0, min(width, int(config.SCREEN_WIDTH * 0.3)), line_h * len(recent) + ui_padding)
+                rect.topright = (config.SCREEN_WIDTH - ui_margin, ui_margin)
+                draw_ui_panel(target_surface, rect)
+                y = rect.top + ui_padding // 2
+                for message, timestamp in recent:
                     age = current_time - timestamp
-                    if age < config.KILL_FEED_MESSAGE_DURATION:
-                        alpha = max(0, min(255,
-                                           int(255 * (1.0 - (float(age) / max(1, config.KILL_FEED_MESSAGE_DURATION))))))
-                        feed_color_base = config.COLOR_KILL_FEED
-                        if not isinstance(feed_color_base, (list, tuple)) or len(
-                            feed_color_base) < 3: feed_color_base = (200, 200, 200)
-                        feed_color_alpha = feed_color_base[:3] + (alpha,)
-                        if current_y_top_right + kf_line_height < top_right_panel_rect.bottom - ui_padding:
-                            utils.draw_text(target_surface, message, font_small, feed_color_alpha,
-                                            (content_x_right, current_y_top_right), "topright")
-                            current_y_top_right += kf_line_height
-                        else:
-                            break
-                except Exception as e:
-                    logging.error(f"Erreur dessin message Kill Feed '{message}': {e}"); current_y_top_right += kf_line_height
-            current_y_top_right += 5
-        mode_key_map = {config.MODE_SOLO: "solo", config.MODE_CLASSIC: "classic", config.MODE_VS_AI: "vs_ai",
-                        config.MODE_PVP: "pvp", config.MODE_SURVIVAL: "survie"}
-        mode_key = mode_key_map.get(current_game_mode, "solo")
-        mode_display_name = getattr(current_game_mode, 'name', '???') if current_game_mode else "???"
-        top_score_display = f"Meilleur ({mode_display_name}): ---"
-        hs_list = utils.high_scores.get(mode_key)
-        if hs_list:
-            try:
-                top_entry = hs_list[0]; name = top_entry.get('name', '???'); score = top_entry.get('score',
-                                                                                                   0); hs_prefix = "Vague Max" if mode_key == "survie" else "Meilleur"; top_score_display = f"{hs_prefix}: {name} {score}"
-            except (IndexError, KeyError, TypeError):
-                pass
-        if current_y_top_right + font_default.get_height() < top_right_panel_rect.bottom - ui_padding:
-            hs_rect = utils.draw_text_with_shadow(target_surface, top_score_display, font_default,
-                                                  config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW,
-                                                  (content_x_right, current_y_top_right), "topright")
-            current_y_top_right = hs_rect.bottom + 8
-        if player_snake and player_snake.alive:
-            active_effects_list = []
-            current_ticks = current_time;
-            is_timer_inv = player_snake.invincible_timer > current_ticks;
-            is_powerup_inv = player_snake.invincible_powerup_active
-            if is_timer_inv and not is_powerup_inv: start_t = max(0,
-                                                                  player_snake.invincible_timer - config.ARMOR_ABSORB_INVINCIBILITY); active_effects_list.append(
-                ("INVULN", config.COLOR_ARMOR_HIGHLIGHT, player_snake.invincible_timer, start_t))
-            powerup_end_time = player_snake.powerup_end_time
-            if powerup_end_time > current_ticks:
-                current_pu_type, pu_text, pu_color, pu_duration = "", "?", config.COLOR_WHITE, config.POWERUP_BASE_DURATION
-                if player_snake.shield_active:
-                    current_pu_type = "shield"
-                elif player_snake.rapid_fire_active:
-                    current_pu_type = "rapid_fire"; pu_duration = config.POWERUP_RAPID_FIRE_DURATION
-                elif player_snake.invincible_powerup_active:
-                    current_pu_type = "invincibility"
-                elif player_snake.multishot_active:
-                    current_pu_type = "multishot"; pu_duration = config.POWERUP_MULTISHOT_DURATION
-                if current_pu_type and current_pu_type in config.POWERUP_TYPES and current_pu_type != "armor_plate": pu_data = \
-                config.POWERUP_TYPES[current_pu_type]; specific_duration = pu_data.get("duration",
-                                                                                       pu_duration); start_t = max(0,
-                                                                                                                   powerup_end_time - specific_duration); pu_text = pu_data.get(
-                    "symbol", "?"); pu_color = pu_data.get("color", config.COLOR_WHITE); active_effects_list.append(
-                    (pu_text, pu_color, powerup_end_time, start_t))
-
-            # --- AJOUT: Affichage Durée Bouclier Compétence ---
-            if player_snake.shield_charge_active and player_snake.shield_charge_expiry_time > current_ticks:
-                charge_start_time = max(0, player_snake.shield_charge_expiry_time - config.SHIELD_SKILL_DURATION)
-                active_effects_list.append(
-                    ("CHARGE", config.COLOR_SHIELD_POWERUP, player_snake.shield_charge_expiry_time, charge_start_time))
-            # --- FIN AJOUT ---
-
-            if player_snake.speed_boost_level > 0:
-                active_speed_stacks = [(t, max(0, t - config.FOOD_EFFECT_DURATION)) for t in
-                                       player_snake.effect_end_timers.get('speed_boost', []) if t > current_ticks]
-                if active_speed_stacks: active_speed_stacks.sort(); min_end_time, est_start_time = active_speed_stacks[
-                    0]; active_effects_list.append(
-                    (f"SPEED x{len(active_speed_stacks)}", config.COLOR_FOOD_SPEED, min_end_time, est_start_time))
-            poison_end_time = player_snake.effect_end_timers.get('poison', 0)
-            if isinstance(poison_end_time, (
-            int, float)) and player_snake.poison_effect_active and poison_end_time > current_ticks: start_t = max(0,
-                                                                                                                  poison_end_time - config.POISON_EFFECT_DURATION); reversed_mod = " (Rev)" if player_snake.reversed_controls_active else ""; active_effects_list.append(
-                (f"POISON{reversed_mod}", config.COLOR_FOOD_POISON, poison_end_time, start_t))
-            multiplier_end_time = player_snake.effect_end_timers.get('score_multiplier', 0)
-            if isinstance(multiplier_end_time, (int,
-                                                float)) and player_snake.score_multiplier_active and multiplier_end_time > current_ticks: start_t = max(
-                0, multiplier_end_time - config.FOOD_EFFECT_DURATION); active_effects_list.append(
-                ("SCORE x2", config.COLOR_FOOD_MULTIPLIER, multiplier_end_time, start_t))
-            ghost_end_time = player_snake.effect_end_timers.get('ghost', 0)
-            if isinstance(ghost_end_time, (int,
-                                           float)) and player_snake.ghost_active and ghost_end_time > current_ticks: ghost_duration = config.GHOST_EFFECT_DURATION if player_snake.is_player else config.ENEMY_GHOST_EFFECT_DURATION; start_t = max(
-                0, ghost_end_time - ghost_duration); active_effects_list.append(
-                ("GHOST", config.COLOR_FOOD_GHOST, ghost_end_time, start_t))
-            freeze_end_time = player_snake.effect_end_timers.get('freeze_self', 0)
-            if isinstance(freeze_end_time,
-                          (int, float)) and player_snake.frozen and freeze_end_time > current_ticks: start_t = max(0,
-                                                                                                                   freeze_end_time - config.ENEMY_FREEZE_DURATION); active_effects_list.append(
-                ("FROZEN", config.COLOR_FOOD_FREEZE, freeze_end_time, start_t))
-            active_effects_list.sort(key=lambda x: x[2])
-            bar_max_width_eff, bar_height_eff = 70, 8
-            bar_v_offset = (font_small.get_height() - bar_height_eff) // 2
-            for text, color, end_time, start_time in active_effects_list:
-                time_left_ms = max(0, end_time - current_ticks)
-                if time_left_ms > 100 and current_y_top_right + font_small.get_height() < top_right_panel_rect.bottom - ui_padding:
-                    effect_text = f"{text} {time_left_ms / 1000.0:.1f}s"
-                    text_rect = utils.draw_text(target_surface, effect_text, font_small, color,
-                                                (content_x_right, current_y_top_right), "topright")
-                    total_duration = max(1, end_time - start_time);
-                    percent_left = max(0.0, min(1.0, float(time_left_ms) / total_duration))
-                    current_bar_width = int(bar_max_width_eff * percent_left)
-                    bar_x = content_x_right - text_rect.width - bar_max_width_eff - 8
-                    bar_y = current_y_top_right + bar_v_offset
-                    try:
-                        pygame.draw.rect(target_surface, config.COLOR_TIMER_BAR_BG,
-                                         (bar_x, bar_y, bar_max_width_eff, bar_height_eff),
-                                         border_radius=bar_radius // 2)
-                        if current_bar_width > 0: pygame.draw.rect(target_surface, color,
-                                                                   (bar_x, bar_y, current_bar_width, bar_height_eff),
-                                                                   border_radius=bar_radius // 2)
-                    except Exception:
-                        pass
-                    current_y_top_right += font_small.get_height() + 5
-                elif current_y_top_right + font_small.get_height() >= top_right_panel_rect.bottom - ui_padding:
-                    break
-    except StopIteration:
-        pass
-    except Exception as e:
-        logging.error(f"Erreur dessin UI Top-Right: {e}", exc_info=True)
+                    alpha = max(60, min(255, int(255 * (1.0 - age / float(config.KILL_FEED_MESSAGE_DURATION)))))
+                    utils.draw_text(target_surface, message, font_small, tuple(config.COLOR_KILL_FEED[:3]) + (alpha,),
+                                    (rect.right - ui_padding, y), "topright")
+                    y += line_h
+        except Exception as e:
+            logging.error(f"Erreur dessin fil des kills: {e}", exc_info=True)
 
     # --- ** UI Bottom Center (Vague, Objectif, Timer) ** ---
     # === BLOC MODIFIÉ (Voir Point 1 pour détails) ===
