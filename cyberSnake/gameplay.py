@@ -1433,6 +1433,13 @@ def run_game(events, dt, screen, game_state):
                     spawn_pos = utils.get_random_empty_position(current_occupied)
                 if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
 
+            # Mines arrivées en fin de vie (niveaux Facile / Normal) : petite bouffée de fumée et disparition
+            expired = [m for m in mines if getattr(m, 'expires_at', None) is not None and m.is_expired(current_time)]
+            if expired:
+                for m in expired:
+                    cx, cy = m.get_center_pos_px()
+                    utils.emit_particles(cx, cy, 6, (120, 120, 140), (1, 2), (200, 400), (1, 3))
+                mines[:] = [m for m in mines if m not in expired]
             density_interval, density_max = rules.mine_density()  # Règle perso : densité de mines
             if current_game_mode != config.MODE_CLASSIC and density_interval is not None and not frenzy.active(game_state, current_time) \
                     and current_time - last_mine_spawn_time > mine_interval * density_interval * level.get("mine_interval"):
@@ -1987,7 +1994,9 @@ def run_game(events, dt, screen, game_state):
                             mmine_center_px_head = mmine_collided_obj.get_center_pos_px()
                             mmine_collided_obj.explode(proximity=False) # Explose au contact tête
 
-                            survived_mmine_head = snake_object.handle_damage(current_time, None, damage_source_pos=mmine_center_px_head)
+                            # Le boss n'est pas blessé par une mine mobile (elles visent les joueurs) : sinon une mine
+                            # perdue pouvait l'achever et donner sa récompense sans combat
+                            survived_mmine_head = True if getattr(snake_object, 'is_boss', False) else                                 snake_object.handle_damage(current_time, None, damage_source_pos=mmine_center_px_head)
                             if not survived_mmine_head:
                                 logging.warning(f"Moving Mine Head Collision Death: {snake_object.name} died.")
                                 # Logique de mort commune

@@ -135,12 +135,12 @@ class TestCareerStats(unittest.TestCase):
         self.assertEqual((st["best_combo"], st["best_wave"]), (6, 7))
         self.assertEqual(st["games_by_mode"], {"solo": 1, "survie": 1})
 
-    def test_hall_of_fame_has_three_pages(self):
+    def test_hall_of_fame_has_four_pages(self):
         import screens
         surf = pygame.Surface((1280, 720))
         gs = _state()
         right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
-        for expected in (1, 2, 0):
+        for expected in (1, 2, 3, 0):  # Records, Trophées, Statistiques, Défi du jour
             screens.run_hall_of_fame([right], 16, surf, gs)
             self.assertEqual(gs['_hof_page'], expected)
 
@@ -197,6 +197,58 @@ class TestLiveRecord(unittest.TestCase):
                 self.assertFalse(gs['live_record_done'])
         finally:
             utils.high_scores = saved
+
+
+class TestBossVsMovingMine(unittest.TestCase):
+    def test_moving_mine_does_not_hurt_the_boss(self):
+        import boss
+        import game_objects
+        with FakeClock():
+            gs = new_game(config.MODE_SURVIVAL)
+            gs['player_snake'].invincible_timer = 10 ** 12
+            b = boss.maybe_spawn_boss(gs, game_clock.ticks(), 5)
+            b.invincible_timer = 0
+            armor = b.armor
+            g = config.GRID_SIZE
+            hit = []
+            orig = b.handle_damage
+            b.handle_damage = lambda *a, **k: hit.append(1) or orig(*a, **k)
+            surf = pygame.Surface((800, 600))
+            for _ in range(60):  # La mine est posée là où la tête du boss arrive à chaque image
+                hx, hy = b.positions[0]
+                dx, dy = b.current_direction
+                nx, ny = (hx + dx) % config.GRID_WIDTH, (hy + dy) % config.GRID_HEIGHT
+                gs['moving_mines'] = [game_objects.MovingMine(nx * g + g // 2, ny * g + g // 2, (nx, ny))]
+                b.choose_direction = lambda *a, **k: None
+                gameplay.run_game([], 16, surf, gs)
+                if hit or not b.alive:
+                    break
+            self.assertTrue(b.alive)
+            self.assertEqual(b.armor, armor)
+            self.assertFalse(hit)
+
+
+class TestMinesExpire(unittest.TestCase):
+    """Facile / Normal : une mine disparaît au bout de 30 / 45 s ; Difficile : elle reste."""
+
+    def tearDown(self):
+        import level
+        level._cache.clear()
+
+    def test_mine_disappears_in_normal_but_not_in_hard(self):
+        import level
+        import game_objects
+        for lvl, should_vanish in (("normal", True), ("difficile", False)):
+            level._cache['level'] = lvl
+            with FakeClock() as clock:
+                gs = new_game(config.MODE_SOLO)
+                gs['player_snake'].invincible_timer = 10 ** 12
+                mine = game_objects.Mine((2, 2))
+                gs['mines'] = [mine]
+                clock.tick(level.get("mine_arm_ms") + 46000)
+                gs['last_mine_spawn_time'] = game_clock.ticks()  # Pas de nouvelle mine pendant le test
+                gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+                self.assertEqual(mine not in gs['mines'], should_vanish, lvl)
 
 
 if __name__ == "__main__":

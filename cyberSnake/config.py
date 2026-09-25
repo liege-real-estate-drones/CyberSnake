@@ -738,10 +738,11 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.9.0'
+VERSION = '2.10.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Hall of Fame : nouvelle page « Statistiques » (gauche / droite)",
-    "« RECORD BATTU ! » annoncé en pleine partie",
-    "Choix des fonds plus fluide",
+    "Mines : en Facile et Normal, elles disparaissent au bout de 30 / 45 s",
+    "Hall of Fame : page « Défi du jour » (classement et jours passés)",
+    "Boss : une mine mobile ne peut plus l'achever à ta place",
+    "« Comment jouer » bien plus fluide",
 ]
