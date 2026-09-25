@@ -18,7 +18,7 @@ import stick_wizard
 from setup_screens import invalidate_map_selection_cache
 import walls as walls_mod
 import game_objects
-from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
+from ui_common import darken, draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
 def _activate_menu_option(game_state, menu_options, menu_selection_index):
@@ -57,6 +57,9 @@ def _activate_menu_option(game_state, menu_options, menu_selection_index):
     game_state['current_state'] = next_state
     game_state['menu_selection_index'] = menu_selection_index
     return next_state
+
+
+MENU_QUIT_CONFIRM_MS = 2500
 
 
 def run_menu(events, dt, screen, game_state):
@@ -142,7 +145,7 @@ def run_menu(events, dt, screen, game_state):
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.JOYBUTTONDOWN:
-                if event.instance_id == p1_id and is_confirm_button(event.button):
+                if is_confirm_button(event.button) or is_back_button(event.button):  # J1 ou J2
                     game_state['show_version_popup'] = False
                     utils.play_sound("menu_select")
                     return next_state
@@ -172,9 +175,15 @@ def run_menu(events, dt, screen, game_state):
                     if utils.select_and_load_music(music_num, base_path):
                         music.preview_game_track()  # Musique de jeu choisie : on l'entend tout de suite
                     last_axis_move_time = current_time
-                elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
-                    logging.info("Joystick button 8 pressed in menu, quitting.")
-                    return False # Quitte le jeu
+                elif event.button == getattr(config, "BUTTON_BACK", 8):
+                    # Coin quitte le jeu, mais seulement au second appui : sur une borne, on appuie
+                    # sur Coin par réflexe (et le jeu se fermait d'un coup)
+                    if current_time <= int(game_state.get('menu_quit_armed_until', 0) or 0):
+                        logging.info("Coin appuyé deux fois dans le menu : on quitte le jeu.")
+                        game_state.pop('menu_quit_armed_until', None)
+                        return False
+                    game_state['menu_quit_armed_until'] = current_time + MENU_QUIT_CONFIRM_MS
+                    utils.play_sound("denied")
 
         elif event.type == pygame.JOYHATMOTION:
             # Vérifie si l'événement vient du joystick J1, hat 0 et si assez de temps s'est écoulé
@@ -223,7 +232,7 @@ def run_menu(events, dt, screen, game_state):
             try: backgrounds.draw(screen, menu_background_image)
             except Exception as e: logging.error(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
         else: screen.fill(config.COLOR_BACKGROUND)
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
+        darken(screen, 150)
         
         if pvp_error_msg:
             error_y = config.SCREEN_HEIGHT * 0.05 # En haut de l'écran
@@ -243,7 +252,7 @@ def run_menu(events, dt, screen, game_state):
         # Boutons dessinés à leur place sur le panneau de la borne (panel.py)
         legend_lines = [
             settings_screens.hint("Stick : naviguer", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
-            settings_screens.hint(f"{settings_screens.button_name('MUSIC')} : musique", f"{settings_screens.button_name('BACK')} : quitter", "Inactivité : démo (3 min)"),
+            settings_screens.hint(f"{settings_screens.button_name('MUSIC')} : musique", f"{settings_screens.button_name('BACK')} deux fois : quitter", "Inactivité : démo (3 min)"),
         ]
         legend_h = (int(font_small.get_height() * 1.45) + 4) * len(legend_lines) + 14
         legend_w = min(int(config.SCREEN_WIDTH * 0.92), 900)
@@ -328,6 +337,15 @@ def run_menu(events, dt, screen, game_state):
             settings_screens.draw_hint(screen, line, font_small, config.COLOR_TEXT_MENU, (legend_rect.centerx, y_text), "midtop")
             y_text += int(font_small.get_height() * 1.45) + 4  # Place pour les dessins des boutons
 
+        if current_time <= int(game_state.get('menu_quit_armed_until', 0) or 0):
+            band = pygame.Rect(0, 0, config.SCREEN_WIDTH, font_medium.get_height() + 24)
+            band.center = (config.SCREEN_WIDTH // 2, int(config.SCREEN_HEIGHT * 0.5))
+            veil = pygame.Surface(band.size, pygame.SRCALPHA)
+            veil.fill((60, 0, 10, 215))
+            screen.blit(veil, band.topleft)
+            settings_screens.draw_hint(screen, f"Appuie encore sur {settings_screens.button_name('BACK')} pour quitter le jeu",
+                                       font_medium, (255, 130, 130), band.center, "center")
+
         # Petit rappel musique
         try:
             music_track_text = f"Musique de jeu : {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
@@ -345,23 +363,33 @@ def run_menu(events, dt, screen, game_state):
         # --- Draw Version Popup Overlay ---
         if game_state.get('show_version_popup'):
             # Semi-transparent background
-            overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 200))
-            screen.blit(overlay, (0, 0))
+            darken(screen, 200)
 
-            # Popup Box
-            popup_width, popup_height = 400, 250
-            popup_rect = pygame.Rect((config.SCREEN_WIDTH - popup_width) // 2, (config.SCREEN_HEIGHT - popup_height) // 2, popup_width, popup_height)
+            # Fenêtre : titre, version, puis les nouveautés de cette version (config.WHATS_NEW)
+            news = list(getattr(config, "WHATS_NEW", []))[:6]
+            line_h = font_small.get_linesize() + 4
+            popup_width = min(int(config.SCREEN_WIDTH * 0.8), max(440, max([font_small.size("• " + n)[0] for n in news] + [0]) + 60))
+            popup_height = font_medium.get_linesize() + font_large.get_linesize() + (line_h * len(news) + font_small.get_linesize() + 16 if news else 0) + font_small.get_linesize() + 70
+            popup_rect = pygame.Rect(0, 0, popup_width, popup_height)
+            popup_rect.center = (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2)
+            pygame.draw.rect(screen, (8, 10, 20), popup_rect, border_radius=12)  # Opaque : le menu ne transparaît pas
             draw_ui_panel(screen, popup_rect)
 
-            # Text Content
-            center_x, center_y = popup_rect.centerx, popup_rect.centery
-            utils.draw_text_with_shadow(screen, "Mise à jour réussie !", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (center_x, center_y - 60), "center")
-
-            version_text = f"Version: {getattr(config, 'VERSION', 'Inconnue')}"
-            utils.draw_text_with_shadow(screen, version_text, font_large, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (center_x, center_y), "center")
-
-            settings_screens.draw_hint(screen, f"{settings_screens.button_name('PRIMARY')} : fermer", font_small, config.COLOR_TEXT, (center_x, center_y + 80), "center")
+            center_x = popup_rect.centerx
+            y = popup_rect.top + 18
+            utils.draw_text_with_shadow(screen, "Mise à jour réussie !", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (center_x, y), "midtop")
+            y += font_medium.get_linesize()
+            version_text = f"Version {getattr(config, 'VERSION', 'inconnue')}"
+            utils.draw_text_with_shadow(screen, version_text, font_large, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (center_x, y), "midtop")
+            y += font_large.get_linesize() + 6
+            if news:
+                utils.draw_text(screen, "Nouveautés :", font_small, config.COLOR_TEXT_HIGHLIGHT, (popup_rect.left + 30, y), "topleft")
+                y += font_small.get_linesize() + 4
+                for line in news:
+                    utils.draw_text(screen, "• " + line, font_small, config.COLOR_TEXT_MENU, (popup_rect.left + 30, y), "topleft")
+                    y += line_h
+            settings_screens.draw_hint(screen, f"{settings_screens.button_name('PRIMARY')} : fermer", font_small, config.COLOR_TEXT,
+                                       (center_x, popup_rect.bottom - 22), "center")
 
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin du menu: {e}")
@@ -1292,9 +1320,7 @@ def run_options(events, dt, screen, game_state):
         else:
             screen.fill(config.COLOR_BACKGROUND)
 
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
 
@@ -1882,11 +1908,11 @@ def run_controls_remap(events, dt, screen, game_state):
     menu_items = [
         ("WIZARD", "Assistant sticks J1 / J2", "action"),
         ("SYSFIX", "Fixer J1 / J2 pour TOUS les jeux", "action"),
-        ("PRIMARY", "Bouton Tir / Confirmer", "button"),
-        ("SECONDARY", "Bouton Dash / Retour", "button"),
-        ("TERTIARY", "Bouton Bouclier", "button"),
-        ("PAUSE", "Bouton Pause", "button"),
-        ("BACK", "Bouton Menu (Back)", "button"),
+        ("PRIMARY", "Tirer / Valider", "button"),
+        ("SECONDARY", "Dash / Retour", "button"),
+        ("TERTIARY", "Bouclier", "button"),
+        ("PAUSE", "Pause", "button"),
+        ("BACK", "Pause / Quitter", "button"),
         ("AXIS_H", "Axe horizontal", "axis"),
         ("AXIS_V", "Axe vertical", "axis"),
         ("INV_H", "Inverser axe horizontal", "toggle"),
@@ -2139,9 +2165,7 @@ def run_controls_remap(events, dt, screen, game_state):
     # Draw
     try:
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 150)
 
         utils.draw_text_with_shadow(
             screen,

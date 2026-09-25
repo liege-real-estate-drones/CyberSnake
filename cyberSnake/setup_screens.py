@@ -14,7 +14,7 @@ from gameplay import reset_game
 import walls as walls_mod
 import pvp_rounds
 import settings_screens
-from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
+from ui_common import darken, draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
 VIRTUAL_KEYBOARD_CHARS = [
@@ -287,9 +287,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
     # Dessin de l'écran
     try: # Bloc try autour du dessin
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 190)) # Overlay plus sombre
-        screen.blit(overlay, (0, 0))
+        darken(screen, 190)
 
 
         # Affichage du nom
@@ -544,6 +542,15 @@ def run_map_selection(events, dt, screen, game_state):
                     game_state['map_selection_index'] = map_selection_index
                     utils.play_sound("menu_move")
                     last_axis_move_time = current_time
+                elif hat_x and _map_keys_display[map_selection_index] == "Aléatoire":
+                    # Gauche / Droite : nouvelle carte (l'aide le disait, mais seul le clavier le faisait)
+                    try:
+                        _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
+                        utils.play_sound("shoot_p1")
+                    except Exception as e:
+                        logging.error(f"Erreur regénération carte aléatoire via stick: {e}")
+                        _current_random_map_walls = []
+                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == p1_id and is_confirm_button(event.button): # Confirmer
@@ -730,9 +737,7 @@ def run_map_selection(events, dt, screen, game_state):
     # --- MODIFIÉ: Dessin de l'écran ---
     try: # Bloc try autour du dessin
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 150)
 
         utils.draw_text_with_shadow(screen, "Choix de l'Arène", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
 
@@ -804,7 +809,7 @@ def run_map_selection(events, dt, screen, game_state):
         if selected_key_or_label_preview == "Aléatoire":
             desc_lines = [
                 f"Labyrinthe aléatoire ({walls_count} murs).",
-                "G/D : nouvelle génération | F : sauvegarder en favori",
+                "Une nouvelle à chaque fois : garde celles qui te plaisent en favori (voir en bas).",
             ]
         elif selected_key_or_label_preview in _favorite_maps:
             desc_lines = [
@@ -956,16 +961,19 @@ def run_map_selection(events, dt, screen, game_state):
         except Exception:
             pass
 
-        # Instructions en bas (modifiées pour inclure 'F' pour Favori)
+        # Instructions en bas : carte aléatoire (nouvelle, garder en favori) et favoris (supprimer)
         instruction_y = config.SCREEN_HEIGHT * 0.88
-        line_gap = max(18, int(font_small.get_linesize() * 1.05))
+        line_gap = max(18, int(font_small.get_linesize() * 1.45))
         instruction_text_1 = settings_screens.hint("Stick : choisir", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour")
         instruction_text_2 = ""
-        if _map_keys_display[current_selection_index] == "Aléatoire":
-            instruction_text_2 = "G/D: Nouvelle | F: Sauver en favori"
+        current_label = _map_keys_display[current_selection_index]
+        if current_label == "Aléatoire":
+            instruction_text_2 = settings_screens.hint("Gauche / Droite : nouvelle carte", f"{settings_screens.button_name(6)} : garder en favori")
+        elif current_label in _favorite_maps:
+            instruction_text_2 = f"{settings_screens.button_name(7)} : supprimer ce favori"
         settings_screens.draw_hint(screen, instruction_text_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
         if instruction_text_2:
-            utils.draw_text(screen, instruction_text_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + line_gap), "center")
+            settings_screens.draw_hint(screen, instruction_text_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + line_gap), "center")
 
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin de run_map_selection: {e}", exc_info=True)
@@ -1267,9 +1275,7 @@ def run_classic_setup(events, dt, screen, game_state):
         else:
             screen.fill(config.COLOR_BACKGROUND)
 
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
         utils.draw_text_with_shadow(
@@ -1680,9 +1686,7 @@ def run_vs_ai_setup(events, dt, screen, game_state):
     # --- Dessin ---
     try:
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))
-        screen.blit(overlay, (0, 0))
+        darken(screen, 180)
 
         sw, sh = int(config.SCREEN_WIDTH), int(config.SCREEN_HEIGHT)
         title = "VS IA - DIFFICULTÉ (PARTIE)"
@@ -1953,7 +1957,7 @@ def run_pvp_setup(events, dt, screen, game_state):
     # Dessin de l'écran
     try:
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
+        darken(screen, 150)
         utils.draw_text_with_shadow(screen, "Configuration PvP", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
         y_start, item_gap = config.SCREEN_HEIGHT * 0.26, min(60, int(config.SCREEN_HEIGHT * 0.085))
         label_x, value_x = config.SCREEN_WIDTH * 0.35, config.SCREEN_WIDTH * 0.65
@@ -2275,7 +2279,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     # Dessin de l'écran
     try: # Bloc try autour du dessin
         draw_screen_background(screen, game_state)
-        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 190)); screen.blit(overlay, (0, 0))
+        darken(screen, 190)
 
         
         # Affichage du titre et du nom

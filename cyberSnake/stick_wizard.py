@@ -14,6 +14,7 @@ import config
 import utils
 import joy_map
 import screens
+import panel
 import borne_install
 
 PUSH_THRESHOLD = 0.6
@@ -171,7 +172,7 @@ def run_stick_wizard(events, dt, screen, game_state):
         if ok:
             lines = ["Tes réglages de boutons restent les mêmes, rien à configurer.",
                      "Redémarre la borne pour que tous les jeux en profitent.",
-                     "URGENCE : Select + Start tenus 5 secondes = correction désactivée."]
+                     "URGENCE : Coin + Player tenus 5 secondes = correction désactivée."]
         else:
             lines = ["Rien n'a été modifié pour les autres jeux."]
         for k, line in enumerate(lines):
@@ -202,8 +203,8 @@ def run_stick_wizard(events, dt, screen, game_state):
         utils.draw_text(screen, "Relâche le stick...", font_default, config.COLOR_TEXT_MENU, (sw // 2, int(sh * 0.74)), "center")
     if st['message']:
         utils.draw_text(screen, st['message'], font_default, (255, 120, 120), (sw // 2, int(sh * 0.80)), "center")
-    hint = "Back / Échap : annuler"
+    hint = f"{panel.button_tag('BACK')} : annuler"
     if slot == "p2":
         hint += "   |   Un seul joueur ? Appuie sur un bouton pour terminer"
-    utils.draw_text(screen, hint, font_small, (150, 170, 200), (sw // 2, int(sh * 0.92)), "center")
+    panel.draw_hint(screen, hint, font_small, (150, 170, 200), (sw // 2, int(sh * 0.92)), "center")
     return config.STICK_WIZARD

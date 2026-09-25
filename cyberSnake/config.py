@@ -736,4 +736,13 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.4.0'
+VERSION = '2.5.0'
+# Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
+WHATS_NEW = [
+    "Menu : appuie deux fois sur Coin pour quitter le jeu",
+    "Seul du côté rouge (J2) : menus et parties solo au stick de J2",
+    "Carte aléatoire : gauche / droite pour en générer une nouvelle",
+    "Plus fluide en 1080p : mort, flash, fondus et menus",
+    "Mise à jour : « Déjà à jour » sans tout retélécharger",
+    "Aides : boutons dessinés sur tous les écrans",
+]

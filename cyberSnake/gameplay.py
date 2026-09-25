@@ -111,22 +111,22 @@ def _run_death_cam(dt, screen, game_state, real_now):
     now = game_clock.ticks()
     utils.particles[:] = [p for p in utils.particles if not p.update(dt)]
     shake_x, shake_y = utils.apply_shake_offset(now)
-    surf = game_state.get('_shake_surface')
-    if surf is None or surf.get_size() != screen.get_size():
-        surf = pygame.Surface(screen.get_size()).convert()
-        game_state['_shake_surface'] = surf
-    draw_game_elements_on_surface(surf, game_state, now)
-    screen.fill(config.COLOR_BACKGROUND)
-    screen.blit(surf, (shake_x, shake_y))
-    # Assombrissement progressif vers l'écran de fin
-    t = 1.0 - (until - real_now) / float(DEATH_CAM_MS)
-    veil = game_state.get('_death_veil')
-    if veil is None or veil.get_size() != screen.get_size():
-        veil = pygame.Surface(screen.get_size())
-        veil.fill((0, 0, 0))
-        game_state['_death_veil'] = veil
-    veil.set_alpha(int(170 * max(0.0, min(1.0, t))))
-    screen.blit(veil, (0, 0))
+    if shake_x or shake_y:
+        surf = game_state.get('_shake_surface')
+        if surf is None or surf.get_size() != screen.get_size():
+            surf = pygame.Surface(screen.get_size()).convert()
+            game_state['_shake_surface'] = surf
+        draw_game_elements_on_surface(surf, game_state, now)
+        screen.fill(config.COLOR_BACKGROUND)
+        screen.blit(surf, (shake_x, shake_y))
+    else:
+        draw_game_elements_on_surface(screen, game_state, now)  # Sans secousse : directement à l'écran
+    # Assombrissement progressif vers l'écran de fin. Multiplier les pixels donne le même rendu
+    # qu'un voile noir transparent, pour 3 fois moins de calcul (la borne tombait à 30 images/s ici).
+    t = max(0.0, min(1.0, 1.0 - (until - real_now) / float(DEATH_CAM_MS)))
+    k = 255 - int(170 * t)
+    if k < 255:
+        screen.fill((k, k, k), special_flags=pygame.BLEND_RGB_MULT)
     return config.PLAYING
 
 
@@ -1021,7 +1021,8 @@ def run_game(events, dt, screen, game_state):
         # --- Gestion Joystick Mouvement (AVEC LOGGING) ---
         elif event.type == pygame.JOYAXISMOTION:
             target_snake = None
-            if event.instance_id == p1_id and player_snake and player_snake.alive:
+            # Seul en jeu : le stick de J2 dirige aussi le serpent (on peut jouer du côté rouge)
+            if (event.instance_id == p1_id or (not two_players and event.instance_id == p2_id)) and player_snake and player_snake.alive:
                 target_snake = player_snake
             elif event.instance_id == p2_id and two_players and player2_snake and player2_snake.alive:
                 target_snake = player2_snake
@@ -1051,7 +1052,7 @@ def run_game(events, dt, screen, game_state):
 
         elif event.type == pygame.JOYHATMOTION:
             target_snake_hat = None
-            if event.instance_id == p1_id and player_snake and player_snake.alive:
+            if (event.instance_id == p1_id or (not two_players and event.instance_id == p2_id)) and player_snake and player_snake.alive:
                 target_snake_hat = player_snake
             elif event.instance_id == p2_id and two_players and player2_snake and player2_snake.alive:
                 target_snake_hat = player2_snake
@@ -1081,7 +1082,7 @@ def run_game(events, dt, screen, game_state):
             # de perdre une partie sur un appui accidentel. "Quitter" reste dans le menu Pause.
             pause_button = int(getattr(config, 'BUTTON_PAUSE', 7))
             menu_button = int(getattr(config, 'BUTTON_BACK', 8))
-            pause_allowed = event.instance_id == p1_id or (two_players and event.instance_id == p2_id)
+            pause_allowed = event.instance_id in (p1_id, p2_id)
             if pause_allowed and event.button in (pause_button, menu_button, panel.BUTTON_START):
                 logging.info(f"Joystick button {event.button} pressed, pausing game.")
                 return _enter_pause(game_state)
@@ -1090,8 +1091,8 @@ def run_game(events, dt, screen, game_state):
                        int(getattr(config, 'BUTTON_TERTIARY_ACTION', 3)): 'shield'}
             action = actions.get(event.button)
             snake = None
-            if event.instance_id == p1_id:
-                snake = player_snake
+            if event.instance_id == p1_id or (not two_players and event.instance_id == p2_id):
+                snake = player_snake  # Seul en jeu : les boutons de J2 servent aussi
             elif two_players and event.instance_id == p2_id:
                 snake = player2_snake
             if action and snake is not None and _player_action(game_state, snake, action, current_time, coop):

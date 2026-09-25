@@ -347,10 +347,14 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
                     (int(x1) - int(x0) + 1) * config.GRID_SIZE,
                     (int(y1) - int(y0) + 1) * config.GRID_SIZE,
                 )
-                overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-                overlay.fill((0, 0, 0, 140))
-                overlay.fill((0, 0, 0, 0), arena_rect_px)
-                target_surface.blit(overlay, (0, 0))
+                # Hors de l'arène : pixels assombris (comme un voile noir à 140/255), sans allouer
+                # une surface transparente plein écran à chaque image
+                sw, sh = target_surface.get_size()
+                a = arena_rect_px.clip(pygame.Rect(0, 0, sw, sh))
+                for r in (pygame.Rect(0, 0, sw, a.top), pygame.Rect(0, a.bottom, sw, sh - a.bottom),
+                          pygame.Rect(0, a.top, a.left, a.height), pygame.Rect(a.right, a.top, sw - a.right, a.height)):
+                    if r.width > 0 and r.height > 0:
+                        target_surface.fill((115, 115, 115), r, special_flags=pygame.BLEND_RGB_MULT)
             except Exception:
                 pass
 

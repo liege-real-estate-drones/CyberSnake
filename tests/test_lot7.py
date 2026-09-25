@@ -87,7 +87,8 @@ class TestPauseTwoPlayers(unittest.TestCase):
             gs['screen'] = surf
             gameplay._enter_pause(gs)
             clock.tick(200)
-            self.assertEqual(game_states.run_pause([start], 16, surf, gs), config.PAUSED)  # Seul J1 en solo
+            # Lot 9 : seul en jeu, on peut jouer du côté J2, donc aussi reprendre la partie
+            self.assertEqual(game_states.run_pause([start], 16, surf, gs), config.PLAYING)
 
 
 class TestKillCredit(unittest.TestCase):
