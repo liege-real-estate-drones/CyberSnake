@@ -110,5 +110,94 @@ class TestCheaperScreens(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
 
+class TestCareerStats(unittest.TestCase):
+    """Page « Statistiques » du Hall of Fame : parties, temps de jeu, nourriture, combos..."""
+
+    def setUp(self):
+        import progress
+        import tempfile
+        self.dir = tempfile.mkdtemp(prefix="cybersnake_stats_")
+        self._old = (progress._base_path, progress._cache)
+        progress.load(self.dir)
+
+    def tearDown(self):
+        import progress
+        import shutil
+        progress._base_path, progress._cache = self._old
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_games_are_accumulated(self):
+        import progress
+        progress.record_game(config.MODE_SOLO, 120, kills=2, mode_key="solo", duration_ms=65000, foods=12, best_combo=4)
+        progress.record_game(config.MODE_SURVIVAL, 7, wave=7, mode_key="survie", duration_ms=30000, foods=3, best_combo=6)
+        st = progress.stats()
+        self.assertEqual((st["games"], st["play_ms"], st["foods"], st["kills"]), (2, 95000, 15, 2))
+        self.assertEqual((st["best_combo"], st["best_wave"]), (6, 7))
+        self.assertEqual(st["games_by_mode"], {"solo": 1, "survie": 1})
+
+    def test_hall_of_fame_has_three_pages(self):
+        import screens
+        surf = pygame.Surface((1280, 720))
+        gs = _state()
+        right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
+        for expected in (1, 2, 0):
+            screens.run_hall_of_fame([right], 16, surf, gs)
+            self.assertEqual(gs['_hof_page'], expected)
+
+
+class TestBackgroundPickerCache(unittest.TestCase):
+    def test_going_back_and_forth_does_not_reload(self):
+        import backgrounds
+        import settings_screens
+        loads = []
+        orig = backgrounds.load
+        backgrounds.load = lambda *a, **k: loads.append(a[1]) or orig(*a, **k)
+        right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
+        left = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(-1, 0), instance_id=0, joy=0)
+        try:
+            with MemoryOptions():
+                gs = _state(_bg_choice="cover_anim")
+                surf = pygame.Surface((640, 360))
+                settings_screens.run_background_screen([], 16, surf, gs)
+                for ev in (right, right, left, right):  # duel_neon, double_helice, duel_neon, double_helice
+                    settings_screens.run_background_screen([ev], 16, surf, gs)
+        finally:
+            backgrounds.load = orig
+        self.assertEqual(loads, ["duel_neon", "double_helice"])
+
+
+class TestLiveRecord(unittest.TestCase):
+    """« RECORD BATTU ! » annoncé en pleine partie, une seule fois."""
+
+    def test_announced_once_when_the_best_score_is_passed(self):
+        saved = {k: list(v) for k, v in utils.high_scores.items()}
+        try:
+            utils.high_scores['solo'] = [{"name": "THI", "score": 100}]
+            with FakeClock():
+                gs = new_game(config.MODE_SOLO)
+                p = gs['player_snake']
+                p.invincible_timer = 10 ** 12
+                surf = pygame.Surface((800, 600))
+                p.score = 90
+                gameplay.run_game([], 16, surf, gs)
+                self.assertFalse(gs['live_record_done'])
+                p.score = 150
+                gameplay.run_game([], 16, surf, gs)
+                self.assertTrue(gs['live_record_done'])
+                self.assertEqual(gs['boss_banner_text'], "RECORD BATTU !")
+                gs['boss_banner_text'] = ""
+                p.score = 300
+                gameplay.run_game([], 16, surf, gs)
+                self.assertEqual(gs['boss_banner_text'], "")  # Pas une deuxième fois
+            with FakeClock():
+                gs = new_game(config.MODE_SOLO, daily_challenge=True)  # Défi du jour : son propre classement
+                gs['player_snake'].invincible_timer = 10 ** 12
+                gs['player_snake'].score = 500
+                gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+                self.assertFalse(gs['live_record_done'])
+        finally:
+            utils.high_scores = saved
+
+
 if __name__ == "__main__":
     unittest.main()

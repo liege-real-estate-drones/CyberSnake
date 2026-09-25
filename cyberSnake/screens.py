@@ -32,6 +32,7 @@ HOF_CATEGORIES = [
     ("survie_coop", "Survie Coop"),
     ("chrono", "Chrono"),
 ]
+HOF_PAGES = 3  # Records, Trophées, Statistiques
 PODIUM_COLORS = [(255, 215, 0), (200, 210, 225), (205, 127, 50)]
 
 _title_glow_cache = {}
@@ -255,7 +256,8 @@ def run_hall_of_fame(events, dt, screen, game_state):
             return config.MENU
         elif ev.type == pygame.JOYHATMOTION and ev.value[0]:
             game_state.pop('_hof_reset_until', None)
-            game_state['_hof_page'] = 1 - int(game_state.get('_hof_page', 0) or 0)  # Records <-> Trophées
+            # Records -> Trophées -> Statistiques (gauche / droite)
+            game_state['_hof_page'] = (int(game_state.get('_hof_page', 0) or 0) + (1 if ev.value[0] > 0 else -1)) % HOF_PAGES
             utils.play_sound("menu_move")
 
     page = int(game_state.get('_hof_page', 0) or 0)
@@ -265,15 +267,16 @@ def run_hall_of_fame(events, dt, screen, game_state):
             game_state['_hof_page'] = 0
             return config.HOW_TO_PLAY
         page = 1 if elapsed >= ATTRACT_HOF_MS * 0.6 else 0  # Boucle d'attente : records puis trophées
-    if page == 1:
+    if page in (1, 2):
         _draw_background(screen, game_state, now, darken=185)
-        draw_trophies(screen, game_state, now)
+        (draw_trophies if page == 1 else draw_stats)(screen, game_state, now)
         if attract:
             if (now // 550) % 2 == 0:
                 utils.draw_text_with_shadow(screen, "APPUIE SUR UN BOUTON", game_state.get('font_default'), config.COLOR_TEXT_MENU,
                                             config.COLOR_UI_SHADOW, (screen.get_width() // 2, int(screen.get_height() * 0.95)), "center")
         else:
-            panel.draw_hint(screen, panel.hint("Gauche / Droite : records", f"{panel.button_tag('PRIMARY')} ou {panel.button_tag('SECONDARY')} : retour au menu"),
+            panel.draw_hint(screen, panel.hint("Gauche / Droite : " + ("statistiques" if page == 1 else "records"),
+                                               f"{panel.button_tag('PRIMARY')} ou {panel.button_tag('SECONDARY')} : retour au menu"),
                             game_state.get('font_default'), config.COLOR_TEXT_MENU, (screen.get_width() // 2, int(screen.get_height() * 0.95)), "center")
         return config.HALL_OF_FAME
 
@@ -369,6 +372,59 @@ def _wrap(font, text, max_width):
     if cur:
         lines.append(cur)
     return lines
+
+
+def draw_stats(screen, game_state, now):
+    """Page « Statistiques » : la carrière de la borne (toutes parties confondues)."""
+    import progress
+    sw, sh = screen.get_size()
+    font_large = game_state.get('font_large')
+    font_medium = game_state.get('font_medium')
+    font_small = game_state.get('font_small')
+    title = _glow_text(font_large, "STATISTIQUES", (255, 240, 180), (255, 170, 0), 10)
+    screen.blit(title, title.get_rect(center=(sw // 2, int(sh * 0.10))))
+    st = progress.stats()
+    play_s = int(st.get("play_ms", 0)) // 1000
+    tiles = [
+        ("Parties jouées", str(int(st.get("games", 0)))),
+        ("Temps de jeu", f"{play_s // 3600} h {play_s % 3600 // 60:02d}" if play_s >= 3600 else f"{play_s // 60} min {play_s % 60:02d}"),
+        ("Nourriture mangée", str(int(st.get("foods", 0)))),
+        ("Ennemis éliminés", str(int(st.get("kills", 0)))),
+        ("Meilleur combo", f"x{int(st.get('best_combo', 0))}"),
+        ("Vague la plus haute", str(int(st.get("best_wave", 0)))),
+        ("Boss vaincus", str(int(st.get("bosses", 0)))),
+        ("Points de carrière", str(int(progress._data().get("career_points", 0) or 0))),
+    ]
+    cols = 4
+    margin, gap = int(sw * 0.05), int(sw * 0.02)
+    top = int(sh * 0.19)
+    tile_w = (sw - 2 * margin - (cols - 1) * gap) // cols
+    tile_h = int(sh * 0.17)
+    for i, (label, value) in enumerate(tiles):
+        r = pygame.Rect(margin + (i % cols) * (tile_w + gap), top + (i // cols) * (tile_h + gap), tile_w, tile_h)
+        _draw_panel(screen, r, alpha=210)
+        val = _glow_text(font_medium, value, (255, 255, 255), (0, 200, 255), 6)
+        screen.blit(val, val.get_rect(center=(r.centerx, r.centery - font_small.get_linesize() // 2)))
+        utils.draw_text(screen, label, font_small, config.COLOR_HOF_CATEGORY, (r.centerx, r.bottom - 10), "midbottom")
+    # Parties par mode
+    by_mode = st.get("games_by_mode") or {}
+    y = top + 2 * (tile_h + gap) + 6
+    box = pygame.Rect(margin, y, sw - 2 * margin, int(sh * 0.90) - y)
+    _draw_panel(screen, box, alpha=200)
+    utils.draw_text(screen, "Parties par mode", font_medium, config.COLOR_HOF_CATEGORY, (box.centerx, box.top + 10), "midtop")
+    labels = dict(HOF_CATEGORIES)
+    total = max(1, max([int(v) for v in by_mode.values()] + [1]))
+    rows = [(labels.get(k, k), int(by_mode.get(k, 0))) for k, _l in HOF_CATEGORIES]
+    bar_top = box.top + 14 + font_medium.get_linesize()
+    row_h = (box.bottom - 8 - bar_top) // max(1, len(rows))  # Toutes les lignes tiennent dans le cadre
+    label_w = max(font_small.size(lbl)[0] for lbl, _n in rows) + 20
+    for j, (lbl, n) in enumerate(rows):
+        ry = bar_top + j * row_h
+        utils.draw_text(screen, lbl, font_small, config.COLOR_TEXT_MENU, (box.left + 20, ry + row_h // 2), "midleft")
+        bar = pygame.Rect(box.left + 20 + label_w, ry + row_h // 4, int((box.width - label_w - 110) * n / total), max(4, row_h // 2))
+        if n:
+            pygame.draw.rect(screen, (0, 200, 255), bar, border_radius=4)
+        utils.draw_text(screen, str(n), font_small, config.COLOR_TEXT_HIGHLIGHT, (bar.right + 10, ry + row_h // 2), "midleft")
 
 
 def draw_trophies(screen, game_state, now):

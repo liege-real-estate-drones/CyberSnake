@@ -13,7 +13,7 @@ import config
 import utils
 import panel
 import rules
-from ui_common import draw_screen_background, draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
+from ui_common import blend_rect, draw_screen_background, draw_ui_panel, get_joystick_ids, is_back_button, is_confirm_button
 
 def button_name(action):
     """Marque d'un bouton dans une aide : draw_hint la dessine à sa place sur le panneau de la borne."""
@@ -105,9 +105,7 @@ def run_list_screen(events, screen, game_state, key, title, subtitle, items, bac
         r = pygame.Rect(box.left + 12, box.top + 12 + i * row_h, box.width - 24, row_h - 6)
         selected = i == sel
         if selected:
-            hl = pygame.Surface(r.size, pygame.SRCALPHA)
-            hl.fill((255, 255, 255, int(40 + 30 * math.sin(now * 0.008))))
-            screen.blit(hl, r.topleft)
+            blend_rect(screen, r, (255, 255, 255, int(40 + 30 * math.sin(now * 0.008))))
             pygame.draw.rect(screen, config.COLOR_TEXT_HIGHLIGHT, r, 2, border_radius=8)
         col = config.COLOR_TEXT_HIGHLIGHT if selected else config.COLOR_TEXT_MENU
         utils.draw_text(screen, label, font_default, col, (r.left + 12, r.centery), "midleft")
@@ -182,7 +180,17 @@ def run_background_screen(events, dt, screen, game_state):
         opts = _options()
         opts["menu_background"] = new
         _save(opts)
-        img = backgrounds.load(base_path, new, screen.get_size())
+        # Les 3 derniers fonds préparés restent en mémoire : aller-retour sans recharger l'image
+        # (le choix des fonds tombait à ~38 images/s sur la borne). Pas pour l'animé ni l'aléatoire.
+        cache = game_state.setdefault('_bg_cache', [])
+        spec = backgrounds.BACKGROUNDS.get(new)
+        cacheable = new.startswith(backgrounds.USER_PREFIX) or (spec is not None and not spec[4])
+        img = next((surf for key, size, surf in cache if key == new and size == screen.get_size()), None) if cacheable else None
+        if img is None:
+            img = backgrounds.load(base_path, new, screen.get_size())
+            if img is not None and cacheable:
+                cache.append((new, screen.get_size(), img))
+                del cache[:-3]
         if img is not None:
             game_state['menu_background_image'] = img
         utils.play_sound("menu_move")
@@ -198,10 +206,12 @@ def run_background_screen(events, dt, screen, game_state):
             utils.play_sound("menu_select" if is_confirm_button(ev.button) else "menu_back")
             game_state.pop('_bg_choice', None)
             game_state.pop('_bg_choices', None)
+            game_state.pop('_bg_cache', None)
             return back
         elif ev.type == pygame.KEYDOWN and ev.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
             game_state.pop('_bg_choice', None)
             game_state.pop('_bg_choices', None)
+            game_state.pop('_bg_cache', None)
             return back
 
     sw, sh = screen.get_size()

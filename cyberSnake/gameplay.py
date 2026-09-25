@@ -375,6 +375,35 @@ def _enter_pause(game_state):
     return config.PAUSED
 
 
+def _record_key(game_state):
+    """Classement du Hall of Fame de la partie en cours (None : pas de record possible)."""
+    mode = game_state.get('current_game_mode')
+    if game_state.get('demo_mode') or game_state.get('daily_challenge') or rules.game_is_custom():
+        return None
+    if mode == config.MODE_SOLO:
+        return time_attack.HOF_KEY if time_attack.active(game_state) else "solo"
+    if mode == config.MODE_SURVIVAL:
+        return "survie_coop" if game_state.get('coop') else "survie"
+    return {config.MODE_VS_AI: "vs_ai", config.MODE_CLASSIC: "classic"}.get(mode)
+
+
+def _check_live_record(game_state, now):
+    """« RECORD BATTU ! » en pleine partie, dès qu'on dépasse le meilleur score (ou vague) du mode."""
+    if game_state.get('live_record_done'):
+        return
+    key = _record_key(game_state)
+    snake = game_state.get('player_snake')
+    scores = utils.high_scores.get(key, []) if key else []
+    if not scores or snake is None:
+        return
+    value = int(game_state.get('survival_wave', 0) or 0) if key.startswith("survie") else int(snake.score)
+    if value > int(scores[0].get('score', 0) or 0):
+        game_state['live_record_done'] = True
+        game_state['boss_banner_text'] = "RECORD BATTU !"
+        game_state['boss_banner_until'] = now + 2000
+        utils.play_sound("new_record")
+
+
 BODY_HIT_SEGMENTS = 2  # Anneaux coupés par un tir ennemi dans le corps (niveaux Facile et Normal)
 
 
@@ -486,6 +515,7 @@ def reset_game(game_state):
     game_state['new_unlocks'] = []
     game_state['daily_rank'] = None
     game_state['time_attack_done'] = False
+    game_state['live_record_done'] = False
     game_state.pop('_ta_last_second', None)
     if game_state.get('daily_challenge'):
         random.seed(progress.daily_seed())  # Même départ pour tout le monde aujourd'hui
@@ -2127,6 +2157,7 @@ def run_game(events, dt, screen, game_state):
         boss_mod.update_boss(game_state, current_time)
         if not game_over:
             frenzy.update(game_state, current_time)  # Frénésie : pluie de nourriture, points x2
+            _check_live_record(game_state, current_time)
     except Exception as e:
         logging.error(f"Erreur mise à jour boss: {e}", exc_info=True)
 
