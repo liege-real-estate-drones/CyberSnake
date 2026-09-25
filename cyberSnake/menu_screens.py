@@ -12,6 +12,7 @@ import utils
 import progress
 import music
 import rules
+import level
 import settings_screens
 import borne_install
 import stick_wizard
@@ -21,6 +22,9 @@ import game_objects
 from ui_common import darken, draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
+LEVEL_ROW = "LEVEL"  # Ligne « Niveau : Facile / Normal / Difficile » du menu principal (level.py)
+
+
 def _activate_menu_option(game_state, menu_options, menu_selection_index):
     """Valide l'option sélectionnée du menu principal et retourne l'état suivant."""
     if not (0 <= menu_selection_index < len(menu_options)):
@@ -28,6 +32,9 @@ def _activate_menu_option(game_state, menu_options, menu_selection_index):
         return config.MENU
     selected_option = menu_options[menu_selection_index][0]
     utils.play_sound("menu_select")
+    if selected_option == LEVEL_ROW:  # Valider sur « Niveau » : niveau suivant
+        level.cycle(1)
+        return config.MENU
 
     # Défi du jour = partie Solo avec carte/départ imposés
     game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
@@ -128,6 +135,7 @@ def run_menu(events, dt, screen, game_state):
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),
         (config.MODE_SURVIVAL, "Mode Survie", top_surv_hs),
         (config.COOP_SURVIVAL, "Survie à deux (Coop)", "Deux joueurs ensemble contre les vagues et les boss"),
+        (LEVEL_ROW, f"Niveau : {level.label()}", level.get("info")),
         (config.RULES, "Règles personnalisées", rules_info),
         (config.OPTIONS, "Options", ""),
         (config.HALL_OF_FAME, "Hall of Fame", ""),
@@ -198,6 +206,10 @@ def run_menu(events, dt, screen, game_state):
                     menu_selection_index = (menu_selection_index + 1) % num_options
                     utils.play_sound("menu_move")
                     last_axis_move_time = current_time # Met à jour le temps
+                elif hat_x and menu_options[menu_selection_index][0] == LEVEL_ROW:  # Gauche / Droite : niveau
+                    level.cycle(1 if hat_x > 0 else -1)
+                    utils.play_sound("menu_move")
+                    last_axis_move_time = current_time
 
         # --- FIN Gestion Joystick Menu ---
 
@@ -300,6 +312,8 @@ def run_menu(events, dt, screen, game_state):
                     pass
 
             main_color = config.COLOR_TEXT_HIGHLIGHT if is_selected else config.COLOR_TEXT_MENU
+            if mode_id == LEVEL_ROW and is_selected:
+                text = f"Niveau :  <  {level.label()}  >"
             utils.draw_text_with_shadow(
                 screen,
                 text,

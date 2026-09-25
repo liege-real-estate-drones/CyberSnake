@@ -23,6 +23,7 @@ import config
 import utils
 import fx
 import game_objects
+import level
 
 BOSS_WAVE_INTERVAL = 5
 BOSS_COLOR = (190, 60, 255)
@@ -216,7 +217,7 @@ def _fire_fan(game_state, boss, now):
     for k in range(count):
         a = base - spread + 2 * spread * k / (count - 1)
         shots.append(game_objects.Projectile(x + math.cos(a) * g * 0.8, y + math.sin(a) * g * 0.8, (math.cos(a), math.sin(a)),
-                                             config.ENEMY_PROJECTILE_SPEED * 0.8, color, config.ENEMY_PROJECTILE_SIZE + 1, boss))
+                                             config.ENEMY_PROJECTILE_SPEED * 0.8 * level.get("enemy_shot_speed"), color, config.ENEMY_PROJECTILE_SIZE + 1, boss))
     game_state.setdefault('enemy_projectiles', []).extend(shots)
     utils.play_sound("boss_fan")
     utils.trigger_shake(3, 180)

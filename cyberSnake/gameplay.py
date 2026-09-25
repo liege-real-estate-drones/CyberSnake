@@ -17,6 +17,7 @@ import arenas
 import joy_map
 import keyboard_controls
 import rules
+import level
 import pvp_rounds
 import progress
 import screens
@@ -371,6 +372,24 @@ def _enter_pause(game_state):
     return config.PAUSED
 
 
+BODY_HIT_SEGMENTS = 2  # Anneaux coupés par un tir ennemi dans le corps (niveaux Facile et Normal)
+
+
+def _enemy_shot_on_body(snake, seg_index, hit_pos_px):
+    """Tir ennemi dans le corps d'un joueur : Facile / Normal, le serpent perd 2 anneaux au lieu
+    d'une armure (ou de la vie). Retourne True si c'est réglé ainsi, False s'il faut infliger le coup."""
+    if seg_index <= 0 or not level.get("body_hit_shrinks"):
+        return False
+    lost = max(0, min(BODY_HIT_SEGMENTS, len(snake.positions) - 3))  # Toujours au moins 3 anneaux
+    if lost:
+        snake.shrink(lost)
+    if hit_pos_px:
+        utils.emit_particles(hit_pos_px[0], hit_pos_px[1], 8, config.COLOR_ARMOR_HIT, (1, 3), (200, 400), (1, 3))
+    utils.play_sound("hit_p1")
+    snake._hit_flash_until = game_clock.ticks() + 120
+    return True
+
+
 def _player_action(game_state, snake, action, current_time, coop):
     """Tir / Dash / Bouclier d'un joueur (manette ou clavier). Retourne True si le Dash l'a tué."""
     mode = game_state.get('current_game_mode')
@@ -601,6 +620,8 @@ def reset_game(game_state):
     game_state['active_enemies'] = []
     game_state['nests'] = []
     start_armor_p1 = pvp_start_armor if current_game_mode == config.MODE_PVP else getattr(config, 'INITIAL_ARMOR_P1', 0)
+    if current_game_mode not in (config.MODE_PVP, config.MODE_CLASSIC):
+        start_armor_p1 = max(start_armor_p1, level.get("start_armor"))  # Niveau : armure de départ
     start_ammo_p1 = pvp_start_ammo if current_game_mode == config.MODE_PVP else getattr(config, 'INITIAL_AMMO_P1', 20)
     # --- NOUVEAU: Donne 10 munitions de départ au joueur en mode Vs AI ---
     if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SOLO:
@@ -1377,10 +1398,19 @@ def run_game(events, dt, screen, game_state):
                 if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
 
             density_interval, density_max = rules.mine_density()  # Règle perso : densité de mines
-            if current_game_mode != config.MODE_CLASSIC and density_interval is not None and current_time - last_mine_spawn_time > mine_interval * density_interval:
+            if current_game_mode != config.MODE_CLASSIC and density_interval is not None and current_time - last_mine_spawn_time > mine_interval * density_interval * level.get("mine_interval"):
                 spawned_count = 0
+                # Jamais juste devant un joueur : 7 cases dans sa direction (sur 3 de large)
+                corridor = set()
+                for ps in (player_snake, player2_snake):
+                    if ps and ps.alive and ps.positions:
+                        hx, hy = ps.positions[0]
+                        ddx, ddy = ps.current_direction
+                        for k in range(1, 8):
+                            for side in (-1, 0, 1):
+                                corridor.add(((hx + ddx * k + ddy * side) % config.GRID_WIDTH, (hy + ddy * k + ddx * side) % config.GRID_HEIGHT))
                 for _ in range(config.MINE_SPAWN_COUNT):
-                    if len(mines) >= int(config.MAX_MINES * density_max): break
+                    if len(mines) >= int(config.MAX_MINES * density_max * level.get("mine_max")): break
                     spawn_pos = utils.get_random_empty_position(current_occupied)
                     if spawn_pos:
                         all_snake_bodies = []
@@ -1394,7 +1424,7 @@ def run_game(events, dt, screen, game_state):
                             if baby and baby.alive:
                                 all_snake_bodies.extend(baby.positions)
 
-                        too_close = any(
+                        too_close = spawn_pos in corridor or any(
                             utils.grid_manhattan_distance(spawn_pos, body_part, wrap=True) < 3
                             for body_part in all_snake_bodies
                         )
@@ -1719,12 +1749,14 @@ def run_game(events, dt, screen, game_state):
 
                  # Collision avec Joueur 1
                  if player_snake and player_snake.alive and not player_snake.ghost_active:
-                     for seg_pos_p1 in player_snake.positions:
+                     for seg_idx_p1, seg_pos_p1 in enumerate(player_snake.positions):
                          seg_rect_p1 = pygame.Rect(seg_pos_p1[0]*config.GRID_SIZE, seg_pos_p1[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
                          if en_proj.rect.colliderect(seg_rect_p1):
                              en_rem_indices.add(l); hit_something_en = True
                              if bonuses.is_mirror_active(player_snake, current_time):
                                  _reflect_projectile(game_state, en_proj, player_snake, current_time)
+                                 break
+                             if _enemy_shot_on_body(player_snake, seg_idx_p1, en_proj.rect.center):
                                  break
                              survived_p1 = player_snake.handle_damage(current_time, en_proj.owner_snake, damage_source_pos=en_proj.rect.center) # Passe l'owner IA
                              if not survived_p1:
@@ -1744,12 +1776,14 @@ def run_game(events, dt, screen, game_state):
 
                  # Collision avec Joueur 2 (PvP / Coop)
                  if two_players and player2_snake and player2_snake.alive and not player2_snake.ghost_active:
-                    for seg_pos_p2 in player2_snake.positions:
+                    for seg_idx_p2, seg_pos_p2 in enumerate(player2_snake.positions):
                         seg_rect_p2 = pygame.Rect(seg_pos_p2[0]*config.GRID_SIZE, seg_pos_p2[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
                         if en_proj.rect.colliderect(seg_rect_p2): # en_proj est le projectile IA
                             en_rem_indices.add(l); hit_something_en = True
                             if bonuses.is_mirror_active(player2_snake, current_time):
                                 _reflect_projectile(game_state, en_proj, player2_snake, current_time)
+                                break
+                            if _enemy_shot_on_body(player2_snake, seg_idx_p2, en_proj.rect.center):
                                 break
                             survived_p2 = player2_snake.handle_damage(current_time, en_proj.owner_snake, damage_source_pos=en_proj.rect.center) # Passe l'owner IA
                             if not survived_p2:
@@ -1832,7 +1866,7 @@ def run_game(events, dt, screen, game_state):
                     for i in range(len(mines) - 1, -1, -1):
                          # Utilise mines_collided_indices_head pour éviter double collision
                          if i not in mines_collided_indices_head and 0 <= i < len(mines): # Vérifie index
-                             if head_pos == mines[i].position:
+                             if head_pos == mines[i].position and mines[i].is_armed(current_time):
                                  collided_mine_idx_head = i
                                  break
                     
