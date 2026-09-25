@@ -358,7 +358,8 @@ def draw_game_over(screen, game_state, info):
     y = panel.top + 18
     utils.draw_text(screen, info.get('main_label', "SCORE"), font_default, (160, 190, 230), (sw // 2, y), "midtop")
     y += font_default.get_height() + 4
-    big = _big_font(game_state, max(40, int(sh * 0.09)))
+    # Chiffres en Share Tech Mono : en Orbitron, « 7 » et « 0 » ressemblent à des symboles
+    big = _big_font(game_state, max(40, int(sh * 0.09)), "ShareTechMono-Regular.ttf")
     val = _glow_text(big, str(info.get('main_value', 0)), (255, 255, 255), (0, 200, 255), 8)
     screen.blit(val, val.get_rect(midtop=(sw // 2, y - 14)))
     y += big.get_height() + 6
@@ -407,7 +408,7 @@ def draw_game_over(screen, game_state, info):
     # Boutons
     options = info.get('options', [])
     sel = info.get('selection', 0)
-    btn_w = int(sw * 0.2)
+    btn_w = max(int(sw * 0.2), max((font_medium.size(o)[0] for o in options), default=0) + 40)
     btn_h = font_medium.get_height() + 16
     gap = int(sw * 0.02)
     total = btn_w * len(options) + gap * (len(options) - 1)

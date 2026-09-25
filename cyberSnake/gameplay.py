@@ -1490,8 +1490,9 @@ def run_game(events, dt, screen, game_state):
                 for j, m in current_mines_copy_p1:
                     if j not in mines_hit_indices_proj and p.rect.colliderect(m.rect):
                         p1_rem_indices.add(i); mines_hit_indices_proj.add(j); hit_something = True
-                        if player_snake and player_snake.alive: # P1 est le owner ici
-                            player_snake.add_score(config.MINE_SCORE_VALUE); player_snake.increment_combo(1)
+                        shooter = p.owner_snake if getattr(p.owner_snake, 'is_player', False) else player_snake  # J2 en Survie à deux
+                        if shooter and shooter.alive:
+                            shooter.add_score(config.MINE_SCORE_VALUE); shooter.increment_combo(1)
                             if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
                                 obj_completed, bonus = utils.check_objective_completion('destroy_mine', current_objective, 1)
                                 if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
@@ -1523,7 +1524,8 @@ def run_game(events, dt, screen, game_state):
                                 utils.trigger_shake(4, 220)
                                 fx.add_shockwave(ncx, ncy, (255, 170, 60), now=current_time)
                                 fx.add_popup(ncx, ncy - 10, f"NID DÉTRUIT +{config.NEST_DESTROY_SCORE}", (255, 190, 90), now=current_time, big=True)
-                                if player_snake and player_snake.alive: player_snake.add_score(config.NEST_DESTROY_SCORE); player_snake.increment_combo(2)
+                                shooter = p.owner_snake if getattr(p.owner_snake, 'is_player', False) else player_snake
+                                if shooter and shooter.alive: shooter.add_score(config.NEST_DESTROY_SCORE); shooter.increment_combo(2)
                             break
                     if hit_something: continue
 
@@ -1581,6 +1583,7 @@ def run_game(events, dt, screen, game_state):
                                 if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_HIT_SCORE); player_snake.increment_combo(1)
                             else: # AI died
                                 if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_KILL_SCORE); player_snake.add_armor(config.ENEMY_KILL_ARMOR); player_snake.increment_combo(3)
+                                if player_snake: player_snake.kills += 1  # Statistique de fin, couleur « Toxique »
                                 if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
                                      obj_completed, bonus = utils.check_objective_completion('kill_opponent', current_objective, 1)
                                      if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
@@ -1597,10 +1600,13 @@ def run_game(events, dt, screen, game_state):
                                  if p.rect.colliderect(seg_rect_baby):
                                      p1_rem_indices.add(i); hit_something = True
                                      survived_baby = baby_snake_obj.handle_damage(current_time, player_snake, damage_source_pos=p.rect.center)
+                                     # Survie à deux : les tirs du J2 sont dans cette liste, le crédit va au tireur
+                                     shooter = p.owner_snake if getattr(p.owner_snake, 'is_player', False) else player_snake
                                      if survived_baby:
-                                         if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_HIT_SCORE // 2); player_snake.increment_combo(1)
+                                         if shooter and shooter.alive: shooter.add_score(config.ENEMY_HIT_SCORE // 2); shooter.increment_combo(1)
                                      else: # Baby died
-                                         if player_snake and player_snake.alive: player_snake.add_score(config.ENEMY_KILL_SCORE // 2); player_snake.increment_combo(1)
+                                         if shooter and shooter.alive: shooter.add_score(config.ENEMY_KILL_SCORE // 2); shooter.increment_combo(1)
+                                         if shooter: shooter.kills += 1  # Statistique de fin de partie
                                          if baby_snake_obj not in enemies_died_this_frame: enemies_died_this_frame.append(baby_snake_obj)
                                      break # Sort de la boucle des segments bébé
                         if hit_something: break # Sort de la boucle des bébés pour ce projectile

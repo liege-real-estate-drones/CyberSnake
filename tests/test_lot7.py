@@ -90,5 +90,38 @@ class TestPauseTwoPlayers(unittest.TestCase):
             self.assertEqual(game_states.run_pause([start], 16, surf, gs), config.PAUSED)  # Seul J1 en solo
 
 
+class TestKillCredit(unittest.TestCase):
+    def _shot_at(self, gs, owner, target):
+        import game_objects
+        g = config.GRID_SIZE
+        hx, hy = target.positions[0]
+        return game_objects.Projectile(hx * g + g // 2, hy * g + g // 2, (1, 0), 0, (255, 255, 0), 5, owner)
+
+    def test_shooting_the_ai_counts_a_kill(self):
+        gs = new_game(config.MODE_VS_AI)
+        p, ai = gs['player_snake'], gs['enemy_snake']
+        ai.armor, ai.invincible_timer = 0, 0
+        p.invincible_timer = 10 ** 12
+        gs['player_projectiles'].append(self._shot_at(gs, p, ai))
+        gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+        self.assertFalse(ai.alive)
+        self.assertEqual(p.kills, 1)
+
+    def test_coop_player_two_gets_credit_for_his_shots(self):
+        import game_objects
+        gs = new_game(config.MODE_SURVIVAL, coop=True)
+        p1, p2 = gs['player_snake'], gs['player2_snake']
+        p1.invincible_timer = p2.invincible_timer = 10 ** 12
+        baby = game_objects.EnemySnake(start_pos=(20, 5), current_game_mode=config.MODE_SURVIVAL, walls=[],
+                                       start_armor=0, start_ammo=0, is_baby=True)
+        baby.invincible_timer = 0
+        gs['active_enemies'].append(baby)
+        gs['player_projectiles'].append(self._shot_at(gs, p2, baby))
+        gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+        self.assertEqual((p1.kills, p2.kills), (0, 1))
+        self.assertGreater(p2.score, 0)
+        self.assertEqual(p1.score, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
