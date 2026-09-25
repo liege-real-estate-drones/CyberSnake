@@ -736,12 +736,13 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.4.0'
+VERSION = '2.5.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Saisie des noms : plus de « b » en trop, effacer fonctionne",
-    "Options > Boutons de la borne : le panneau de J1 et J2 dessiné",
-    "Aides : chaque bouton est dessiné à sa place sur le panneau",
-    "Hall of Fame : Bouclier puis Valider pour effacer les records",
-    "Fonds : couverture animée, et tes images dans mes_fonds",
+    "Menu : appuie deux fois sur Coin pour quitter le jeu",
+    "Seul du côté rouge (J2) : menus et parties solo au stick de J2",
+    "Carte aléatoire : gauche / droite pour en générer une nouvelle",
+    "Plus fluide en 1080p : mort, flash, fondus et menus",
+    "Mise à jour : « Déjà à jour » sans tout retélécharger",
+    "Aides : boutons dessinés sur tous les écrans",
 ]
