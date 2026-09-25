@@ -1987,7 +1987,9 @@ def run_game(events, dt, screen, game_state):
                             mmine_center_px_head = mmine_collided_obj.get_center_pos_px()
                             mmine_collided_obj.explode(proximity=False) # Explose au contact tête
 
-                            survived_mmine_head = snake_object.handle_damage(current_time, None, damage_source_pos=mmine_center_px_head)
+                            # Le boss n'est pas blessé par une mine mobile (elles visent les joueurs) : sinon une mine
+                            # perdue pouvait l'achever et donner sa récompense sans combat
+                            survived_mmine_head = True if getattr(snake_object, 'is_boss', False) else                                 snake_object.handle_damage(current_time, None, damage_source_pos=mmine_center_px_head)
                             if not survived_mmine_head:
                                 logging.warning(f"Moving Mine Head Collision Death: {snake_object.name} died.")
                                 # Logique de mort commune

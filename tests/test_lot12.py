@@ -199,5 +199,34 @@ class TestLiveRecord(unittest.TestCase):
             utils.high_scores = saved
 
 
+class TestBossVsMovingMine(unittest.TestCase):
+    def test_moving_mine_does_not_hurt_the_boss(self):
+        import boss
+        import game_objects
+        with FakeClock():
+            gs = new_game(config.MODE_SURVIVAL)
+            gs['player_snake'].invincible_timer = 10 ** 12
+            b = boss.maybe_spawn_boss(gs, game_clock.ticks(), 5)
+            b.invincible_timer = 0
+            armor = b.armor
+            g = config.GRID_SIZE
+            hit = []
+            orig = b.handle_damage
+            b.handle_damage = lambda *a, **k: hit.append(1) or orig(*a, **k)
+            surf = pygame.Surface((800, 600))
+            for _ in range(60):  # La mine est posée là où la tête du boss arrive à chaque image
+                hx, hy = b.positions[0]
+                dx, dy = b.current_direction
+                nx, ny = (hx + dx) % config.GRID_WIDTH, (hy + dy) % config.GRID_HEIGHT
+                gs['moving_mines'] = [game_objects.MovingMine(nx * g + g // 2, ny * g + g // 2, (nx, ny))]
+                b.choose_direction = lambda *a, **k: None
+                gameplay.run_game([], 16, surf, gs)
+                if hit or not b.alive:
+                    break
+            self.assertTrue(b.alive)
+            self.assertEqual(b.armor, armor)
+            self.assertFalse(hit)
+
+
 if __name__ == "__main__":
     unittest.main()
