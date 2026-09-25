@@ -128,8 +128,8 @@ def _spawn_food(game_state):
         logging.debug("Frénésie : nourriture non placée", exc_info=True)
 
 
-def draw(surface, game_state, now, font):
-    """Barre du temps restant, en haut au centre."""
+def draw(surface, game_state, now, font, top=0):
+    """Barre du temps restant, en haut au centre (sous le chrono du Contre-la-montre : top)."""
     if not _enabled(game_state) or not active(game_state, now):
         return
     try:
@@ -137,11 +137,11 @@ def draw(surface, game_state, now, font):
         sw = surface.get_width()
         w = min(360, int(sw * 0.28))
         bar = pygame.Rect(0, 0, w, 10)
-        bar.midtop = (sw // 2, 12 + font.get_linesize())
+        bar.midtop = (sw // 2, top + 12 + font.get_linesize())
         pulse = (now // 150) % 2 == 0
         color = (255, 220, 90) if pulse or left > 2000 else (255, 120, 60)
         utils.draw_text_with_shadow(surface, f"FRÉNÉSIE  x2   {left // 1000 + 1} s", font, color, config.COLOR_UI_SHADOW,
-                                    (sw // 2, 8), "midtop")
+                                    (sw // 2, top + 8), "midtop")
         pygame.draw.rect(surface, (60, 45, 10), bar, border_radius=5)
         fill = bar.copy()
         fill.width = max(0, int(bar.width * left / DURATION_MS))

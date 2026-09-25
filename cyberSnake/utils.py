@@ -300,7 +300,7 @@ def apply_controls_to_config(controls):
 sounds = {}
 images = {}
 images_hd = {}  # Images d'origine (192 px), pour les icônes affichées plus grand que la grille
-HIGH_SCORE_MODES = ("solo", "vs_ai", "pvp", "survie", "survie_coop", "classic")
+HIGH_SCORE_MODES = ("solo", "vs_ai", "pvp", "survie", "survie_coop", "classic", "chrono")
 high_scores = {k: [] for k in HIGH_SCORE_MODES}
 particles = []
 kill_feed = deque(maxlen=config.MAX_KILL_FEED_MESSAGES)

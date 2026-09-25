@@ -30,6 +30,7 @@ HOF_CATEGORIES = [
     ("pvp", "PvP"),
     ("survie", "Survie"),
     ("survie_coop", "Survie Coop"),
+    ("chrono", "Chrono"),
 ]
 PODIUM_COLORS = [(255, 215, 0), (200, 210, 225), (205, 127, 50)]
 

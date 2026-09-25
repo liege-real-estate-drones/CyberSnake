@@ -13,6 +13,7 @@ import pvp_rounds
 import rules
 import settings_screens
 import level
+import time_attack
 import panel
 from gameplay import reset_game
 from render import draw_game_elements_on_surface
@@ -374,6 +375,8 @@ def run_game_over(events, dt, screen, game_state):
     p1_name = player_snake.name if player_snake else "J1"; p2_name = player2_snake.name if player2_snake else "J2"
 
     mode_key, mode_name, score_to_check, name_for_hs = "solo", "Solo", p1_score, p1_name
+    if time_attack.active(game_state):  # Records à part : 2 minutes sur l'Arène Vide
+        mode_key, mode_name = time_attack.HOF_KEY, time_attack.MODE_NAME
     if current_game_mode == config.MODE_VS_AI: mode_key, mode_name, score_to_check, name_for_hs = "vs_ai", "Vs AI", p1_score, p1_name
     elif current_game_mode == config.MODE_CLASSIC: mode_key, mode_name, score_to_check, name_for_hs = "classic", "Classique", p1_score, p1_name
     elif current_game_mode == config.MODE_PVP:
@@ -637,7 +640,7 @@ def run_game_over(events, dt, screen, game_state):
             record_text = "Règles personnalisées : score non enregistré au Hall of Fame"
         pvp_title = current_game_mode == config.MODE_PVP
         screens.draw_game_over(screen, game_state, {
-            'title': winner_text.upper() if pvp_title else "GAME OVER",
+            'title': winner_text.upper() if pvp_title else ("TEMPS ÉCOULÉ !" if game_state.get('time_attack_done') else "GAME OVER"),
             'title_color': (0, 200, 255) if pvp_title else (255, 60, 80),
             'main_label': info_main_label, 'main_value': info_main_value, 'sub_lines': sub_lines,
             'record_text': record_text, 'is_high_score': is_high_score and not is_daily,

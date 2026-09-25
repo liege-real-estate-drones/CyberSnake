@@ -13,6 +13,7 @@ import progress
 import music
 import rules
 import level
+import time_attack
 import settings_screens
 import borne_install
 import stick_wizard
@@ -20,6 +21,13 @@ from setup_screens import invalidate_map_selection_cache
 import walls as walls_mod
 import game_objects
 from ui_common import darken, draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
+
+
+def _time_attack_info():
+    scores = utils.high_scores.get(time_attack.HOF_KEY, [])
+    if scores:
+        return f"2 minutes pour le plus gros score  —  record : {scores[0].get('name', '?')} {scores[0].get('score', 0)}"
+    return "2 minutes pour le plus gros score, sur l'Arène Vide"
 
 
 LEVEL_ROW = "LEVEL"  # Ligne « Niveau : Facile / Normal / Difficile » du menu principal (level.py)
@@ -36,9 +44,10 @@ def _activate_menu_option(game_state, menu_options, menu_selection_index):
         level.cycle(1)
         return config.MENU
 
-    # Défi du jour = partie Solo avec carte/départ imposés
+    # Défi du jour = partie Solo avec carte/départ imposés ; Contre-la-montre = Solo de 2 minutes
     game_state['daily_challenge'] = (selected_option == config.DAILY_CHALLENGE)
-    if selected_option == config.DAILY_CHALLENGE:
+    game_state['time_attack'] = (selected_option == config.TIME_ATTACK)
+    if selected_option in (config.DAILY_CHALLENGE, config.TIME_ATTACK):
         selected_option = config.MODE_SOLO
     # Coop = Survie avec deux joueurs (choix d'arène, puis les deux noms)
     game_state['coop'] = (selected_option == config.COOP_SURVIVAL)
@@ -130,6 +139,7 @@ def run_menu(events, dt, screen, game_state):
     menu_options = [
         (config.MODE_SOLO, "Joueur Seul", top_solo_hs),
         (config.DAILY_CHALLENGE, "Défi du jour", daily_info),
+        (config.TIME_ATTACK, "Contre-la-montre (2 min)", _time_attack_info()),
         (config.MODE_CLASSIC, "Snake Classique", top_classic_hs),
         (config.MODE_VS_AI, "Joueur vs IA", top_vsai_hs),
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),

@@ -687,6 +687,7 @@ CLASSIC_SETUP = 103 # Options rapides avant Classique
 CONTROLS = 104 # Remapping contrôles
 TITLE = 105 # Écran titre (borne d'arcade)
 DAILY_CHALLENGE = 106 # Entrée de menu : Défi du jour (partie Solo imposée)
+TIME_ATTACK = 114 # Entrée de menu : Contre-la-montre (2 min en Solo, time_attack.py)
 HOW_TO_PLAY = 107 # Écran « Comment jouer » (boucle d'attente)
 COOP_SURVIVAL = 108 # Entrée de menu : Survie à deux (Coop)
 STICK_WIZARD = 109 # Assistant sticks J1 / J2 (Options > Contrôles)
