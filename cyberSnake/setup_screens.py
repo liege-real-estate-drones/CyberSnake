@@ -885,29 +885,45 @@ def run_map_selection(events, dt, screen, game_state):
         pygame.draw.rect(screen, (4, 6, 16), preview_rect)  # Fond sombre de l'aperçu
         pygame.draw.rect(screen, config.COLOR_GRID, preview_rect, 2)
 
-        # Calcule l'échelle pour dessiner les murs dans la zone d'aperçu
-        grid_width_preview = max(1, config.GRID_WIDTH)
-        grid_height_preview = max(1, config.GRID_HEIGHT)
-        # Utilise min pour éviter distorsion si grille non carrée
-        scale_factor = min(preview_rect.width / max(1, grid_width_preview), preview_rect.height / max(1, grid_height_preview))
-        preview_wall_size = max(1, int(config.MAP_PREVIEW_GRID_SIZE * scale_factor)) # Utilise la constante config
+        # Aperçu : mêmes structures néon qu'en jeu (walls.preview_surface), départs et arène animée
+        try:
+            gw_p, gh_p = max(1, config.GRID_WIDTH), max(1, config.GRID_HEIGHT)
+            cell_px = max(2, int(min((preview_rect.width - 8) / gw_p, (preview_rect.height - 8) / gh_p)))
+            cells = {(int(x), int(y)) for x, y in walls_to_preview if isinstance(x, int) and isinstance(y, int)}
+            prev = walls_mod.preview_surface(cells, gw_p, gh_p, cell_px)
+            origin = (preview_rect.centerx - prev.get_width() // 2, preview_rect.centery - prev.get_height() // 2)
+            screen.blit(prev, origin)
 
-        # Dessine chaque mur dans l'aperçu
-        for wall_x_grid, wall_y_grid in walls_to_preview:
-             if not (isinstance(wall_x_grid, int) and isinstance(wall_y_grid, int)): continue # Assure que ce sont des entiers
-             # Calcule la position dans l'aperçu
-             preview_wall_x = preview_rect.left + int(wall_x_grid * scale_factor)
-             preview_wall_y = preview_rect.top + int(wall_y_grid * scale_factor)
-             wall_draw_rect = pygame.Rect(preview_wall_x, preview_wall_y, preview_wall_size, preview_wall_size)
-             # Dessine seulement si dans les limites de l'aperçu
-             if preview_rect.colliderect(wall_draw_rect):
-                 try:
-                     # Utilise clip pour s'assurer qu'on ne dessine pas hors du cadre
-                     clipped_rect = wall_draw_rect.clip(preview_rect)
-                     if clipped_rect.width > 0 and clipped_rect.height > 0:
-                         draw_wall_tile(screen, clipped_rect, grid_pos=(wall_x_grid, wall_y_grid), current_time=current_time)
-                 except Exception:
-                      pass  # Ignore les erreurs de dessin individuelles
+            def _cell_center(pos):
+                return (origin[0] + pos[0] * cell_px + cell_px // 2, origin[1] + pos[1] * cell_px + cell_px // 2)
+            map_data_p = config.MAPS.get(selected_key_or_label_preview) or {}
+            events_fn = map_data_p.get('events')
+            if events_fn:
+                ev = events_fn(gw_p, gh_p) or {}
+                for seg in ev.get('lasers', []):
+                    for c in seg:
+                        pygame.draw.rect(screen, (255, 60, 80), pygame.Rect(origin[0] + c[0] * cell_px + cell_px // 3,
+                                                                          origin[1] + c[1] * cell_px + cell_px // 3,
+                                                                          max(1, cell_px // 3), max(1, cell_px // 3)))
+                for i, (pa, pb) in enumerate(ev.get('portals', [])):
+                    col = arenas.PORTAL_COLORS[i % len(arenas.PORTAL_COLORS)]
+                    for c in (pa, pb):
+                        pygame.draw.circle(screen, col, _cell_center(c), max(3, cell_px), 2)
+                if ev.get('shrink'):
+                    pygame.draw.rect(screen, (255, 40, 40), pygame.Rect(origin, prev.get_size()), 2)
+            # Points de départ (J1 vert, J2 / IA à la couleur du J2)
+            starts = [('p1_start', getattr(config, 'COLOR_SNAKE_P1', (0, 255, 150)))]
+            if current_game_mode in (config.MODE_PVP, config.MODE_VS_AI) or game_state.get('coop'):
+                key2 = 'ai_start' if current_game_mode == config.MODE_VS_AI else 'p2_start'
+                starts.append((key2, getattr(config, 'COLOR_SNAKE_P2', (255, 100, 200))))
+            for key_s, col in starts:
+                fn_s = map_data_p.get(key_s)
+                if fn_s:
+                    c = _cell_center(fn_s(gw_p, gh_p))
+                    pygame.draw.circle(screen, col, c, max(3, cell_px // 2 + 1))
+                    pygame.draw.circle(screen, (255, 255, 255), c, max(3, cell_px // 2 + 1), 1)
+        except Exception:
+            logging.debug("Aperçu de carte non dessiné", exc_info=True)
 
         # Panneau description (sous l'aperçu)
         try:
