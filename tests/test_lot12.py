@@ -166,5 +166,38 @@ class TestBackgroundPickerCache(unittest.TestCase):
         self.assertEqual(loads, ["duel_neon", "double_helice"])
 
 
+class TestLiveRecord(unittest.TestCase):
+    """« RECORD BATTU ! » annoncé en pleine partie, une seule fois."""
+
+    def test_announced_once_when_the_best_score_is_passed(self):
+        saved = {k: list(v) for k, v in utils.high_scores.items()}
+        try:
+            utils.high_scores['solo'] = [{"name": "THI", "score": 100}]
+            with FakeClock():
+                gs = new_game(config.MODE_SOLO)
+                p = gs['player_snake']
+                p.invincible_timer = 10 ** 12
+                surf = pygame.Surface((800, 600))
+                p.score = 90
+                gameplay.run_game([], 16, surf, gs)
+                self.assertFalse(gs['live_record_done'])
+                p.score = 150
+                gameplay.run_game([], 16, surf, gs)
+                self.assertTrue(gs['live_record_done'])
+                self.assertEqual(gs['boss_banner_text'], "RECORD BATTU !")
+                gs['boss_banner_text'] = ""
+                p.score = 300
+                gameplay.run_game([], 16, surf, gs)
+                self.assertEqual(gs['boss_banner_text'], "")  # Pas une deuxième fois
+            with FakeClock():
+                gs = new_game(config.MODE_SOLO, daily_challenge=True)  # Défi du jour : son propre classement
+                gs['player_snake'].invincible_timer = 10 ** 12
+                gs['player_snake'].score = 500
+                gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+                self.assertFalse(gs['live_record_done'])
+        finally:
+            utils.high_scores = saved
+
+
 if __name__ == "__main__":
     unittest.main()
