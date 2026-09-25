@@ -19,6 +19,7 @@ import keyboard_controls
 import rules
 import level
 import frenzy
+import announcer
 import time_attack
 import pvp_rounds
 import progress
@@ -75,7 +76,8 @@ def _run_countdown(screen, game_state, real_now):
     step = 3 if left > 2000 else 2 if left > 1000 else 1
     if left <= COUNTDOWN_MS and game_state.get('_countdown_step') != step:
         game_state['_countdown_step'] = step
-        utils.play_sound("countdown")
+        if not announcer.countdown(game_state, step):  # Voix « 3, 2, 1 » (sinon le bip)
+            utils.play_sound("countdown")
     frozen = game_clock.ticks()
     # Temps de dessin arrondi : un serpent invincible (clignotant) reste visible pendant l'attente
     draw_game_elements_on_surface(screen, game_state, frozen - frozen % 600)
@@ -98,6 +100,7 @@ def _draw_go_banner(screen, game_state):
     if not game_state.get('_go_start'):
         game_state['_go_start'] = until
         utils.play_sound("go")
+        announcer.go(game_state)  # « Fight ! » en PvP, « Begin ! » sinon
     t = age / GO_BANNER_MS
     _big_centered(screen, game_state, "GO !", (255, 255, 200), (255, 190, 0), 0.2, scale=1.0 + 0.4 * t, alpha=255 * (1 - t))
 

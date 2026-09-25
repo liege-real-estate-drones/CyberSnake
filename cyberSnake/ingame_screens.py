@@ -13,6 +13,7 @@ import pvp_rounds
 import rules
 import settings_screens
 import level
+import announcer
 import time_attack
 import panel
 from gameplay import reset_game
@@ -468,6 +469,13 @@ def run_game_over(events, dt, screen, game_state):
             utils.play_sound("unlock")
         else:
             utils.play_sound("game_over_sfx")
+        # Voix de l'annonceur : vainqueur en PvP, record battu, sinon « Game over »
+        if current_game_mode == config.MODE_PVP:
+            announcer.say("tie" if "galit" in str(winner_text) else "winner", game_state)
+        elif is_high_score and not is_daily:
+            announcer.say("winner", game_state)
+        else:
+            announcer.say("game_over", game_state)
 
     next_state = config.GAME_OVER
     for event in events:

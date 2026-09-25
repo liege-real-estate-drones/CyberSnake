@@ -10,6 +10,7 @@ import pygame
 
 import config
 import utils
+import announcer
 
 DURATION_MS = 120000
 MAP_KEY = "Vide"
@@ -42,6 +43,7 @@ def update(game_state, now):
         game_state['boss_banner_text'] = "TEMPS ÉCOULÉ !"
         game_state['boss_banner_until'] = now + 1500
         utils.play_sound("go")
+        announcer.say("time", game_state)
         return True
     return False
 

@@ -24,6 +24,7 @@ import utils
 import fx
 import game_objects
 import level
+import announcer
 
 BOSS_WAVE_INTERVAL = 5
 BOSS_COLOR = (190, 60, 255)
@@ -188,6 +189,7 @@ def maybe_spawn_boss(game_state, current_time, wave):
     game_state['boss_banner_until'] = current_time + BOSS_BANNER_MS
     try:
         utils.play_sound("boss_spawn")
+        announcer.say("prepare_yourself", game_state)
         utils.trigger_shake(6, 500)
         fx.trigger_flash((190, 60, 255), 450, 110, now=current_time)
     except Exception:

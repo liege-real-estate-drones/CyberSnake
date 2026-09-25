@@ -218,7 +218,7 @@ class TestPanel(unittest.TestCase):
             gs = _fonts_state()
             surf = pygame.Surface((1280, 720))
             game_states.run_options([], 16, surf, gs)
-            gs['options_selection_index'] = 19
+            gs['options_selection_index'] = 20  # « Boutons de la borne » (après « Voix de l'annonceur », lot 15)
             result = game_states.run_options([joy_button(config.BUTTON_PRIMARY_ACTION)], 16, surf, gs)
             self.assertEqual(result, config.BUTTONS_SCREEN)
 

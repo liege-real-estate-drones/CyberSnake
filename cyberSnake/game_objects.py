@@ -14,6 +14,7 @@ import game_clock
 import utils
 import fx
 import level
+import announcer
 import bonuses
 import logging # Added for detailed score logging
 
@@ -1256,6 +1257,8 @@ class Snake:
             if self.combo_counter >= 5 and self.combo_counter // 5 > getattr(self, '_combo_milestone', 0) and cx_skill_ok(self):
                 self._combo_milestone = self.combo_counter // 5
                 fx.add_popup(*self.get_head_center_px(), f"COMBO x{self.combo_counter} !", config.COLOR_COMBO_TEXT, big=True)
+                if self._combo_milestone == 1:  # La voix une fois par série (à x5), pas à chaque palier
+                    announcer.say("combo")
 
     def add_ammo(self, value):
         if self.alive:
