@@ -738,12 +738,11 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.7.0'
+VERSION = '2.8.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "7 nouveaux fonds des menus (Options > Fond des menus)",
-    "Frénésie : toutes les minutes, 8 s de pluie de nourriture et points x2",
-    "Pendant la frénésie, aucune nouvelle mine : une respiration",
-    "Nouveaux sons : frénésie, queue coupée par un tir",
-    "Écran de fin : le niveau joué est affiché",
+    "Contre-la-montre : 2 minutes pour le plus gros score (menu principal)",
+    "Hall of Fame : nouvelle colonne « Chrono »",
+    "Plus fluide : écran de fin, titre, Hall of Fame, Comment jouer, pause",
+    "Moins de saccades quand des mines apparaissent",
 ]
