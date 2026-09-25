@@ -18,6 +18,7 @@ import pygame
 import config
 import utils
 import screens
+import panel
 from ui_common import get_joystick_ids, is_confirm_button
 
 BEST_OF_CHOICES = (1, 3, 5)
@@ -216,6 +217,7 @@ def run_round_score(events, dt, screen, game_state):
     utils.draw_text_with_shadow(screen, f"Manche {m.get('round', 2)} : {map_name}", font_medium,
                                 tuple(int(c * pulse) for c in config.COLOR_TEXT_HIGHLIGHT), config.COLOR_UI_SHADOW,
                                 (sw // 2, int(sh * 0.81)), "center")
-    hint = f"Départ dans {left // 1000 + 1} s  |  Bouton : lancer  |  Back : menu" if unlocked else "..."
-    utils.draw_text(screen, hint, font_small, (150, 170, 200), (sw // 2, int(sh * 0.92)), "center")
+    hint = (panel.hint(f"Départ dans {left // 1000 + 1} s", f"{panel.button_tag('PRIMARY')} : lancer", f"{panel.button_tag('BACK')} : menu")
+            if unlocked else "...")
+    panel.draw_hint(screen, hint, font_small, (150, 170, 200), (sw // 2, int(sh * 0.92)), "center")
     return config.ROUND_SCORE

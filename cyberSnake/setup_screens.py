@@ -544,6 +544,15 @@ def run_map_selection(events, dt, screen, game_state):
                     game_state['map_selection_index'] = map_selection_index
                     utils.play_sound("menu_move")
                     last_axis_move_time = current_time
+                elif hat_x and _map_keys_display[map_selection_index] == "Aléatoire":
+                    # Gauche / Droite : nouvelle carte (l'aide le disait, mais seul le clavier le faisait)
+                    try:
+                        _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
+                        utils.play_sound("shoot_p1")
+                    except Exception as e:
+                        logging.error(f"Erreur regénération carte aléatoire via stick: {e}")
+                        _current_random_map_walls = []
+                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYBUTTONDOWN:
             if event.instance_id == p1_id and is_confirm_button(event.button): # Confirmer
@@ -804,7 +813,7 @@ def run_map_selection(events, dt, screen, game_state):
         if selected_key_or_label_preview == "Aléatoire":
             desc_lines = [
                 f"Labyrinthe aléatoire ({walls_count} murs).",
-                "G/D : nouvelle génération | F : sauvegarder en favori",
+                "Une nouvelle à chaque fois : garde celles qui te plaisent en favori (voir en bas).",
             ]
         elif selected_key_or_label_preview in _favorite_maps:
             desc_lines = [
@@ -956,16 +965,19 @@ def run_map_selection(events, dt, screen, game_state):
         except Exception:
             pass
 
-        # Instructions en bas (modifiées pour inclure 'F' pour Favori)
+        # Instructions en bas : carte aléatoire (nouvelle, garder en favori) et favoris (supprimer)
         instruction_y = config.SCREEN_HEIGHT * 0.88
-        line_gap = max(18, int(font_small.get_linesize() * 1.05))
+        line_gap = max(18, int(font_small.get_linesize() * 1.45))
         instruction_text_1 = settings_screens.hint("Stick : choisir", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour")
         instruction_text_2 = ""
-        if _map_keys_display[current_selection_index] == "Aléatoire":
-            instruction_text_2 = "G/D: Nouvelle | F: Sauver en favori"
+        current_label = _map_keys_display[current_selection_index]
+        if current_label == "Aléatoire":
+            instruction_text_2 = settings_screens.hint("Gauche / Droite : nouvelle carte", f"{settings_screens.button_name(6)} : garder en favori")
+        elif current_label in _favorite_maps:
+            instruction_text_2 = f"{settings_screens.button_name(7)} : supprimer ce favori"
         settings_screens.draw_hint(screen, instruction_text_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
         if instruction_text_2:
-            utils.draw_text(screen, instruction_text_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + line_gap), "center")
+            settings_screens.draw_hint(screen, instruction_text_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + line_gap), "center")
 
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin de run_map_selection: {e}", exc_info=True)

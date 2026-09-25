@@ -564,7 +564,7 @@ def draw_game_over(screen, game_state, info):
         bar.width = int(bar.width * ratio)
         pygame.draw.rect(screen, (0, 200, 255), bar, border_radius=3)
     else:
-        utils.draw_text(screen, "Stick : choisir  |  Bouton : valider", font_small, (150, 170, 200),
+        panel.draw_hint(screen, panel.hint("Stick : choisir", f"{panel.button_tag('PRIMARY')} : valider"), font_small, (150, 170, 200),
                         (sw // 2, by + btn_h + 12), "midtop")
 
 

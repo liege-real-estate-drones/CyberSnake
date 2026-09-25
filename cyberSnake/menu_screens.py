@@ -59,6 +59,9 @@ def _activate_menu_option(game_state, menu_options, menu_selection_index):
     return next_state
 
 
+MENU_QUIT_CONFIRM_MS = 2500
+
+
 def run_menu(events, dt, screen, game_state):
     """Gère l'écran du menu principal."""
     logging.debug("Entering run_menu")
@@ -172,9 +175,15 @@ def run_menu(events, dt, screen, game_state):
                     if utils.select_and_load_music(music_num, base_path):
                         music.preview_game_track()  # Musique de jeu choisie : on l'entend tout de suite
                     last_axis_move_time = current_time
-                elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
-                    logging.info("Joystick button 8 pressed in menu, quitting.")
-                    return False # Quitte le jeu
+                elif event.button == getattr(config, "BUTTON_BACK", 8):
+                    # Coin quitte le jeu, mais seulement au second appui : sur une borne, on appuie
+                    # sur Coin par réflexe (et le jeu se fermait d'un coup)
+                    if current_time <= int(game_state.get('menu_quit_armed_until', 0) or 0):
+                        logging.info("Coin appuyé deux fois dans le menu : on quitte le jeu.")
+                        game_state.pop('menu_quit_armed_until', None)
+                        return False
+                    game_state['menu_quit_armed_until'] = current_time + MENU_QUIT_CONFIRM_MS
+                    utils.play_sound("denied")
 
         elif event.type == pygame.JOYHATMOTION:
             # Vérifie si l'événement vient du joystick J1, hat 0 et si assez de temps s'est écoulé
@@ -243,7 +252,7 @@ def run_menu(events, dt, screen, game_state):
         # Boutons dessinés à leur place sur le panneau de la borne (panel.py)
         legend_lines = [
             settings_screens.hint("Stick : naviguer", f"{settings_screens.button_name('PRIMARY')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
-            settings_screens.hint(f"{settings_screens.button_name('MUSIC')} : musique", f"{settings_screens.button_name('BACK')} : quitter", "Inactivité : démo (3 min)"),
+            settings_screens.hint(f"{settings_screens.button_name('MUSIC')} : musique", f"{settings_screens.button_name('BACK')} deux fois : quitter", "Inactivité : démo (3 min)"),
         ]
         legend_h = (int(font_small.get_height() * 1.45) + 4) * len(legend_lines) + 14
         legend_w = min(int(config.SCREEN_WIDTH * 0.92), 900)
@@ -327,6 +336,15 @@ def run_menu(events, dt, screen, game_state):
         for line in legend_lines:
             settings_screens.draw_hint(screen, line, font_small, config.COLOR_TEXT_MENU, (legend_rect.centerx, y_text), "midtop")
             y_text += int(font_small.get_height() * 1.45) + 4  # Place pour les dessins des boutons
+
+        if current_time <= int(game_state.get('menu_quit_armed_until', 0) or 0):
+            band = pygame.Rect(0, 0, config.SCREEN_WIDTH, font_medium.get_height() + 24)
+            band.center = (config.SCREEN_WIDTH // 2, int(config.SCREEN_HEIGHT * 0.5))
+            veil = pygame.Surface(band.size, pygame.SRCALPHA)
+            veil.fill((60, 0, 10, 215))
+            screen.blit(veil, band.topleft)
+            settings_screens.draw_hint(screen, f"Appuie encore sur {settings_screens.button_name('BACK')} pour quitter le jeu",
+                                       font_medium, (255, 130, 130), band.center, "center")
 
         # Petit rappel musique
         try:
@@ -1882,11 +1900,11 @@ def run_controls_remap(events, dt, screen, game_state):
     menu_items = [
         ("WIZARD", "Assistant sticks J1 / J2", "action"),
         ("SYSFIX", "Fixer J1 / J2 pour TOUS les jeux", "action"),
-        ("PRIMARY", "Bouton Tir / Confirmer", "button"),
-        ("SECONDARY", "Bouton Dash / Retour", "button"),
-        ("TERTIARY", "Bouton Bouclier", "button"),
-        ("PAUSE", "Bouton Pause", "button"),
-        ("BACK", "Bouton Menu (Back)", "button"),
+        ("PRIMARY", "Tirer / Valider", "button"),
+        ("SECONDARY", "Dash / Retour", "button"),
+        ("TERTIARY", "Bouclier", "button"),
+        ("PAUSE", "Pause", "button"),
+        ("BACK", "Pause / Quitter", "button"),
         ("AXIS_H", "Axe horizontal", "axis"),
         ("AXIS_V", "Axe vertical", "axis"),
         ("INV_H", "Inverser axe horizontal", "toggle"),
