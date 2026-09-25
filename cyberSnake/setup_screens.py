@@ -14,6 +14,7 @@ from gameplay import reset_game
 import walls as walls_mod
 import pvp_rounds
 import settings_screens
+import panel
 from ui_common import darken, draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
@@ -24,6 +25,9 @@ VIRTUAL_KEYBOARD_CHARS = [
     ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
     ["-", "_", ".", " ", "<-", "OK"]  # Caractères spéciaux, effacer (<-) et confirmer (OK)
 ]
+
+# Touche OK : le curseur y démarre quand un nom est déjà proposé (le même joueur rejoue d'un appui)
+OK_KEY_POS = next((r, c) for r, row in enumerate(VIRTUAL_KEYBOARD_CHARS) for c, ch in enumerate(row) if ch == "OK")
 
 # --- Variables pour les animations du clavier virtuel ---
 # Couleurs par défaut en cas d'erreur
@@ -130,6 +134,9 @@ def run_name_entry_solo(events, dt, screen, game_state):
         # Reset le nom SEULEMENT S'IL N'EXISTE PAS. Sinon, on le garde.
         if 'player1_name_input' not in game_state:
             game_state['player1_name_input'] = ""
+        if game_state['player1_name_input'].strip():  # Nom proposé : curseur sur OK, un appui suffit
+            vk_row, vk_col = OK_KEY_POS
+            game_state['vk_row'], game_state['vk_col'] = vk_row, vk_col
         game_state[SELECT_ALL_KEY] = 'player1_name_input'  # Le nom proposé sera remplacé d'un coup
         game_state['input_active_solo'] = True 
         input_active = True # Mettre à jour la variable locale aussi
@@ -225,8 +232,8 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 if not input_active:
                     continue
 
-                if is_confirm_button(event.button):  # Valider la touche sélectionnée
-                    selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
+                if is_confirm_button(event.button) or event.button == panel.BUTTON_START:  # Valider la touche (Player : OK)
+                    selected_char = "OK" if event.button == panel.BUTTON_START else VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
 
                     if selected_char == "OK":  # Confirmation du nom
                         name_entered = player1_name_input.strip()[:15]
@@ -395,7 +402,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                                           (key_x + key_width/2, key_y + key_height/2), "center")
         
         # Instructions
-        settings_screens.draw_hint(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", "OK : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
+        settings_screens.draw_hint(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", f"OK ou {settings_screens.button_name('START')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
         logging.error(f"Erreur lors du dessin de run_name_entry_solo: {e}")
@@ -1993,6 +2000,8 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     if 'name_entry_start_time_pvp' not in game_state or game_state.get('_name_select_stage') != stage:
         game_state['_name_select_stage'] = stage
         game_state[SELECT_ALL_KEY] = f'player{stage}_name_input'  # Le nom proposé sera remplacé d'un coup
+        if str(game_state.get(f'player{stage}_name_input') or '').strip():  # Nom proposé : curseur sur OK
+            game_state['vk_row_pvp'], game_state['vk_col_pvp'] = OK_KEY_POS
 
     p1_id, p2_id = get_joystick_ids(game_state)
     # Joysticks autorisés pour cette étape (J1 puis J2). On garde J1 en secours si J2 est absent.
@@ -2136,6 +2145,8 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             if is_confirm_button(button):  # Boutons A/B confirment la sélection actuelle
                 # Obtenez le caractère sélectionné
                 selected_char = VIRTUAL_KEYBOARD_CHARS[vk_row][vk_col]
+            elif button == panel.BUTTON_START:  # Player : valider le nom directement
+                selected_char = "OK"
 
             if selected_char == "OK":  # Confirmation du nom
                 current_input_name = game_state.get('player1_name_input', "") if stage == 1 else game_state.get('player2_name_input', "")
@@ -2393,7 +2404,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                                          (key_x + key_width/2, key_y + key_height/2), "center")
         
         # Instructions
-        settings_screens.draw_hint(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", "OK : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
+        settings_screens.draw_hint(screen, settings_screens.hint("Stick : choisir une touche", f"{settings_screens.button_name('PRIMARY')} : écrire", f"OK ou {settings_screens.button_name('START')} : valider", f"{settings_screens.button_name('SECONDARY')} : retour"),
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
         logging.error(f"Erreur lors du dessin de run_name_entry_pvp: {e}")

@@ -139,5 +139,41 @@ class TestLevelInMainMenu(_Level):
             self.assertEqual(menu_screens.LEVEL_ROW, "LEVEL")
 
 
+class TestReplayFasterWithTheSameName(unittest.TestCase):
+    """Nom déjà proposé : le curseur démarre sur OK (un appui pour rejouer) ; Player valide aussi."""
+
+    def _gs(self, **extra):
+        gs = {'font_small': FONTS['small'], 'font_default': FONTS['default'], 'font_medium': FONTS['medium'],
+              'font_large': FONTS['large'], 'font_title': FONTS['title'], 'base_path': GAME_DIR,
+              'menu_background_image': None}
+        gs.update(extra)
+        return gs
+
+    def test_one_press_keeps_the_proposed_name(self):
+        import setup_screens
+        surf = pygame.Surface((800, 600))
+        press = pygame.event.Event(pygame.JOYBUTTONDOWN, button=config.BUTTON_PRIMARY_ACTION, instance_id=0, joy=0)
+        with FakeClock() as clock:
+            gs = self._gs(player1_name_input="THI")
+            setup_screens.run_name_entry_solo([], 16, surf, gs)
+            clock.tick(1000)
+            self.assertEqual(setup_screens.run_name_entry_solo([press], 16, surf, gs), config.MAP_SELECTION)
+            self.assertEqual(gs['player1_name_input'], "THI")
+
+    def test_player_button_validates_in_two_player_entry(self):
+        import setup_screens
+        surf = pygame.Surface((800, 600))
+        start = pygame.event.Event(pygame.JOYBUTTONDOWN, button=panel.BUTTON_START, instance_id=0, joy=0)
+        with FakeClock() as clock:
+            gs = self._gs(player1_name_input="THI", player2_name_input="CRI", pvp_name_entry_stage=1,
+                          current_game_mode=config.MODE_PVP)
+            gs['vk_row_pvp'], gs['vk_col_pvp'] = 0, 0
+            setup_screens.run_name_entry_pvp([], 16, surf, gs)
+            clock.tick(1000)
+            setup_screens.run_name_entry_pvp([start], 16, surf, gs)
+            self.assertEqual(gs.get('pvp_name_entry_stage'), 2)
+            self.assertEqual(gs['player1_name_input'], "THI")
+
+
 if __name__ == "__main__":
     unittest.main()
