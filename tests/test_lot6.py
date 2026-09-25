@@ -256,5 +256,58 @@ class TestBackgrounds(unittest.TestCase):
         self.assertFalse([e for e in errors if "Options" in e], errors)
 
 
+class TestComfort(unittest.TestCase):
+    def _back(self):
+        return pygame.event.Event(pygame.JOYBUTTONDOWN, button=config.BUTTON_BACK, instance_id=0, joy=0)
+
+    def test_back_twice_quits_pause_but_not_a_quick_double_press(self):
+        import game_states
+        surf = pygame.display.get_surface()
+        with FakeClock() as clock:
+            gs = new_game(config.MODE_SOLO)
+            gs['screen'] = surf
+            gameplay._enter_pause(gs)
+            clock.tick(100)  # Double appui accidentel juste après l'ouverture : ignoré
+            self.assertEqual(game_states.run_pause([self._back()], 16, surf, gs), config.PAUSED)
+            clock.tick(100)
+            self.assertEqual(game_states.run_pause([self._back()], 16, surf, gs), config.PAUSED)
+            clock.tick(1000)  # Premier appui volontaire : demande de confirmation
+            self.assertEqual(game_states.run_pause([self._back()], 16, surf, gs), config.PAUSED)
+            self.assertIn('pause_quit_armed_until', gs)
+            clock.tick(500)
+            self.assertEqual(game_states.run_pause([self._back()], 16, surf, gs), config.MENU)
+
+    def test_pvp_replay_restarts_directly(self):
+        import game_states
+        surf = pygame.display.get_surface()
+        with FakeClock() as clock:
+            gs = new_game(config.MODE_PVP, player1_name_input="Ana", player2_name_input="Bob")
+            gs['current_state'] = config.GAME_OVER
+            game_states.run_game_over([], 16, surf, gs)
+            clock.tick(2000)
+            ok = pygame.event.Event(pygame.JOYBUTTONDOWN, button=config.BUTTON_PRIMARY_ACTION, instance_id=0, joy=0)
+            self.assertEqual(game_states.run_game_over([ok], 16, surf, gs), config.PLAYING)
+            self.assertEqual((gs['player_snake'].name, gs['player2_snake'].name), ("Ana", "Bob"))
+
+    def test_last_names_are_remembered(self):
+        import test_lot5
+        with MemoryOptions() as mem:
+            self.assertEqual(utils.last_player_names(), (config.DEFAULT_NAME_P1, config.DEFAULT_NAME_P2))
+            test_lot5._real_remember("Ana", "Bob")  # Vraie fonction (neutralisée pour les autres tests)
+            self.assertEqual(utils.last_player_names(), ("Ana", "Bob"))
+            self.assertEqual(mem.data['last_names'], {'p1': 'Ana', 'p2': 'Bob'})
+
+class TestDemoProgress(unittest.TestCase):
+    def test_boss_beaten_in_demo_does_not_count(self):
+        import boss
+        import progress
+        before = progress._data()["stats"].get("bosses", 0)
+        gs = new_game(config.MODE_SURVIVAL, demo_mode=True)
+        b = boss.maybe_spawn_boss(gs, game_clock.ticks(), 5)
+        b.alive = False
+        boss.update_boss(gs, game_clock.ticks())
+        self.assertEqual(progress._data()["stats"].get("bosses", 0), before)
+
+
 if __name__ == "__main__":
     unittest.main()

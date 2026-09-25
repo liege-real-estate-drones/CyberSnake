@@ -36,6 +36,7 @@ import demo_mode  # noqa: E402
 utils.load_assets(GAME_DIR)
 # Les tests n'écrivent jamais dans les fichiers du joueur (cyberSnake/*.json) :
 # noms mémorisés ignorés, progression et records dans un dossier temporaire.
+_real_remember = utils.remember_player_names
 utils.remember_player_names = lambda *a, **k: None
 import tempfile  # noqa: E402
 import progress  # noqa: E402
