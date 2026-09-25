@@ -492,6 +492,7 @@ class PvpCondition:
     TIMER = 1
     KILLS = 2
     MIXED = 3
+    SCORE = 4  # Premier à atteindre le score limite (game_options.json : pvp.score_limit)
 
 
 PVP_DEFAULT_CONDITION = PvpCondition.KILLS
@@ -634,7 +635,9 @@ SOUND_PATHS = {
     "name_input_char": "menu_move.wav", "name_input_confirm": "menu_select.wav",
     "eat_special": "eat_special.mp3", "low_armor_warning": "low_armor.mp3",
     "skill_activate": "shield_up.wav",
-    "skill_ready": "objective_complete.wav", "dash_sound": "dash.wav",
+    "skill_ready": "skill_ping.wav", "dash_sound": "dash.wav",
+    "boss_charge": "boss_charge.wav", "boss_phase": "boss_phase.wav", "boss_fan": "boss_fan.wav",
+    "round_win": "round_win.wav",
     # Sons synthétiques (tools/generate_sounds.py)
     "boss_spawn": "boss_spawn.wav", "boss_defeat": "boss_defeat.wav", "kill": "kill.wav",
     "unlock": "unlock.wav", "game_over_sfx": "game_over.wav", "new_record": "new_record.wav",
@@ -683,6 +686,9 @@ DAILY_CHALLENGE = 106 # Entrée de menu : Défi du jour (partie Solo imposée)
 HOW_TO_PLAY = 107 # Écran « Comment jouer » (boucle d'attente)
 COOP_SURVIVAL = 108 # Entrée de menu : Survie à deux (Coop)
 STICK_WIZARD = 109 # Assistant sticks J1 / J2 (Options > Contrôles)
+RULES = 110 # Règles personnalisées (mutateurs), menu principal
+BUTTON_COLORS_SCREEN = 111 # Couleur de chaque bouton de la borne (Options)
+ROUND_SCORE = 112 # Score entre deux manches (PvP en manches)
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)
@@ -726,4 +732,4 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.0.0'
+VERSION = '2.1.0'

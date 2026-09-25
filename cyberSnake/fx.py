@@ -283,6 +283,11 @@ def mine_sprite(size, lit):
 def nest_sprite(size, damage_ratio):
     """Nid : œuf alien segmenté, qui rougit et se fissure avec les dégâts."""
     step = int(round(max(0.0, min(1.0, damage_ratio)) * 3))
+    import utils  # Import local : utils importe déjà fx
+    src = utils.images_hd.get(f"nest_{step}.png")  # tools/generate_sprites.py
+    if src is not None:
+        return _cached(('nest_png', int(size), step, id(src)),
+                       lambda: pygame.transform.smoothscale(src, (max(10, int(size)), max(10, int(size)))))
 
     def build():
         s = max(10, int(size))

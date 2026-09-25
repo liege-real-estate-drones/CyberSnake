@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Génère les sprites des serpents et des mines dans un style néon unique (cyberSnake/*.png).
 
-Usage : python3 tools/generate_sprites.py
+Usage : python3 tools/generate_sprites.py [snakes] [items]
 Nécessite pygame. Même langage visuel que les icônes des bonus : contour lumineux épais,
 corps sombre, reflets clairs et halo. Les trois serpents partagent les mêmes formes ;
 seules la couleur et quelques détails (cornes de l'ennemi) changent.
@@ -10,6 +10,9 @@ seules la couleur et quelques détails (cornes de l'ennemi) changent.
 - snake_{p1,p2,enemy}_body.png : anneau (symétrique, n'est pas tourné en jeu)
 - snake_{p1,p2,enemy}_tail.png : pointe à gauche, base à droite (côté corps)
 - mine.png / mine_lit.png      : mine, noyau éteint / allumé (clignotement)
+- food_ammo, food_multiplier, icon_invincible, icon_multishot : bonus redessinés
+- nest_0..3.png                : nid (0 = intact, 3 = presque détruit)
+- skill_dash.png / skill_shield.png : compétences affichées dans le HUD
 
 J1 est dessiné en vert « cyber » et J2 en rose : le jeu recolore ces sprites dans la
 couleur choisie dans les Options (game_objects._hue_shifted).
@@ -184,20 +187,176 @@ def mine(lit):
     return L.render(0.95 if lit else 0.55)
 
 
-def main():
+# ---------------------------------------------------------------------------
+# Objets et bonus redessinés dans le même style (ceux qui détonnaient)
+# ---------------------------------------------------------------------------
+AMMO_BLUE = (150, 150, 255)
+GOLD = (255, 215, 0)
+INVINCIBLE_PINK = (255, 180, 220)
+MULTISHOT_ORANGE = (255, 110, 20)
+NEST_ORANGE = (255, 150, 40)
+DASH_CYAN = (0, 220, 255)
+SHIELD_GREEN = (0, 255, 120)
+
+
+def _mix3(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def ammo():
+    """Chargeur : trois balles debout dans un étui."""
+    L = Layers()
+    c = AMMO_BLUE
+    hi = lighten(c, 0.7)
+    L.shape([P(0.14, 0.52), P(0.86, 0.52), P(0.82, 0.90), P(0.18, 0.90)], c, 0.28, 12)
+    for x in (0.30, 0.50, 0.70):
+        L.shape([P(x - 0.075, 0.54), P(x - 0.075, 0.30), P(x, 0.12), P(x + 0.075, 0.30), P(x + 0.075, 0.54)], c, 0.4, 8)
+        L.line(P(x - 0.075, 0.31), P(x + 0.075, 0.31), hi, 5, glow=False)
+    L.line(P(0.24, 0.71), P(0.76, 0.71), scale(c, 0.8), 6, glow=False)
+    L.line(P(0.22, 0.60), P(0.40, 0.60), hi, 4, glow=False)
+    return L.render()
+
+
+def multiplier():
+    """Pièce hexagonale et « x2 » tracé au néon (au lieu d'un simple texte)."""
+    L = Layers()
+    c = GOLD
+    hi = lighten(c, 0.7)
+    hexa = [P(0.5 + 0.44 * math.cos(math.pi / 6 + k * math.pi / 3), 0.5 + 0.44 * math.sin(math.pi / 6 + k * math.pi / 3)) for k in range(6)]
+    L.shape(hexa, c, 0.18, 10)
+    # « x »
+    L.line(P(0.20, 0.38), P(0.42, 0.64), hi, 12)
+    L.line(P(0.42, 0.38), P(0.20, 0.64), hi, 12)
+    # « 2 »
+    two = [P(0.52, 0.36), P(0.59, 0.28), P(0.71, 0.28), P(0.78, 0.36), P(0.77, 0.46), P(0.53, 0.70), P(0.80, 0.70)]
+    pygame.draw.lines(L.glow, hi + (255,), False, two, 24)
+    pygame.draw.lines(L.art, hi + (255,), False, two, 12)
+    for pt in two:
+        pygame.draw.circle(L.art, hi + (255,), (int(pt[0]), int(pt[1])), 6)
+    return L.render()
+
+
+def invincible():
+    """Étoile néon d'une seule couleur, avec étincelles."""
+    L = Layers()
+    c = INVINCIBLE_PINK
+    hi = lighten(c, 0.7)
+
+    def star(r_out, r_in, cx=0.5, cy=0.53):
+        return [P(cx + (r_out if k % 2 == 0 else r_in) * math.cos(-math.pi / 2 + k * math.pi / 5),
+                  cy + (r_out if k % 2 == 0 else r_in) * math.sin(-math.pi / 2 + k * math.pi / 5)) for k in range(10)]
+    L.shape(star(0.44, 0.19), c, 0.25, 11)
+    pygame.draw.polygon(L.art, hi + (255,), star(0.24, 0.10), 5)
+    for (x, y, r) in ((0.16, 0.16, 0.06), (0.86, 0.22, 0.045), (0.84, 0.86, 0.05)):
+        L.line(P(x - r, y), P(x + r, y), hi, 5)
+        L.line(P(x, y - r), P(x, y + r), hi, 5)
+    return L.render()
+
+
+def multishot():
+    """Trois tirs en éventail depuis un canon."""
+    L = Layers()
+    c = MULTISHOT_ORANGE
+    hi = lighten(c, 0.7)
+    base = (0.16, 0.5)
+    L.shape([P(0.06, 0.40), P(0.24, 0.40), P(0.30, 0.50), P(0.24, 0.60), P(0.06, 0.60)], c, 0.35, 9)
+    for ang in (-28, 0, 28):
+        a = math.radians(ang)
+        x0, y0 = base[0] + 0.20 * math.cos(a), base[1] + 0.20 * math.sin(a)
+        x1, y1 = base[0] + 0.66 * math.cos(a), base[1] + 0.66 * math.sin(a)
+        L.line(P(x0, y0), P(x1, y1), c, 12)
+        for sgn in (-1, 1):  # Pointe de flèche
+            b = a + math.pi + sgn * 0.5
+            L.line(P(x1, y1), P(x1 + 0.12 * math.cos(b), y1 + 0.12 * math.sin(b)), c, 10)
+        L.line(P(x0, y0), P(x1, y1), hi, 4, glow=False)
+    return L.render()
+
+
+def nest(step):
+    """Nid : œuf alien au contour néon ; step 0..3 = dégâts (fissures lumineuses)."""
+    L = Layers()
+    c = _mix3(NEST_ORANGE, (255, 60, 50), step / 3.0)
+    hi = lighten(c, 0.6)
+    rect = pygame.Rect(int(0.20 * W), int(0.08 * W), int(0.60 * W), int(0.84 * W))
+    pygame.draw.ellipse(L.glow, c + (255,), rect.inflate(20, 20), 28)
+    pygame.draw.ellipse(L.art, scale(c, 0.22) + (245,), rect)
+    pygame.draw.ellipse(L.art, c + (255,), rect, 12)
+    # Segments de la coquille
+    for k in (-1, 1):
+        inner = pygame.Rect(int((0.5 - 0.16) * W) if k < 0 else int(0.5 * W - 0.02 * W), int(0.18 * W), int(0.18 * W), int(0.64 * W))
+        start, end = (math.radians(90), math.radians(270)) if k < 0 else (math.radians(-90), math.radians(90))
+        pygame.draw.arc(L.art, scale(c, 0.7) + (255,), inner, start, end, 5)
+    L.line(P(0.5, 0.18), P(0.5, 0.82), scale(c, 0.7), 5, glow=False)
+    # Noyau vivant
+    L.circle(P(0.5, 0.56), 0.09 * W, hi)
+    # Fissures lumineuses selon les dégâts
+    cracks = [[(0.36, 0.14), (0.44, 0.34), (0.36, 0.46)], [(0.64, 0.20), (0.56, 0.40), (0.66, 0.54)],
+              [(0.40, 0.90), (0.48, 0.72), (0.40, 0.62)]]
+    for pts in cracks[:step]:
+        pp = [P(*q) for q in pts]
+        pygame.draw.lines(L.glow, (255, 240, 200, 255), False, pp, 16)
+        pygame.draw.lines(L.art, (255, 240, 200, 255), False, pp, 6)
+    return L.render(min(1.0, 0.8 + 0.06 * step))
+
+
+def skill_dash():
+    """Compétence Dash : doubles chevrons et traits de vitesse."""
+    L = Layers()
+    c = DASH_CYAN
+    hi = lighten(c, 0.7)
+    for x in (0.34, 0.58):
+        L.shape([P(x, 0.22), P(x + 0.22, 0.50), P(x, 0.78), P(x - 0.08, 0.78), P(x + 0.12, 0.50), P(x - 0.08, 0.22)], c, 0.3, 8)
+    for y, ln in ((0.32, 0.14), (0.50, 0.20), (0.68, 0.14)):
+        L.line(P(0.06, y), P(0.06 + ln, y), hi, 6)
+    return L.render()
+
+
+def skill_shield():
+    """Compétence Bouclier : écu avec éclair."""
+    L = Layers()
+    c = SHIELD_GREEN
+    hi = lighten(c, 0.7)
+    L.shape([P(0.5, 0.08), P(0.86, 0.22), P(0.80, 0.60), P(0.5, 0.92), P(0.20, 0.60), P(0.14, 0.22)], c, 0.22, 11)
+    L.shape([P(0.56, 0.22), P(0.36, 0.54), P(0.50, 0.54), P(0.42, 0.80), P(0.66, 0.44), P(0.52, 0.44), P(0.60, 0.22)], hi, 0.9, 4)
+    return L.render()
+
+
+ITEMS = {
+    "food_ammo.png": ammo,
+    "food_multiplier.png": multiplier,
+    "icon_invincible.png": invincible,
+    "icon_multishot.png": multishot,
+    "skill_dash.png": skill_dash,
+    "skill_shield.png": skill_shield,
+}
+
+
+def main(groups=("snakes", "items")):
+    """groups : « snakes » (serpents + mines), « items » (objets, bonus, nid, compétences)."""
     pygame.init()
     pygame.display.set_mode((1, 1))
-    for who, color in SNAKES.items():
-        enemy = who == "enemy"
-        for part, fn in (("head", head), ("body", body), ("tail", tail)):
-            path = os.path.join(OUT, f"snake_{who}_{part}.png")
-            pygame.image.save(fn(color, enemy), path)
+    if "snakes" in groups:
+        for who, color in SNAKES.items():
+            enemy = who == "enemy"
+            for part, fn in (("head", head), ("body", body), ("tail", tail)):
+                path = os.path.join(OUT, f"snake_{who}_{part}.png")
+                pygame.image.save(fn(color, enemy), path)
+                print("écrit", path)
+        for lit, name in ((False, "mine.png"), (True, "mine_lit.png")):
+            path = os.path.join(OUT, name)
+            pygame.image.save(mine(lit), path)
             print("écrit", path)
-    for lit, name in ((False, "mine.png"), (True, "mine_lit.png")):
-        path = os.path.join(OUT, name)
-        pygame.image.save(mine(lit), path)
-        print("écrit", path)
+    if "items" in groups:
+        for name, fn in ITEMS.items():
+            path = os.path.join(OUT, name)
+            pygame.image.save(fn(), path)
+            print("écrit", path)
+        for step in range(4):
+            path = os.path.join(OUT, f"nest_{step}.png")
+            pygame.image.save(nest(step), path)
+            print("écrit", path)
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(tuple(sys.argv[1:]) or ("snakes", "items"))

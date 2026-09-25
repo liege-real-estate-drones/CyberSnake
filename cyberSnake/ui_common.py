@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Utilitaires d'interface partagés (boutons, manettes, panneaux, fonds, murs)."""
+import logging
+
 import pygame
 
 import config
@@ -205,7 +207,7 @@ def draw_ui_panel(surface, rect):
         surface.blit(panel_surf, rect.topleft)
     except Exception as e:
         if not getattr(draw_ui_panel, 'has_warned', False):
-             print(f"Warning: Error drawing UI panel (will warn only once): {e}")
+             logging.error(f"Warning: Error drawing UI panel (will warn only once): {e}")
              draw_ui_panel.has_warned = True
 
 

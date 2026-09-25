@@ -927,13 +927,15 @@ class Snake:
             if not self.dash_ready and self.last_dash_time > 0:
                 if current_time >= self.last_dash_time + config.SKILL_COOLDOWN_DASH:
                     self.dash_ready = True
-                    # Optionnel: utils.play_sound("skill_ready_dash") ou son spécifique
+                    self.dash_ready_time = current_time  # « Ping » du HUD
+                    utils.play_sound("skill_ready")
 
             # Cooldown Bouclier
             if not self.shield_ready and self.last_shield_time > 0:
                 if current_time >= self.last_shield_time + config.SKILL_COOLDOWN_SHIELD:
                     self.shield_ready = True
-                    utils.play_sound("skill_ready")  # Son générique pour le moment
+                    self.shield_ready_time = current_time  # « Ping » du HUD
+                    utils.play_sound("skill_ready")
 
         # --- MODIFICATION: Expiration de la CHARGE de bouclier ---
         # Désactivation Bouclier de compétence ACTIF (différent du cooldown) <- Remplacé par expiration de charge

@@ -3,12 +3,14 @@
 import pygame
 import random
 import math
-import traceback
 import logging
 
 import config
 import utils
 import progress
+import music
+import rules
+import settings_screens
 import borne_install
 import stick_wizard
 from setup_screens import invalidate_map_selection_cache
@@ -36,7 +38,7 @@ def _activate_menu_option(game_state, menu_options, menu_selection_index):
         game_state['menu_selection_index'] = menu_selection_index
         return config.MAP_SELECTION
 
-    if selected_option in (config.HALL_OF_FAME, config.UPDATE, config.OPTIONS):
+    if selected_option in (config.HALL_OF_FAME, config.UPDATE, config.OPTIONS, config.RULES):
         next_state = selected_option
     elif isinstance(selected_option, config.GameMode):
         game_state['current_game_mode'] = selected_option
@@ -73,7 +75,7 @@ def run_menu(events, dt, screen, game_state):
 
     # Vérifie si les polices sont chargées
     if not all([font_small, font_medium, font_large, font_title]):
-        print("Erreur: Polices manquantes pour run_menu")
+        logging.error("Erreur: Polices manquantes pour run_menu")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -107,6 +109,11 @@ def run_menu(events, dt, screen, game_state):
         daily_info = f"Aujourd'hui : {_dm_name} | Meilleur du jour : {_daily_best}"
     except Exception:
         daily_info = "Une partie Solo imposée, la même pour tous aujourd'hui"
+    try:
+        rules_info = "ACTIVES : poison, fantôme, gel, bouclier, croissance, mines..." if rules.is_custom() else \
+            "Mutateurs : poison, fantôme, gel, bouclier, croissance, mines, tirs alliés"
+    except Exception:
+        rules_info = ""
     menu_options = [
         (config.MODE_SOLO, "Joueur Seul", top_solo_hs),
         (config.DAILY_CHALLENGE, "Défi du jour", daily_info),
@@ -115,18 +122,12 @@ def run_menu(events, dt, screen, game_state):
         (config.MODE_PVP, "Joueur vs Joueur", top_pvp_hs),
         (config.MODE_SURVIVAL, "Mode Survie", top_surv_hs),
         (config.COOP_SURVIVAL, "Survie à deux (Coop)", "Deux joueurs ensemble contre les vagues et les boss"),
+        (config.RULES, "Règles personnalisées", rules_info),
         (config.OPTIONS, "Options", ""),
         (config.HALL_OF_FAME, "Hall of Fame", ""),
         (config.UPDATE, "Mise à jour", "")
     ]
     num_options = len(menu_options)
-
-    # Relance la musique du menu si elle s'est arrêtée
-    if utils.selected_music_file and pygame.mixer.get_init() and not pygame.mixer.music.get_busy():
-        try:
-            utils.play_selected_music(base_path)
-        except pygame.error as e:
-            print(f"Erreur lecture musique menu: {e}")
 
     next_state = config.MENU # Par défaut, reste dans le menu
     current_time = pygame.time.get_ticks() # Temps actuel pour gérer le délai de l'axe
@@ -166,10 +167,7 @@ def run_menu(events, dt, screen, game_state):
                 elif event.button == 4: # Bouton 4 pour changer musique
                     music_num = (utils.selected_music_index % 9) + 1
                     if utils.select_and_load_music(music_num, base_path):
-                        try:
-                            utils.play_selected_music(base_path)
-                        except pygame.error as e:
-                            logging.warning(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
+                        music.preview_game_track()  # Musique de jeu choisie : on l'entend tout de suite
                     last_axis_move_time = current_time
                 elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
@@ -228,8 +226,7 @@ def run_menu(events, dt, screen, game_state):
                 return _activate_menu_option(game_state, menu_options, menu_selection_index)
             elif music_num is not None:
                 if utils.select_and_load_music(music_num, base_path):
-                    try: utils.play_selected_music(base_path)
-                    except pygame.error as e: print(f"Erreur lecture musique sélectionnée ({music_num}): {e}")
+                    music.preview_game_track()
             elif key == pygame.K_ESCAPE:
                 return False # Quitte le jeu depuis le menu
             # Contrôles volume
@@ -242,7 +239,7 @@ def run_menu(events, dt, screen, game_state):
     try:
         if menu_background_image:
             try: screen.blit(menu_background_image, (0, 0))
-            except Exception as e: print(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
+            except Exception as e: logging.error(f"Erreur affichage image fond menu: {e}"); screen.fill(config.COLOR_BACKGROUND)
         else: screen.fill(config.COLOR_BACKGROUND)
         overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
         
@@ -265,9 +262,14 @@ def run_menu(events, dt, screen, game_state):
         back_btn = getattr(config, "BUTTON_SECONDARY_ACTION", 2)
         music_btn = 4
         quit_btn = 8
+        def _btn(action, number):  # Nom du bouton par sa couleur sur la borne (Options > Couleurs des boutons)
+            try:
+                return "Bouton " + settings_screens.BUTTON_COLORS[settings_screens.button_color_key(action)][0].lower()
+            except Exception:
+                return f"Bouton {number}"
         legend_lines = [
-            f"Stick/Croix: Naviguer   |   Bouton {confirm_btn}: Valider   |   Bouton {back_btn}: Retour",
-            f"Bouton {music_btn}: Musique   |   Bouton {quit_btn}: Quitter   |   Inactivité: Démo (3 min)",
+            f"Stick/Croix: Naviguer   |   {_btn('PRIMARY', confirm_btn)}: Valider   |   {_btn('SECONDARY', back_btn)}: Retour",
+            f"Bouton {music_btn}: Musique   |   {_btn('BACK', quit_btn)}: Quitter   |   Inactivité: Démo (3 min)",
         ]
         legend_h = (font_small.get_height() + 6) * len(legend_lines) + 14
         legend_w = min(int(config.SCREEN_WIDTH * 0.92), 900)
@@ -280,7 +282,9 @@ def run_menu(events, dt, screen, game_state):
         panel_top_min = int(config.SCREEN_HEIGHT * 0.22)
         available_h = max(220, legend_y - panel_top_min - 12)
         info_h = font_small.get_height() + 6  # Ligne d'info (meilleur score) sous les options
-        row_h = max(44, min(64, int((available_h - 40 - info_h) / max(1, len(menu_options)))))
+        row_h = max(34, min(64, int((available_h - 40 - info_h) / max(1, len(menu_options)))))
+        # Petit écran (11 entrées en 720p) : lignes plus basses et police plus petite plutôt que de couvrir le titre
+        row_font = font_medium if row_h - 8 >= font_medium.get_height() - 4 else game_state.get('font_default', font_medium)
         panel_h = max(220, (len(menu_options) * row_h) + 40 + info_h)
         panel_x = (config.SCREEN_WIDTH - panel_w) // 2
         panel_y = max(12, min(panel_top_min, legend_y - panel_h - 12))
@@ -316,7 +320,7 @@ def run_menu(events, dt, screen, game_state):
             utils.draw_text_with_shadow(
                 screen,
                 text,
-                font_medium,
+                row_font,
                 main_color,
                 config.COLOR_UI_SHADOW,
                 (row_rect.centerx, row_rect.centery),
@@ -352,7 +356,7 @@ def run_menu(events, dt, screen, game_state):
 
         # Petit rappel musique
         try:
-            music_track_text = f"Musique: {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
+            music_track_text = f"Musique de jeu : {'Défaut' if utils.selected_music_index == 0 else f'Piste {utils.selected_music_index}'}"
             utils.draw_text(
                 screen,
                 music_track_text,
@@ -386,7 +390,7 @@ def run_menu(events, dt, screen, game_state):
             utils.draw_text_with_shadow(screen, "Appuyez sur Bouton 1 pour fermer", font_small, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (center_x, center_y + 80), "center")
 
     except Exception as e:
-        print(f"Erreur majeure lors du dessin du menu: {e}")
+        logging.error(f"Erreur majeure lors du dessin du menu: {e}")
         try:
             screen.fill((0,0,0))
             error_font = pygame.font.Font(None, 30)
@@ -413,7 +417,7 @@ def run_options(events, dt, screen, game_state):
     p1_id, p2_id = get_joystick_ids(game_state)
 
     if not all([font_small, font_default, font_medium]):
-        print("Erreur: Polices manquantes pour run_options")
+        logging.error("Erreur: Polices manquantes pour run_options")
         return config.MENU
 
     current_time = pygame.time.get_ticks()
@@ -740,6 +744,7 @@ def run_options(events, dt, screen, game_state):
         ("Volume musique", music_volume_display),
         ("Volume effets", sound_volume_display),
         ("Contrôles", ""),
+        ("Couleurs des boutons", ""),
         ("Réinitialiser", ""),
         ("Appliquer", ""),
         ("Retour", ""),
@@ -764,9 +769,10 @@ def run_options(events, dt, screen, game_state):
     IDX_MUSIC_VOL = 16
     IDX_SOUND_VOL = 17
     IDX_CONTROLS = 18
-    IDX_RESET = 19
-    IDX_APPLY = 20
-    IDX_BACK = 21
+    IDX_BUTTON_COLORS = 19
+    IDX_RESET = 20
+    IDX_APPLY = 21
+    IDX_BACK = 22
 
     def cycle_visual_fx(delta):
         nonlocal pending_visual_fx
@@ -1174,6 +1180,12 @@ def run_options(events, dt, screen, game_state):
             next_state = config.CONTROLS
             return True
 
+        if selection_index == IDX_BUTTON_COLORS:
+            utils.play_sound("menu_select")
+            game_state['button_colors_return_state'] = config.OPTIONS
+            next_state = config.BUTTON_COLORS_SCREEN
+            return True
+
         if selection_index == IDX_RESET:
             if current_time <= reset_confirm_until:
                 reset_confirm_until = 0
@@ -1390,6 +1402,7 @@ def run_options(events, dt, screen, game_state):
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
             ("Contrôles", ""),
+            ("Couleurs des boutons", ""),
             (reset_label, ""),
             ("Appliquer", ""),
             ("Retour", ""),
@@ -1795,7 +1808,7 @@ def run_options(events, dt, screen, game_state):
                 hint = "Entrée/A: CONFIRMER réinitialisation | Echap/B: retour"
         utils.draw_text(screen, hint, font_small, config.COLOR_TEXT, (sw / 2, sh * 0.94), "center")
     except Exception as e:
-        print(f"Erreur dessin run_options: {e}")
+        logging.error(f"Erreur dessin run_options: {e}")
 
     # Nettoyage simple si on quitte l'écran
     if next_state != config.OPTIONS:
@@ -1837,7 +1850,7 @@ def run_controls_remap(events, dt, screen, game_state):
     font_large = game_state.get('font_large') or font_medium
 
     if not all([font_small, font_default, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_controls_remap")
+        logging.error("Erreur: Polices manquantes pour run_controls_remap")
         return return_state
 
     # Init pending config
@@ -2249,8 +2262,7 @@ def run_controls_remap(events, dt, screen, game_state):
         utils.draw_text(screen, help_1, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y), "center")
         utils.draw_text(screen, help_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, help_y + line_gap), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_controls_remap: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur majeure lors du dessin de run_controls_remap: {e}", exc_info=True)
         return return_state
 
     return config.CONTROLS

@@ -3,7 +3,6 @@
 import pygame
 import random
 import math
-import traceback
 import logging
 
 import config
@@ -12,6 +11,7 @@ import progress
 import arenas
 from gameplay import reset_game
 import walls as walls_mod
+import pvp_rounds
 from ui_common import draw_screen_background, draw_ui_panel, draw_wall_tile, get_joystick_ids, is_back_button, is_confirm_button
 
 
@@ -50,8 +50,8 @@ try:
         'delete': getattr(config, 'COLOR_MINE', DEFAULT_VK_COLORS['delete'])
     }
 except Exception as e:
-    print(f"Erreur chargement couleurs clavier virtuel depuis config: {e}")
-    print("Utilisation des couleurs par défaut")
+    logging.error(f"Erreur chargement couleurs clavier virtuel depuis config: {e}")
+    logging.info("Utilisation des couleurs par défaut")
     VK_KEY_COLORS = DEFAULT_VK_COLORS
 
 VK_PULSE_DURATION = 1000  # Durée d'un cycle de pulsation en ms
@@ -109,7 +109,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
         game_state['key_animations'] = key_animations
 
     if not all([font_small, font_medium, font_large]):
-        print("Erreur: Polices manquantes pour run_name_entry_solo")
+        logging.error("Erreur: Polices manquantes pour run_name_entry_solo")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -273,7 +273,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
                 name_entered = player1_name_input.strip()[:15] # Limite à 15 caractères
                 game_state['player1_name_input'] = name_entered if name_entered else "Thib" # Nom par défaut si vide
                 utils.play_sound("name_input_confirm")
-                print(f"Nom Joueur Solo/VsAI/Survie: '{game_state['player1_name_input']}'")
+                logging.info(f"Nom Joueur Solo/VsAI/Survie: '{game_state['player1_name_input']}'")
                 next_state = config.MAP_SELECTION # Après le nom, on choisit la carte
                 return next_state
             elif key == pygame.K_BACKSPACE:
@@ -421,7 +421,7 @@ def run_name_entry_solo(events, dt, screen, game_state):
         utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour", 
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
-        print(f"Erreur lors du dessin de run_name_entry_solo: {e}")
+        logging.error(f"Erreur lors du dessin de run_name_entry_solo: {e}")
         return config.MENU
 
     # Sauvegarder position clavier virtuel
@@ -488,7 +488,7 @@ def run_map_selection(events, dt, screen, game_state):
 
     # --- MODIFIÉ: Charge/Met à jour la liste des cartes si nécessaire ---
     if _map_selection_needs_update:
-        print("Mise à jour de la liste des cartes (incluant favoris)...")
+        logging.info("Mise à jour de la liste des cartes (incluant favoris)...")
         _favorite_maps = utils.load_favorite_maps(base_path)
         if current_game_mode == config.MODE_CLASSIC:
             # Mode classique: on reste sur une carte simple (pas de favoris/aléatoire)
@@ -508,11 +508,11 @@ def run_map_selection(events, dt, screen, game_state):
             try:
                 _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
             except Exception as e:
-                print(f"Erreur génération carte aléatoire initiale: {e}")
+                logging.error(f"Erreur génération carte aléatoire initiale: {e}")
                 _current_random_map_walls = []
 
     if not all([font_small, font_medium]):
-        print("Erreur: Polices manquantes pour run_map_selection")
+        logging.error("Erreur: Polices manquantes pour run_map_selection")
         _current_random_map_walls = None
         _map_selection_needs_update = True # Force rechargement au retour
         try:
@@ -531,7 +531,7 @@ def run_map_selection(events, dt, screen, game_state):
     next_state = config.MAP_SELECTION
 
     if num_maps_total == 0: # Ne devrait plus arriver
-        print("ERREUR CRITIQUE: Aucune carte à afficher !")
+        logging.error("ERREUR CRITIQUE: Aucune carte à afficher !")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -687,10 +687,10 @@ def run_map_selection(events, dt, screen, game_state):
             elif is_random_selected and (key == pygame.K_LEFT or key == pygame.K_RIGHT):
                 try:
                     _current_random_map_walls = utils.generate_random_walls(config.GRID_WIDTH, config.GRID_HEIGHT)
-                    print("Nouvelle carte aléatoire générée.")
+                    logging.info("Nouvelle carte aléatoire générée.")
                     utils.play_sound("shoot_p1")
                 except Exception as e:
-                    print(f"Erreur regénération carte aléatoire: {e}")
+                    logging.error(f"Erreur regénération carte aléatoire: {e}")
                     _current_random_map_walls = []
             # --- NOUVEAU: Touche 'F' pour sauvegarder la carte aléatoire actuelle ---
             elif is_random_selected and key == pygame.K_f:
@@ -702,7 +702,7 @@ def run_map_selection(events, dt, screen, game_state):
                     else:
                         utils.play_sound("menu_back") # Son d'échec
                 else:
-                    print("Impossible de sauvegarder une carte aléatoire vide.")
+                    logging.error("Impossible de sauvegarder une carte aléatoire vide.")
                     utils.play_sound("menu_back")
             # --- FIN NOUVEAU ---
             elif key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
@@ -712,22 +712,22 @@ def run_map_selection(events, dt, screen, game_state):
 
                     if selected_key_or_label == "Aléatoire":
                         game_state['current_random_map_walls'] = list(_current_random_map_walls) if _current_random_map_walls else []
-                        print(f"Map selected: Aléatoire (avec {len(game_state['current_random_map_walls'])} murs)")
+                        logging.info(f"Map selected: Aléatoire (avec {len(game_state['current_random_map_walls'])} murs)")
                     elif selected_key_or_label in _favorite_maps:
                         # Carte favorite sélectionnée
                         game_state['current_random_map_walls'] = list(_favorite_maps[selected_key_or_label]) # Utilise les murs du favori
-                        print(f"Map selected: Favori '{selected_key_or_label}'")
+                        logging.info(f"Map selected: Favori '{selected_key_or_label}'")
                     else:
                         # Carte prédéfinie sélectionnée
                         map_data = config.MAPS.get(selected_key_or_label)
                         if not map_data:
-                             print(f"Erreur: Données de carte introuvables pour la clé '{selected_key_or_label}'")
+                             logging.error(f"Erreur: Données de carte introuvables pour la clé '{selected_key_or_label}'")
                              _current_random_map_walls = None
                              _map_selection_needs_update = True
                              next_state = config.MENU
                              return next_state
                         game_state['current_random_map_walls'] = None # Pas une carte aléatoire
-                        print(f"Map selected: {map_data.get('name', selected_key_or_label)}")
+                        logging.info(f"Map selected: {map_data.get('name', selected_key_or_label)}")
 
                     utils.play_sound("menu_select")
                     _current_random_map_walls = None # Nettoie la carte temporaire
@@ -744,16 +744,16 @@ def run_map_selection(events, dt, screen, game_state):
                         next_state = config.PLAYING
                     return next_state # Change d'état
                 except IndexError:
-                    print(f"Erreur: Index de carte hors limites ({map_selection_index})")
+                    logging.error(f"Erreur: Index de carte hors limites ({map_selection_index})")
                     _current_random_map_walls = None
                     _map_selection_needs_update = True
                     next_state = config.MENU
                 except Exception as e:
-                    print(f"Erreur lors de la sélection/reset de la carte: {e}")
+                    logging.error(f"Erreur lors de la sélection/reset de la carte: {e}")
                     _current_random_map_walls = None
                     _map_selection_needs_update = True
                     next_state = config.MENU
-                    traceback.print_exc()
+                    logging.error("Détail de l'erreur", exc_info=True)
 
             elif key == pygame.K_ESCAPE:
                 _current_random_map_walls = None
@@ -822,7 +822,7 @@ def run_map_selection(events, dt, screen, game_state):
             try:
                 walls_to_preview = list(walls_generator_preview(config.GRID_WIDTH, config.GRID_HEIGHT))
             except Exception as e:
-                print(f"Erreur génération murs preview map '{selected_key_or_label_preview}': {e}")
+                logging.error(f"Erreur génération murs preview map '{selected_key_or_label_preview}': {e}")
 
         # Description contextuelle (1–2 lignes)
         try:
@@ -992,8 +992,7 @@ def run_map_selection(events, dt, screen, game_state):
             utils.draw_text(screen, instruction_text_2, font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y + line_gap), "center")
 
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_map_selection: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur majeure lors du dessin de run_map_selection: {e}", exc_info=True)
         _current_random_map_walls = None
         _map_selection_needs_update = True
         return config.MENU
@@ -1836,7 +1835,7 @@ def run_pvp_setup(events, dt, screen, game_state):
     inputs_locked = (current_time - pvp_setup_start_time < input_lock_duration)
 
     if not all([font_small, font_medium]):
-        print("Erreur: Polices manquantes pour run_pvp_setup")
+        logging.error("Erreur: Polices manquantes pour run_pvp_setup")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -1848,7 +1847,7 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     PvpCondition = getattr(config, 'PvpCondition', None)
     if PvpCondition is None:
-        print("ERREUR CRITIQUE: Enum PvpCondition non trouvée dans config.py!")
+        logging.error("ERREUR CRITIQUE: Enum PvpCondition non trouvée dans config.py!")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -1861,12 +1860,15 @@ def run_pvp_setup(events, dt, screen, game_state):
     condition_names = {
         PvpCondition.TIMER: "Temps Limite",
         PvpCondition.KILLS: "Objectif Kills",
-        PvpCondition.MIXED: "Mixte (Temps ou Kills)"
+        PvpCondition.MIXED: "Mixte (Temps ou Kills)",
+        PvpCondition.SCORE: "Score Limite",
     }
+    if 'pvp_best_of' not in game_state or 'pvp_score_limit' not in game_state:
+        game_state['pvp_best_of'], game_state['pvp_score_limit'] = pvp_rounds.load_settings()
 
     def change_condition(change):
         current_condition_val = game_state.get('pvp_condition_type', PvpCondition.KILLS)
-        all_conditions = [PvpCondition.TIMER, PvpCondition.KILLS, PvpCondition.MIXED]
+        all_conditions = [PvpCondition.TIMER, PvpCondition.KILLS, PvpCondition.MIXED, PvpCondition.SCORE]
         try:
             current_index = all_conditions.index(current_condition_val)
             new_index = (current_index + change + len(all_conditions)) % len(all_conditions)
@@ -1876,15 +1878,26 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     def change_time(change):
         current_time_target = game_state.get('pvp_target_time', config.PVP_DEFAULT_TIME_SECONDS)
-        if game_state.get('pvp_condition_type') != PvpCondition.KILLS:
+        if game_state.get('pvp_condition_type') in (PvpCondition.TIMER, PvpCondition.MIXED):
             new_time = max(config.PVP_TIME_INCREMENT, current_time_target + change * config.PVP_TIME_INCREMENT)
             game_state['pvp_target_time'] = new_time
 
     def change_kills(change):
         current_kills_target = game_state.get('pvp_target_kills', config.PVP_DEFAULT_KILLS)
-        if game_state.get('pvp_condition_type') != PvpCondition.TIMER:
+        if game_state.get('pvp_condition_type') in (PvpCondition.KILLS, PvpCondition.MIXED):
             new_kills = max(1, current_kills_target + change * config.PVP_KILLS_INCREMENT)
             game_state['pvp_target_kills'] = new_kills
+
+    def change_score_limit(change):
+        if game_state.get('pvp_condition_type') == PvpCondition.SCORE:
+            limit = int(game_state.get('pvp_score_limit', pvp_rounds.DEFAULT_SCORE_LIMIT))
+            game_state['pvp_score_limit'] = max(pvp_rounds.SCORE_LIMIT_STEP, limit + change * pvp_rounds.SCORE_LIMIT_STEP)
+
+    def change_best_of(change):
+        choices = list(pvp_rounds.BEST_OF_CHOICES)
+        cur = game_state.get('pvp_best_of', 1)
+        idx = choices.index(cur) if cur in choices else 0
+        game_state['pvp_best_of'] = choices[(idx + change) % len(choices)]
 
     def change_start_armor(change):
         default_armor = getattr(config, 'PVP_DEFAULT_START_ARMOR', 0)
@@ -1906,8 +1919,10 @@ def run_pvp_setup(events, dt, screen, game_state):
 
     options = [
         ("Condition Victoire", lambda gs: condition_names.get(gs.get('pvp_condition_type'), "?"), change_condition),
-        ("Temps Limite (sec)", lambda gs: str(gs.get('pvp_target_time')) if gs.get('pvp_condition_type') != PvpCondition.KILLS else "N/A", change_time),
-        ("Objectif Kills", lambda gs: str(gs.get('pvp_target_kills')) if gs.get('pvp_condition_type') != PvpCondition.TIMER else "N/A", change_kills),
+        ("Temps Limite (sec)", lambda gs: str(gs.get('pvp_target_time')) if gs.get('pvp_condition_type') in (PvpCondition.TIMER, PvpCondition.MIXED) else "N/A", change_time),
+        ("Objectif Kills", lambda gs: str(gs.get('pvp_target_kills')) if gs.get('pvp_condition_type') in (PvpCondition.KILLS, PvpCondition.MIXED) else "N/A", change_kills),
+        ("Score Limite", lambda gs: str(gs.get('pvp_score_limit')) if gs.get('pvp_condition_type') == PvpCondition.SCORE else "N/A", change_score_limit),
+        ("Manches", lambda gs: {1: "Partie unique", 3: "2 gagnantes sur 3", 5: "3 gagnantes sur 5"}.get(gs.get('pvp_best_of', 1), "?"), change_best_of),
         ("Armure Départ", lambda gs: str(gs.get('pvp_start_armor')), change_start_armor),
         ("Munitions Départ", lambda gs: str(gs.get('pvp_start_ammo')), change_start_ammo)
     ]
@@ -2002,6 +2017,7 @@ def run_pvp_setup(events, dt, screen, game_state):
 
                 if is_confirm_button(event.button):  # Confirmer
                     utils.play_sound("menu_select")
+                    pvp_rounds.save_settings(game_state.get('pvp_best_of', 1), game_state.get('pvp_score_limit', pvp_rounds.DEFAULT_SCORE_LIMIT))
                     next_state = config.NAME_ENTRY_PVP
                     game_state['current_state'] = next_state
                     game_state['pvp_name_entry_stage'] = 1
@@ -2027,13 +2043,13 @@ def run_pvp_setup(events, dt, screen, game_state):
                     change_func = options[pvp_setup_index][2]
                     if change_func:
                         try: change_func(-1); utils.play_sound("shoot_p1")
-                        except Exception as e: print(f"Erreur change_func(-1) option {pvp_setup_index}: {e}")
+                        except Exception as e: logging.error(f"Erreur change_func(-1) option {pvp_setup_index}: {e}")
             elif key in (pygame.K_RIGHT, pygame.K_PLUS, pygame.K_KP_PLUS):
                  if 0 <= pvp_setup_index < num_options:
                     change_func = options[pvp_setup_index][2]
                     if change_func:
                          try: change_func(1); utils.play_sound("shoot_p1")
-                         except Exception as e: print(f"Erreur change_func(1) option {pvp_setup_index}: {e}")
+                         except Exception as e: logging.error(f"Erreur change_func(1) option {pvp_setup_index}: {e}")
             elif key == pygame.K_RETURN or key == pygame.K_KP_ENTER:
                 utils.play_sound("menu_select")
                 pvp_cond = game_state.get('pvp_condition_type'); pvp_time = game_state.get('pvp_target_time')
@@ -2058,7 +2074,7 @@ def run_pvp_setup(events, dt, screen, game_state):
         draw_screen_background(screen, game_state)
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); screen.blit(overlay, (0, 0))
         utils.draw_text_with_shadow(screen, "Configuration PvP", font_medium, config.COLOR_TEXT_MENU, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.15), "center")
-        y_start, item_gap = config.SCREEN_HEIGHT * 0.30, 60
+        y_start, item_gap = config.SCREEN_HEIGHT * 0.26, min(60, int(config.SCREEN_HEIGHT * 0.085))
         label_x, value_x = config.SCREEN_WIDTH * 0.35, config.SCREEN_WIDTH * 0.65
         current_selection_idx = game_state.get('pvp_setup_index', 0)
         for i, (text, getter, _) in enumerate(options):
@@ -2068,14 +2084,13 @@ def run_pvp_setup(events, dt, screen, game_state):
             item_y = y_start + i * item_gap
             label_text = f"{prefix}{text} : "
             try: value_text = getter(game_state)
-            except Exception as e: print(f"Erreur getter PvP setup pour {text}: {e}"); value_text = "ERR"
+            except Exception as e: logging.error(f"Erreur getter PvP setup pour {text}: {e}"); value_text = "ERR"
             utils.draw_text_with_shadow(screen, label_text, font_medium, label_color, config.COLOR_UI_SHADOW, (label_x, item_y), "midright")
             utils.draw_text_with_shadow(screen, value_text, font_medium, value_color, config.COLOR_UI_SHADOW, (value_x, item_y), "midleft")
         instruction_y = config.SCREEN_HEIGHT * 0.90
         utils.draw_text(screen, "HAUT/BAS: Sélection | GAUCHE/DROITE: Modifier | ENTRÉE: Noms Joueurs | ECHAP: Retour Carte", font_small, config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, instruction_y), "center")
     except Exception as e:
-        print(f"Erreur majeure lors du dessin de run_pvp_setup: {e}")
-        traceback.print_exc()
+        logging.error(f"Erreur majeure lors du dessin de run_pvp_setup: {e}", exc_info=True)
         logging.debug("Exiting run_pvp_setup (Exception in draw), next_state: config.MAP_SELECTION") # NOUVEAU LOG
         return config.MAP_SELECTION
 
@@ -2141,7 +2156,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
     font_small=game_state.get('font_small'); font_medium=game_state.get('font_medium');
     font_large=game_state.get('font_large'); font_default=game_state.get('font_default');
     if not all([font_small, font_medium, font_large, font_default]):
-        print("Erreur: Polices manquantes pour run_name_entry_pvp")
+        logging.error("Erreur: Polices manquantes pour run_name_entry_pvp")
         try:
             screen.fill((0,0,0)) # Fond noir
             error_font = pygame.font.Font(None, 30)
@@ -2375,7 +2390,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                             game_state['pvp_name_entry_stage'] = 2 # Change l'étape
                         elif stage == 2:
                             game_state['player2_name_input'] = name_entered
-                            print(f"Noms PvP: J1='{game_state['player1_name_input']}', J2='{game_state['player2_name_input']}'")
+                            logging.info(f"Noms PvP: J1='{game_state['player1_name_input']}', J2='{game_state['player2_name_input']}'")
                             game_state['pvp_name_entry_stage'] = 1 # Réinitialise pour la prochaine fois
                             
                             reset_game(game_state) # Initialise le jeu PvP
@@ -2396,8 +2411,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
                             game_state['current_state'] = next_state # Important
                             return next_state # Lance le jeu ou retourne au menu
                     except Exception as e:
-                         print(f"Erreur lors de la validation du nom PvP (stage {stage}): {e}")
-                         traceback.print_exc() # Affiche la trace
+                         logging.error(f"Erreur lors de la validation du nom PvP (stage {stage}): {e}", exc_info=True)
                          next_state = config.PVP_SETUP # Retour config par sécurité
                          return next_state # Important de retourner ici
 
@@ -2571,7 +2585,7 @@ def run_name_entry_pvp(events, dt, screen, game_state):
         utils.draw_text(screen, "JOYSTICK/HAT: Naviguer | BOUTON A/B: Sélectionner | ECHAP: Retour", 
                       font_small, config.COLOR_TEXT, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.9), "center")
     except Exception as e:
-        print(f"Erreur lors du dessin de run_name_entry_pvp: {e}")
+        logging.error(f"Erreur lors du dessin de run_name_entry_pvp: {e}")
         return config.PVP_SETUP # Retour config PvP
 
     # Sauvegarder position clavier virtuel

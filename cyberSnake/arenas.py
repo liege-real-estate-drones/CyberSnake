@@ -251,3 +251,9 @@ MAP_DESCRIPTIONS = {
     "Portes Laser": "Des portes laser s'allument et s'éteignent (elles clignotent avant).",
     "Zone Mortelle": "Après 45 s, l'arène rétrécit anneau par anneau. Reste au centre !",
 }
+
+# Cartes supplémentaires (structures de murs, maps_extra.py)
+import maps_extra  # noqa: E402
+for _key, _data in maps_extra.MAPS.items():
+    config.MAPS.setdefault(_key, _data)
+MAP_DESCRIPTIONS.update(maps_extra.DESCRIPTIONS)

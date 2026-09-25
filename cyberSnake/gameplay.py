@@ -2,7 +2,6 @@
 """Logique d'une partie : initialisation (reset_game) et boucle de jeu (run_game)."""
 import pygame
 import random
-import traceback
 import logging
 import itertools
 
@@ -16,6 +15,9 @@ import enemies
 import bonuses
 import arenas
 import joy_map
+import keyboard_controls
+import rules
+import pvp_rounds
 import progress
 import screens
 from render import draw_game_elements_on_surface
@@ -100,6 +102,10 @@ def _run_death_cam(dt, screen, game_state, real_now):
     """Fin de partie : l'arène reste affichée (explosion, particules) puis l'écran de fin."""
     until = int(game_state.get('death_cam_until', 0) or 0)
     if real_now >= until:
+        if game_state.pop('round_transition', False):  # PvP en manches : score, puis manche suivante
+            game_state.pop('death_cam_until', None)
+            game_state['current_state'] = config.ROUND_SCORE
+            return config.ROUND_SCORE
         return _enter_game_over(game_state)
     now = game_clock.ticks()
     utils.particles[:] = [p for p in utils.particles if not p.update(dt)]
@@ -172,7 +178,11 @@ def _eat_food(game_state, snake_object, collected_food, current_time):
     if snake_object.is_ai and snake_object.is_baby and food_type_key not in ['normal', 'ammo']:
         should_grow = False  # Bébé ne grandit qu'avec normal/ammo
     if should_grow:
-        snake_object.grow()
+        rings = rules.growth_per_food() if snake_object.is_player else 1  # Règle perso : 0 à 3 anneaux
+        for _ in range(rings):
+            snake_object.grow()
+        if rings == 0 and snake_object.is_player:
+            snake_object.foods_eaten = getattr(snake_object, 'foods_eaten', 0) + 1
 
     if snake_object.is_player:
         snake_object.add_score(food_data.get('score', 0))
@@ -266,6 +276,55 @@ def _apply_dash_loot(game_state, snake, dash_result, current_time):
             _take_powerup(game_state, snake, pu, current_time)
 
 
+def _enter_pause(game_state):
+    game_state['previous_state'] = config.PLAYING
+    game_state['pause_menu_selection'] = 0
+    game_state['current_state'] = config.PAUSED
+    return config.PAUSED
+
+
+def _player_action(game_state, snake, action, current_time, coop):
+    """Tir / Dash / Bouclier d'un joueur (manette ou clavier). Retourne True si le Dash l'a tué."""
+    mode = game_state.get('current_game_mode')
+    if snake is None or not snake.alive or mode == config.MODE_CLASSIC:
+        return False
+    if action == 'shoot':
+        projectiles = snake.shoot(current_time)
+        if projectiles:
+            # Coop : les tirs du J2 sont ceux de l'équipe (touchent mines, nids et IA)
+            key = 'player_projectiles' if (snake.player_num == 1 or coop) else 'player2_projectiles'
+            game_state.setdefault(key, []).extend(projectiles)
+            utils.play_sound(snake.shoot_sound)
+        return False
+    if action == 'shield':
+        if snake.shield_ready:
+            snake.activate_shield(current_time)
+        else:
+            utils.play_sound("denied")
+        return False
+    if action != 'dash':
+        return False
+    if not snake.dash_ready:
+        utils.play_sound("denied")  # Compétence pas encore prête
+        return False
+    walls = game_state.get('current_map_walls', [])
+    mines = game_state.get('mines', [])
+    obstacles = utils.get_obstacles_for_player(snake, game_state.get('player_snake'), game_state.get('player2_snake'),
+                                               game_state.get('enemy_snake'), mines, walls, game_state.get('active_enemies', []))
+    result = snake.activate_dash(current_time, obstacles, game_state.get('foods', []), game_state.get('powerups', []), mines, set(walls))
+    _apply_dash_loot(game_state, snake, result, current_time)
+    if result and result.get('died'):
+        death_type = result.get('type')
+        logging.info(f"{snake.name} died by {death_type} during dash at {result.get('position')}.")
+        if mode == config.MODE_PVP or snake.player_num == 2:
+            game_state[f'p{snake.player_num}_death_time'] = current_time
+            game_state[f'p{snake.player_num}_death_cause'] = f"{death_type}_dash"  # ex : 'mine_dash', 'wall_dash'
+        return True
+    if result and result.get('collided'):
+        logging.info(f"{snake.name} collided during dash with {result.get('type')}.")
+    return False
+
+
 def _update_moving_mines(game_state, current_time, dt, players):
     """Déplace les mines mobiles ; une explosion blesse les joueurs proches.
     Retourne la liste des joueurs tués. Les mines éteintes sont retirées."""
@@ -296,11 +355,12 @@ def _update_moving_mines(game_state, current_time, dt, players):
 def reset_game(game_state):
     """Réinitialise l'état du jeu dans game_state."""
 
-    print("Resetting game...")
+    logging.info("Resetting game...")
     current_time_reset = game_clock.ticks()
     fx.clear_popups()
     fx.clear_shockwaves()
     bonuses.reset()
+    custom_rules = rules.begin(game_state)  # Règles personnalisées (figées pour la partie)
     game_state['game_start_time'] = current_time_reset
     game_state.pop('game_end_time', None)
     game_state['boss'] = None
@@ -347,7 +407,7 @@ def reset_game(game_state):
     game_state.pop('spawn_bounds', None)
     current_game_mode = game_state.get('current_game_mode')
     if current_game_mode is None:
-        print("current_game_mode manquant, utilisation du mode Solo par défaut pour le redémarrage.")
+        logging.warning("current_game_mode manquant, utilisation du mode Solo par défaut pour le redémarrage.")
         current_game_mode = config.MODE_SOLO
         game_state['current_game_mode'] = current_game_mode
     selected_map_key = game_state.get('selected_map_key', config.DEFAULT_MAP_KEY)
@@ -364,9 +424,9 @@ def reset_game(game_state):
     dynamic_walls_raw = game_state.get('current_random_map_walls', None)
     if dynamic_walls_raw is not None and selected_map_key not in config.MAPS:
         if selected_map_key == "Aléatoire":
-            print("Resetting game with generated random map.")
+            logging.info("Resetting game with generated random map.")
         else:
-            print(f"Resetting game with favorite map: {selected_map_key}")
+            logging.info(f"Resetting game with favorite map: {selected_map_key}")
 
         current_map_walls_list = []
         if isinstance(dynamic_walls_raw, list):
@@ -388,7 +448,7 @@ def reset_game(game_state):
         try:
             current_map_walls_list = list(walls_generator(config.GRID_WIDTH, config.GRID_HEIGHT))
         except Exception as e:
-            print(f"Erreur génération murs map '{selected_map_key}': {e}")
+            logging.error(f"Erreur génération murs map '{selected_map_key}': {e}")
             current_map_walls_list = [] # Fallback murs vides
 
         # Récupère les fonctions de démarrage spécifiques à la carte
@@ -405,7 +465,7 @@ def reset_game(game_state):
         p2_start = p2_start_func(config.GRID_WIDTH, config.GRID_HEIGHT)
         ai_start = ai_start_func(config.GRID_WIDTH, config.GRID_HEIGHT)
     except Exception as e:
-        print(f"Erreur calcul positions départ map '{selected_map_key}': {e}")
+        logging.error(f"Erreur calcul positions départ map '{selected_map_key}': {e}")
         # Garde les positions par défaut si erreur
     # --- Arène Classique (taille réglable via options) ---
     if current_game_mode == config.MODE_CLASSIC:
@@ -452,7 +512,7 @@ def reset_game(game_state):
     # --- NOUVEAU: Donne 10 munitions de départ au joueur en mode Vs AI ---
     if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SOLO:
         start_ammo_p1 = 10
-        print(f"Mode {current_game_mode.name} détecté, J1 commence avec {start_ammo_p1} munitions.")
+        logging.info(f"Mode {current_game_mode.name} détecté, J1 commence avec {start_ammo_p1} munitions.")
     # --- FIN NOUVEAU ---
     try:
         game_state['player_snake'] = game_objects.Snake(
@@ -463,7 +523,7 @@ def reset_game(game_state):
         if current_game_mode != config.MODE_CLASSIC:
             game_state['player_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
     except Exception as e:
-         print(f"ERREUR CRITIQUE création player_snake: {e}"); traceback.print_exc()
+         logging.error(f"ERREUR CRITIQUE création player_snake: {e}", exc_info=True)
     if current_game_mode == config.MODE_VS_AI:
         try:
             default_ai_armor = getattr(config, 'ENEMY_START_ARMOR', 0)
@@ -480,12 +540,12 @@ def reset_game(game_state):
             game_state['vs_ai_start_time'] = current_time_reset
             game_state['last_difficulty_update_time'] = current_time_reset
             # --- FIN AJOUT ---
-        except Exception as e: print(f"ERREUR CRITIQUE création enemy_snake: {e}"); traceback.print_exc()
+        except Exception as e: logging.error(f"ERREUR CRITIQUE création enemy_snake: {e}", exc_info=True)
     elif current_game_mode == config.MODE_SURVIVAL:
         game_state['survival_wave'] = 1
         game_state['survival_wave_start_time'] = current_time_reset
         game_state['current_survival_interval_factor'] = config.SURVIVAL_INITIAL_INTERVAL_FACTOR
-        print("Survival Mode Started - Wave 1")
+        logging.info("Survival Mode Started - Wave 1")
         if game_state.get('coop'):
             try:
                 game_state['player2_snake'] = game_objects.Snake(
@@ -502,21 +562,21 @@ def reset_game(game_state):
         # =======================================================
     elif current_game_mode == config.MODE_PVP:
         player2_name = game_state.get('player2_name_input', "Alex")
-        print(f"DEBUG PVP RESET: Tentative de création de player2_snake avec nom: {player2_name}, start_pos: {p2_start}")
+        logging.debug(f"DEBUG PVP RESET: Tentative de création de player2_snake avec nom: {player2_name}, start_pos: {p2_start}")
         try:
             game_state['player2_snake'] = game_objects.Snake(
                 player_num=2, name=player2_name, start_pos=p2_start,
                 current_game_mode=current_game_mode, walls=current_map_walls_list,
                 start_armor=pvp_start_armor, start_ammo=pvp_start_ammo
             )
-            print(f"DEBUG PVP RESET: player2_snake créé avec succès: {game_state['player2_snake']}")
+            logging.debug(f"DEBUG PVP RESET: player2_snake créé avec succès: {game_state['player2_snake']}")
             game_state['player2_snake'].invincible_timer = current_time_reset + config.PLAYER_INITIAL_INVINCIBILITY_DURATION
         except Exception as e:
-            print(f"ERREUR CRITIQUE création player2_snake (PvP): {e}")
-            traceback.print_exc()
+            logging.error(f"ERREUR CRITIQUE création player2_snake (PvP): {e}", exc_info=True)
             game_state['player2_snake'] = None # Assurer que c'est None en cas d'erreur
-        print(f"DEBUG PVP RESET: player2_snake après try/except: {game_state.get('player2_snake')}")
+        logging.debug(f"DEBUG PVP RESET: player2_snake après try/except: {game_state.get('player2_snake')}")
         game_state['pvp_start_time'] = current_time_reset
+        pvp_rounds.on_reset(game_state)  # Match en manches : nouveau match ou manche suivante
         num_initial_nests = 0 # Pas de nids en PvP
     num_initial_nests = 0  # Initialisation par défaut à 0
 
@@ -533,7 +593,7 @@ def reset_game(game_state):
     # La logique de spawn des nids a été consolidée ci-dessus.
 
     if num_initial_nests > 0:
-        print(f"Initializing {num_initial_nests} nests for mode {current_game_mode.name}...")
+        logging.info(f"Initializing {num_initial_nests} nests for mode {current_game_mode.name}...")
         initial_occupied_for_nests = utils.get_all_occupied_positions(
             game_state.get('player_snake'), game_state.get('player2_snake'), game_state.get('enemy_snake'),
             [], [], [], current_map_walls_list, [], [], []
@@ -544,10 +604,10 @@ def reset_game(game_state):
                 try:
                     game_state['nests'].append(game_objects.Nest(nest_pos))
                     initial_occupied_for_nests.add(nest_pos)
-                    print(f"  Nest created at {nest_pos}")
-                except Exception as e: print(f"Erreur création nid initial à {nest_pos}: {e}")
+                    logging.info(f"  Nest created at {nest_pos}")
+                except Exception as e: logging.error(f"Erreur création nid initial à {nest_pos}: {e}")
             else:
-                print("  Warning: Could not find empty position for initial nest.")
+                logging.warning("  Warning: Could not find empty position for initial nest.")
     # === FIN MODIFICATION ===
 
     initial_occupied = utils.get_all_occupied_positions(
@@ -571,7 +631,7 @@ def reset_game(game_state):
                 game_state['foods'].append(game_objects.Food(pos, food_type))
                 initial_occupied.add(pos)
             except Exception as e:
-                print(f"Erreur création nourriture initiale à {pos}: {e}"); traceback.print_exc()
+                logging.error(f"Erreur création nourriture initiale à {pos}: {e}", exc_info=True)
     if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
         player_snake_obj = game_state.get('player_snake')
         player_score = player_snake_obj.score if player_snake_obj else 0
@@ -579,12 +639,7 @@ def reset_game(game_state):
         game_state['current_objective'] = new_objective
         if new_objective: game_state['objective_display_text'] = new_objective.get('display_text', "")
         else: game_state['objective_display_text'] = ""
-        print(f"Nouvel Objectif: {game_state.get('objective_display_text','N/A')} (Cible: {game_state.get('current_objective', {}).get('target_value','N/A')})")
-    if utils.selected_music_file and pygame.mixer.get_init():
-        try:
-            utils.music_call("stop")
-            utils.play_selected_music(base_path)
-        except pygame.error as e: print(f"Erreur redémarrage musique pendant reset: {e}")
+        logging.info(f"Nouvel Objectif: {game_state.get('objective_display_text','N/A')} (Cible: {game_state.get('current_objective', {}).get('target_value','N/A')})")
 
     # --- Arène animée (portails, portes laser, zone qui rétrécit) ---
     try:
@@ -600,6 +655,10 @@ def reset_game(game_state):
         except Exception as e:
             logging.error(f"Erreur modificateur défi du jour: {e}", exc_info=True)
 
+    if custom_rules and not game_state.get('demo_mode'):
+        game_state['boss_banner_text'] = "RÈGLES PERSONNALISÉES"
+        game_state['boss_banner_until'] = current_time_reset + 2500
+
     # « 3, 2, 1, GO ! » : l'horloge de la partie reste figée jusqu'au départ (pas en démo)
     game_state.pop('death_cam_until', None)
     game_state['_countdown_step'] = None
@@ -608,7 +667,7 @@ def reset_game(game_state):
         game_state['countdown_until'] = 0
     else:
         game_state['countdown_until'] = pygame.time.get_ticks() + int(getattr(config, "TRANSITION_FADE_MS", 260)) + COUNTDOWN_MS
-    print("Game Reset Complete.")
+    logging.info("Game Reset Complete.")
 
 
 def _apply_daily_modifier(game_state, occupied):
@@ -918,9 +977,9 @@ def run_game(events, dt, screen, game_state):
                     target_snake_hat.turn(config.DOWN)
         # --- FIN Gestion Joystick Mouvement ---
 
-        # --- Gestion Boutons Joystick J1 (AVEC LOGGING) ---
+        # --- Boutons des manettes : pause, puis tir / Dash / Bouclier ---
         elif event.type == pygame.JOYBUTTONDOWN:
-            # --- Pause (Start) / Back : J1 ou J2 (PvP), même si le serpent est mort (respawn) ---
+            # Pause (Start) / Back : J1 ou J2, même si le serpent est mort (respawn).
             # Back ouvre aussi la pause (au lieu de quitter directement) pour éviter
             # de perdre une partie sur un appui accidentel. "Quitter" reste dans le menu Pause.
             pause_button = int(getattr(config, 'BUTTON_PAUSE', 7))
@@ -928,127 +987,45 @@ def run_game(events, dt, screen, game_state):
             pause_allowed = event.instance_id == p1_id or (two_players and event.instance_id == p2_id)
             if pause_allowed and event.button in (pause_button, menu_button):
                 logging.info(f"Joystick button {event.button} pressed, pausing game.")
-                try:
-                    utils.music_call("pause")
-                except Exception:
-                    pass
-                game_state['previous_state'] = config.PLAYING
-                game_state['pause_menu_selection'] = 0
-                game_state['current_state'] = config.PAUSED
-                return config.PAUSED  # Return immediately
+                return _enter_pause(game_state)
+            actions = {int(getattr(config, 'BUTTON_SECONDARY_ACTION', 0)): 'dash',
+                       int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1)): 'shoot',
+                       int(getattr(config, 'BUTTON_TERTIARY_ACTION', 3)): 'shield'}
+            action = actions.get(event.button)
+            snake = None
+            if event.instance_id == p1_id:
+                snake = player_snake
+            elif two_players and event.instance_id == p2_id:
+                snake = player2_snake
+            if action and snake is not None and _player_action(game_state, snake, action, current_time, coop):
+                if snake is player_snake:
+                    p1_died_this_frame = True
+                    game_over = game_over or current_game_mode != config.MODE_PVP
+                else:
+                    p2_died_this_frame = True
 
-             # --- Gestion Boutons Joystick J1 ---
-            if player_snake and player_snake.alive and event.instance_id == p1_id:
-                button = event.button
-                dash_button = int(getattr(config, 'BUTTON_SECONDARY_ACTION', 2))
-                shoot_button = int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1))
-                shield_button = int(getattr(config, 'BUTTON_TERTIARY_ACTION', 3))
-
-                if current_game_mode != config.MODE_CLASSIC and button == dash_button:  # Dash
-                    logging.debug(f"P1 Button {button} (Dash) pressed")
-                    if player_snake.dash_ready:
-                        p1_obstacles_for_dash = utils.get_obstacles_for_player(player_snake, player_snake, player2_snake, enemy_snake, mines, current_map_walls, active_enemies)
-                        # Assurez-vous de passer toutes les listes nécessaires à activate_dash
-                        dash_result_p1 = player_snake.activate_dash(current_time, p1_obstacles_for_dash, foods, powerups, mines, wall_positions) # wall_positions est set(current_map_walls)
-                        _apply_dash_loot(game_state, player_snake, dash_result_p1, current_time)
-
-                        if dash_result_p1 and dash_result_p1.get('died'):
-                            p1_died_this_frame = True
-                            death_type_p1 = dash_result_p1.get('type')
-                            logging.info(f"{player_snake.name} died by {death_type_p1} during dash at {dash_result_p1.get('position')}.")
-
-                            if current_game_mode == config.MODE_PVP:
-                                game_state['p1_death_time'] = current_time
-                                game_state['p1_death_cause'] = f"{death_type_p1}_dash" # ex: 'mine_dash' ou 'wall_dash'
-                                # L'attribution du kill sera gérée par la logique de fin de frame
-                            else: # Modes non-PvP
-                                game_over = True
-                            # Si le dash a tué, on peut considérer le mouvement comme fait pour cette frame
-                            p1_moved_this_frame = True # Empêche le .move() normal si mort par dash
-                        elif dash_result_p1 and dash_result_p1.get('collided'):
-                            logging.info(f"{player_snake.name} collided during dash with {dash_result_p1.get('type')}.")
-                    else:
-                        utils.play_sound("denied")  # Compétence pas encore prête
-                elif current_game_mode != config.MODE_CLASSIC and button == shoot_button: # Tirer
-                    logging.debug(f"Button {button} (Shoot) pressed")
-                    new_projectiles_list = player_snake.shoot(current_time)
-                    if new_projectiles_list:
-                        game_state['player_projectiles'].extend(new_projectiles_list)
-                        utils.play_sound(player_snake.shoot_sound)
-                elif current_game_mode != config.MODE_CLASSIC and button == shield_button: # Shield
-                    logging.debug(f"Button {button} (Shield) pressed")
-                    if player_snake.shield_ready: player_snake.activate_shield(current_time)
-                    else: utils.play_sound("denied")
-                 # else:
-                 #     logging.debug(f"Button {button} pressed, but not mapped to an action.")
-                 # --- END NEW BUTTON MAPPING ---
-
-             # --- START: Player 2 Joystick Button Handling (PvP) ---
-            elif two_players and player2_snake and player2_snake.alive and event.instance_id == p2_id:
-                button = event.button
-                dash_button = int(getattr(config, 'BUTTON_SECONDARY_ACTION', 2))
-                shoot_button = int(getattr(config, 'BUTTON_PRIMARY_ACTION', 1))
-                shield_button = int(getattr(config, 'BUTTON_TERTIARY_ACTION', 3))
-
-                if button == dash_button: # Dash
-                    logging.debug(f"P2 Button {button} (Dash) pressed")
-                    if player2_snake.dash_ready:
-                        p2_obstacles_for_dash = utils.get_obstacles_for_player(player2_snake, player_snake, player2_snake, enemy_snake if coop else None, mines, current_map_walls, active_enemies if coop else [])
-                        dash_result_p2 = player2_snake.activate_dash(current_time, p2_obstacles_for_dash, foods, powerups, mines, wall_positions)
-                        _apply_dash_loot(game_state, player2_snake, dash_result_p2, current_time)
-
-                        if dash_result_p2 and dash_result_p2.get('died'):
-                            p2_died_this_frame = True
-                            death_type_p2 = dash_result_p2.get('type')
-                            logging.info(f"{player2_snake.name} died by {death_type_p2} during dash at {dash_result_p2.get('position')}.")
-                            game_state['p2_death_time'] = current_time
-                            game_state['p2_death_cause'] = f"{death_type_p2}_dash"
-                            p2_moved_this_frame = True
-                    else:
-                        utils.play_sound("denied")
-                elif button == shoot_button: # Tirer
-                    logging.debug(f"P2 Button {button} (Shoot) pressed")
-                    new_projectiles_list_p2 = player2_snake.shoot(current_time)
-                    if new_projectiles_list_p2:
-                        # Coop : les tirs du J2 sont ceux de l'équipe (touchent mines, nids et IA)
-                        game_state['player_projectiles' if coop else 'player2_projectiles'].extend(new_projectiles_list_p2)
-                        utils.play_sound(player2_snake.shoot_sound)
-                elif button == shield_button: # Shield
-                    logging.debug(f"P2 Button {button} (Shield) pressed")
-                    if player2_snake.shield_ready: player2_snake.activate_shield(current_time)
-                    else: utils.play_sound("denied")
-                 # Note: Pause/Escape are typically handled by Player 1 only.
-             # --- END: Player 2 Joystick Button Handling ---
-        # --- FIN Gestion Boutons Joystick ---
-
+        # --- Clavier (PC sans manette) : voir keyboard_controls.py ---
         elif event.type == pygame.KEYDOWN:
-            # logging.debug(f"KEYDOWN - Key={event.key}, Mod={event.mod}") # Optionnel
             try:
                 key = event.key
-                if key == pygame.K_ESCAPE:
-                    logging.info("Escape key pressed, returning to MENU.")
-                    try: utils.music_call("pause")
-                    except Exception: pass
-                    game_state['current_state'] = config.MENU; return config.MENU
-                if key == pygame.K_p:
-                    logging.info("P key pressed, pausing game.")
-                    try: utils.music_call("pause")
-                    except Exception: pass
-                    game_state['previous_state'] = config.PLAYING
-                    game_state['current_state'] = config.PAUSED; return config.PAUSED
-
-                # REMOVED: Contrôles Clavier J1
-                # if player_snake and player_snake.alive:
-                #     if key == pygame.K_UP: player_snake.turn(config.UP)
-                #     ... (rest of P1 keyboard controls) ...
-
-                # REMOVED: Contrôles Clavier J2 (PvP)
-                # if current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive:
-                #     if key == pygame.K_z: player2_snake.turn(config.UP)
-                #     ... (rest of P2 keyboard controls) ...
-
-                # Contrôles Volume (KEEP)
-                if key in (pygame.K_PLUS, pygame.K_KP_PLUS): utils.update_music_volume(0.1)
+                if keyboard_controls.is_pause_key(key):
+                    logging.info("Touche pause (Échap / P).")
+                    return _enter_pause(game_state)
+                mapped = keyboard_controls.game_action(key, two_players)
+                if mapped:
+                    num, action = mapped
+                    snake = player_snake if num == 1 else player2_snake
+                    if snake is not None and snake.alive:
+                        if action in keyboard_controls.DIRECTIONS:
+                            snake.turn(keyboard_controls.DIRECTIONS[action])
+                        elif _player_action(game_state, snake, action, current_time, coop):
+                            if num == 1:
+                                p1_died_this_frame = True
+                                game_over = game_over or current_game_mode != config.MODE_PVP
+                            else:
+                                p2_died_this_frame = True
+                # Volume
+                elif key in (pygame.K_PLUS, pygame.K_KP_PLUS): utils.update_music_volume(0.1)
                 elif key in (pygame.K_MINUS, pygame.K_KP_MINUS): utils.update_music_volume(-0.1)
                 elif key == pygame.K_RIGHTBRACKET or key == pygame.K_KP_MULTIPLY: utils.update_sound_volume(0.1)
                 elif key == pygame.K_LEFTBRACKET or key == pygame.K_KP_DIVIDE: utils.update_sound_volume(-0.1)
@@ -1301,10 +1278,11 @@ def run_game(events, dt, screen, game_state):
                     spawn_pos = utils.get_random_empty_position(current_occupied)
                 if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
 
-            if current_game_mode != config.MODE_CLASSIC and current_time - last_mine_spawn_time > mine_interval:
+            density_interval, density_max = rules.mine_density()  # Règle perso : densité de mines
+            if current_game_mode != config.MODE_CLASSIC and density_interval is not None and current_time - last_mine_spawn_time > mine_interval * density_interval:
                 spawned_count = 0
                 for _ in range(config.MINE_SPAWN_COUNT):
-                    if len(mines) >= config.MAX_MINES: break
+                    if len(mines) >= int(config.MAX_MINES * density_max): break
                     spawn_pos = utils.get_random_empty_position(current_occupied)
                     if spawn_pos:
                         all_snake_bodies = []
@@ -1345,7 +1323,7 @@ def run_game(events, dt, screen, game_state):
                                 h and utils.grid_manhattan_distance(spawn_pos, h, wrap=True) < 4 for h in heads
                             )
                             if not too_close:
-                                available_powerups = list(config.POWERUP_TYPES.keys())
+                                available_powerups = [k for k in config.POWERUP_TYPES if rules.powerup_allowed(k)]
                                 if current_game_mode == config.MODE_PVP:  # Sans ennemis IA, Ralenti et Miroir sont inutiles
                                     available_powerups = [k for k in available_powerups if k not in ("slowmo", "mirror")]
                                 if available_powerups: powerup_type = random.choice(available_powerups); powerups.append(game_objects.PowerUp(spawn_pos, powerup_type)); current_occupied.add(spawn_pos); spawned_count += 1
@@ -1452,6 +1430,20 @@ def run_game(events, dt, screen, game_state):
                                 if player_snake and player_snake.alive: player_snake.add_score(config.NEST_DESTROY_SCORE); player_snake.increment_combo(2)
                             break
                     if hit_something: continue
+
+                # Tirs alliés (Survie à deux, règle perso) : le tir d'un joueur blesse l'autre
+                if coop and rules.friendly_fire():
+                    mate = player2_snake if p.owner_snake is player_snake else player_snake if p.owner_snake is player2_snake else None
+                    if mate is not None and mate.alive and not mate.ghost_active:
+                        g = config.GRID_SIZE
+                        if any(p.rect.colliderect(pygame.Rect(sx * g, sy * g, g, g)) for sx, sy in mate.positions):
+                            p1_rem_indices.add(i)
+                            if not mate.handle_damage(current_time, p.owner_snake, damage_source_pos=p.rect.center):
+                                if mate is player_snake:
+                                    p1_died_this_frame = True
+                                else:
+                                    p2_died_this_frame = True
+                            continue
 
                 # Collision avec Joueur 2 (PvP)
                 if current_game_mode == config.MODE_PVP and player2_snake and player2_snake.alive and not player2_snake.ghost_active:
@@ -2083,10 +2075,16 @@ def run_game(events, dt, screen, game_state):
                 p2_reached_kills = player2_snake and player2_snake.kills >= pvp_target_kills
                 if p1_reached_kills or p2_reached_kills:
                     kills_target_reached = True
+            score_reached = False
+            if pvp_condition_type == getattr(PvpCondition, 'SCORE', -1):
+                limit = int(game_state.get('pvp_score_limit', pvp_rounds.DEFAULT_SCORE_LIMIT) or pvp_rounds.DEFAULT_SCORE_LIMIT)
+                score_reached = any(s is not None and s.score >= limit for s in (player_snake, player2_snake))
             if timer_ended:
                 game_over = True; game_state['pvp_game_over_reason'] = 'timer';
             elif kills_target_reached:
                 game_over = True; game_state['pvp_game_over_reason'] = 'kills';
+            elif score_reached:
+                game_over = True; game_state['pvp_game_over_reason'] = 'score'
     except Exception as e:
          logging.error(f"Erreur lors de la vérification de fin de partie: {e}", exc_info=True); game_over = True
 
@@ -2100,9 +2098,9 @@ def run_game(events, dt, screen, game_state):
 
     # --- Transition vers Game Over (après un court ralenti sur l'explosion) ---
     if game_over:
-        logging.info("Game Over sequence initiated.")
-        try: utils.music_call("fadeout", 1000 + DEATH_CAM_MS)
-        except pygame.error: pass
+        logging.info("Game Over sequence initiated.")  # La musique s'éteint en fondu (music.py)
+        if current_game_mode == config.MODE_PVP and pvp_rounds.on_round_over(game_state):
+            game_state['round_transition'] = True  # Manche terminée, le match continue
         if game_state.get('demo_mode'):
             return _enter_game_over(game_state)
         game_state['death_cam_until'] = pygame.time.get_ticks() + DEATH_CAM_MS

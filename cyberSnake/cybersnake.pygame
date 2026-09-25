@@ -56,6 +56,11 @@ try:
     import es_media
     import game_clock
     import walls
+    import music
+    import keyboard_controls
+    import ui_common
+    import settings_screens
+    import pvp_rounds
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -463,6 +468,9 @@ def main():
         config.STICK_WIZARD: stick_wizard.run_stick_wizard,
         config.UPDATE: game_states.run_update,
         config.DEMO: game_states.run_demo,
+        config.RULES: settings_screens.run_rules,
+        config.ROUND_SCORE: pvp_rounds.run_round_score,
+        config.BUTTON_COLORS_SCREEN: settings_screens.run_button_colors,
     }
     # --- Fin Mappage États ---
 
@@ -470,6 +478,7 @@ def main():
     menu_translator = menu_input.MenuInputTranslator()
     keyboard_echo_filter = menu_input.KeyboardEchoFilter()
     raw_axis_states = {config.PLAYING, config.DEMO, config.CONTROLS, config.STICK_WIZARD}
+    text_entry_states = {config.NAME_ENTRY_SOLO, config.NAME_ENTRY_PVP}  # Saisie des noms au clavier
 
     # --- Boucle Principale ---
     running = True
@@ -536,6 +545,10 @@ def main():
         if any(_is_user_input_event(ev) for ev in events):
             game_state['last_input_time'] = now_ticks
             last_input_time = now_ticks
+
+        # Clavier dans les menus : flèches / Entrée / Espace = croix et « valider » de J1
+        if game_state.get('current_state', config.MENU) not in raw_axis_states | text_entry_states:
+            events = keyboard_controls.translate_menu_keys(events, ui_common.get_joystick_ids(game_state)[0])
 
         # Traduction stick -> croix pour les menus (suivi continu, même pendant les fondus)
         if game_state.get('current_state', config.MENU) in raw_axis_states:
@@ -683,6 +696,10 @@ def main():
         screen = game_state.get('screen', screen)
 
         if running:
+            try:
+                music.update(game_state)  # Piste selon l'écran (menus / jeu / boss), fondu en pause
+            except Exception:
+                logging.warning("Musique : mise à jour impossible", exc_info=True)
             fx.apply_crt(screen)  # Effet écran d'arcade (option)
             try:
                 pygame.display.flip()
