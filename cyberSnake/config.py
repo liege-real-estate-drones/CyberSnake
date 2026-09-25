@@ -737,13 +737,12 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.6.0'
+VERSION = '2.7.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Niveau Facile / Normal / Difficile dans le menu principal",
-    "Normal : 1 armure au départ, 1 s de protection après un choc",
-    "Les mines s'arment en clignotant, jamais juste devant toi",
-    "Tir ennemi dans le corps : 2 anneaux en moins, pas la mort",
-    "Rejouer d'un appui : curseur sur OK, Player valide le nom",
-    "Boutons Coin / Player dessinés comme sur la borne",
+    "Frénésie : toutes les minutes, 8 s de pluie de nourriture et points x2",
+    "Pendant la frénésie, aucune nouvelle mine : une respiration",
+    "Nouveaux sons : frénésie, queue coupée par un tir",
+    "Écran de fin : le niveau joué est affiché",
+    "Rappel : Niveau Facile / Normal / Difficile dans le menu principal",
 ]
