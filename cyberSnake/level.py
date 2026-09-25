@@ -12,7 +12,9 @@ ne protégeait que 0,1 s après un choc.
   un long serpent était touché sans arrêt.
 - Facile : 2 armures, peu de mines, tirs lents et rares.
 - Difficile : le jeu d'avant (sans armure, mines et tirs au maximum).
-Dans tous les niveaux, une nouvelle mine clignote avant d'être dangereuse (mines.py : ARM).
+Dans tous les niveaux, une nouvelle mine clignote avant d'être dangereuse (game_objects.Mine).
+En Facile et Normal, une mine disparaît au bout de 30 / 45 s (elle clignote 2 s avant) : sinon
+l'arène se remplissait jusqu'au maximum et y restait (on mourait sur des mines après quelques minutes).
 Le niveau choisi est enregistré dans game_options.json ("level").
 """
 import logging
@@ -23,17 +25,17 @@ ORDER = ["facile", "normal", "difficile"]
 DEFAULT = "normal"
 LEVELS = {
     "facile": {
-        "label": "Facile", "start_armor": 2, "mine_interval": 1.6, "mine_max": 0.6, "mine_arm_ms": 1600,
+        "label": "Facile", "start_armor": 2, "mine_interval": 1.6, "mine_max": 0.6, "mine_arm_ms": 1600, "mine_life_ms": 30000,
         "enemy_shot_speed": 0.6, "enemy_shot_cooldown": 1.8, "hit_invincibility": 1500, "body_hit_shrinks": True,
         "info": "2 armures au départ, peu de mines, tirs ennemis lents",
     },
     "normal": {
-        "label": "Normal", "start_armor": 1, "mine_interval": 1.25, "mine_max": 0.8, "mine_arm_ms": 1200,
+        "label": "Normal", "start_armor": 1, "mine_interval": 1.25, "mine_max": 0.8, "mine_arm_ms": 1200, "mine_life_ms": 45000,
         "enemy_shot_speed": 0.75, "enemy_shot_cooldown": 1.4, "hit_invincibility": 1000, "body_hit_shrinks": True,
         "info": "1 armure au départ, une seconde de protection après un choc",
     },
     "difficile": {
-        "label": "Difficile", "start_armor": 0, "mine_interval": 1.0, "mine_max": 1.0, "mine_arm_ms": 800,
+        "label": "Difficile", "start_armor": 0, "mine_interval": 1.0, "mine_max": 1.0, "mine_arm_ms": 800, "mine_life_ms": 0,
         "enemy_shot_speed": 1.0, "enemy_shot_cooldown": 1.0, "hit_invincibility": 400, "body_hit_shrinks": False,
         "info": "Sans armure au départ : le premier coup est fatal",
     },

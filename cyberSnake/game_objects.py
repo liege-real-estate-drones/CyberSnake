@@ -235,6 +235,9 @@ class Projectile:
         check_rect = self.rect.inflate(self.size * 4, self.size * 4)
         return not screen_rect.colliderect(check_rect)
 
+MINE_FADE_MS = 2000  # Une mine qui va disparaître clignote pendant ce temps
+
+
 class Mine:
     """Représente une mine.
 
@@ -256,6 +259,14 @@ class Mine:
                 arm_ms = 0
         self.arm_ms = max(0, int(arm_ms))
         self.armed_at = game_clock.ticks() + self.arm_ms
+        try:
+            life = int(level.get("mine_life_ms"))
+        except Exception:
+            life = 0
+        self.expires_at = self.armed_at + life if life > 0 else None  # Niveau : la mine finit par disparaître
+
+    def is_expired(self, now=None):
+        return self.expires_at is not None and (game_clock.ticks() if now is None else now) >= self.expires_at
 
     def is_armed(self, now=None):
         return (game_clock.ticks() if now is None else now) >= getattr(self, 'armed_at', 0)
@@ -276,6 +287,9 @@ class Mine:
                 ring = int(self.size * (0.9 - 0.4 * t))
                 pygame.draw.circle(surface, (255, 90, 90), self.rect.center, max(3, ring), 1)
                 return
+            if self.expires_at is not None and self.expires_at - current_time < MINE_FADE_MS:
+                if (current_time // 110) % 2 == 0:  # Clignote avant de disparaître
+                    return
             sprite = fx.mine_sprite(self.size, flash_state)
             surface.blit(sprite, sprite.get_rect(center=self.rect.center))
         except (TypeError, ValueError, pygame.error) as draw_err:

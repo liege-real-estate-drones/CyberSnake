@@ -228,5 +228,28 @@ class TestBossVsMovingMine(unittest.TestCase):
             self.assertFalse(hit)
 
 
+class TestMinesExpire(unittest.TestCase):
+    """Facile / Normal : une mine disparaît au bout de 30 / 45 s ; Difficile : elle reste."""
+
+    def tearDown(self):
+        import level
+        level._cache.clear()
+
+    def test_mine_disappears_in_normal_but_not_in_hard(self):
+        import level
+        import game_objects
+        for lvl, should_vanish in (("normal", True), ("difficile", False)):
+            level._cache['level'] = lvl
+            with FakeClock() as clock:
+                gs = new_game(config.MODE_SOLO)
+                gs['player_snake'].invincible_timer = 10 ** 12
+                mine = game_objects.Mine((2, 2))
+                gs['mines'] = [mine]
+                clock.tick(level.get("mine_arm_ms") + 46000)
+                gs['last_mine_spawn_time'] = game_clock.ticks()  # Pas de nouvelle mine pendant le test
+                gameplay.run_game([], 16, pygame.Surface((800, 600)), gs)
+                self.assertEqual(mine not in gs['mines'], should_vanish, lvl)
+
+
 if __name__ == "__main__":
     unittest.main()
