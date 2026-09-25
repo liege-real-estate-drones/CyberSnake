@@ -724,6 +724,7 @@ def run_options(events, dt, screen, game_state):
         ("Volume effets", sound_volume_display),
         ("Contrôles", ""),
         ("Couleurs des boutons", ""),
+        ("Fond des menus", ""),
         ("Réinitialiser", ""),
         ("Appliquer", ""),
         ("Retour", ""),
@@ -749,9 +750,10 @@ def run_options(events, dt, screen, game_state):
     IDX_SOUND_VOL = 17
     IDX_CONTROLS = 18
     IDX_BUTTON_COLORS = 19
-    IDX_RESET = 20
-    IDX_APPLY = 21
-    IDX_BACK = 22
+    IDX_BACKGROUND = 20
+    IDX_RESET = 21
+    IDX_APPLY = 22
+    IDX_BACK = 23
 
     def cycle_visual_fx(delta):
         nonlocal pending_visual_fx
@@ -1165,6 +1167,12 @@ def run_options(events, dt, screen, game_state):
             next_state = config.BUTTON_COLORS_SCREEN
             return True
 
+        if selection_index == IDX_BACKGROUND:
+            utils.play_sound("menu_select")
+            game_state['background_return_state'] = config.OPTIONS
+            next_state = config.BACKGROUND_SCREEN
+            return True
+
         if selection_index == IDX_RESET:
             if current_time <= reset_confirm_until:
                 reset_confirm_until = 0
@@ -1325,7 +1333,7 @@ def run_options(events, dt, screen, game_state):
         reset_armed = current_time <= reset_confirm_until
         reset_label = "Réinitialiser" if not reset_armed else "Réinitialiser (CONFIRMER)"
 
-        # Rebuild menu text (no 1-frame lag)
+        # Rebuild menu text (no 1-frame lag). Doit suivre menu_items ligne pour ligne (vérifié ci-dessous).
         menu_items_draw = [
             ("Quadrillage", "Oui" if pending_show_grid else "Non"),
             ("Taille cases", f"{pending_grid_size}px ({preview_w}x{preview_h})"),
@@ -1346,10 +1354,15 @@ def run_options(events, dt, screen, game_state):
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
             ("Contrôles", ""),
+            ("Couleurs des boutons", ""),
+            ("Fond des menus", ""),
             (reset_label, ""),
             ("Appliquer", ""),
             ("Retour", ""),
         ]
+
+        if len(menu_items_draw) != len(menu_items):
+            logging.error("Options : la liste affichée ne correspond plus à la liste des réglages")
 
         # --- Layout ---
         margin = max(24, int(sw * 0.04))

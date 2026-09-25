@@ -51,7 +51,7 @@ def _menu_states():
         _MENU_STATES = {config.MENU, config.TITLE, config.HALL_OF_FAME, config.HOW_TO_PLAY, config.OPTIONS,
                         config.CONTROLS, config.STICK_WIZARD, config.UPDATE, config.MAP_SELECTION,
                         config.NAME_ENTRY_SOLO, config.NAME_ENTRY_PVP, config.PVP_SETUP, config.VS_AI_SETUP,
-                        config.CLASSIC_SETUP, config.RULES, config.BUTTON_COLORS_SCREEN}
+                        config.CLASSIC_SETUP, config.RULES, config.BUTTON_COLORS_SCREEN, config.BACKGROUND_SCREEN}
     return _MENU_STATES
 
 

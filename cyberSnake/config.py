@@ -692,6 +692,7 @@ STICK_WIZARD = 109 # Assistant sticks J1 / J2 (Options > Contrôles)
 RULES = 110 # Règles personnalisées (mutateurs), menu principal
 BUTTON_COLORS_SCREEN = 111 # Couleur de chaque bouton de la borne (Options)
 ROUND_SCORE = 112 # Score entre deux manches (PvP en manches)
+BACKGROUND_SCREEN = 113 # Choix du fond des menus (Options)
 
 # --- Transitions & Mode Démo ---
 TRANSITION_FADE_MS = 260  # Durée du fondu entre écrans (ms)

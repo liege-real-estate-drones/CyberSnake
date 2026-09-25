@@ -63,6 +63,7 @@ DEFAULT_GAME_OPTIONS = {
     "visual_fx": "standard",
     "ui_scale": "normal",
     "hud_mode": "normal",
+    "menu_background": "cover",  # backgrounds.py : cover, synthwave, ville, circuit, nebuleuse, tunnel, random
 }
 
 DEFAULT_CONTROLS = {
@@ -345,14 +346,13 @@ def load_assets(base_path):
     sounds = loaded_sounds
     _apply_sound_volume_internal()
 
-    menu_bg = None
-    menu_bg_path = os.path.join(base_path, config.MENU_BACKGROUND_IMAGE_FILE)
+    # Fond des menus choisi dans les Options (backgrounds.py : cadrage adapté à l'écran)
+    import backgrounds
     try:
-        if os.path.exists(menu_bg_path):
-            img = pygame.image.load(menu_bg_path).convert()
-            menu_bg = cover_scale(img, (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        choice = load_game_options(base_path).get("menu_background", backgrounds.DEFAULT)
     except Exception:
-        pass
+        choice = backgrounds.DEFAULT
+    menu_bg = backgrounds.load(base_path, choice, (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
 
     # --- Chargement et Optimisation des Images ---
     global images, images_hd

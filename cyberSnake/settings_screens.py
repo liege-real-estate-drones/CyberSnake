@@ -228,3 +228,64 @@ def run_rules(events, dt, screen, game_state):
         subtitle = "RÈGLES PERSONNALISÉES ACTIVES  —  " + subtitle
     result = run_list_screen(events, screen, game_state, '_sel_rules', "RÈGLES PERSONNALISÉES", subtitle, items, config.MENU)
     return config.RULES if result is None else result
+
+
+# ---------------------------------------------------------------------------
+# Fond des menus (aperçu en plein écran)
+# ---------------------------------------------------------------------------
+def run_background_screen(events, dt, screen, game_state):
+    """Choix du fond des menus : le fond s'affiche en plein écran pendant qu'on le choisit."""
+    import backgrounds
+    back = game_state.get('background_return_state', config.OPTIONS)
+    p1_id, _p2 = get_joystick_ids(game_state)
+    keys = [k for k, _l in backgrounds.choices()]
+    labels = dict(backgrounds.choices())
+    current = game_state.get('_bg_choice')
+    if current not in keys:
+        current = backgrounds.normalize(_options().get("menu_background"))
+        game_state['_bg_choice'] = current
+
+    def change(delta):
+        new = _cycle(keys, game_state['_bg_choice'], delta)
+        game_state['_bg_choice'] = new
+        opts = _options()
+        opts["menu_background"] = new
+        _save(opts)
+        img = backgrounds.load(game_state.get('base_path', ''), new, screen.get_size())
+        if img is not None:
+            game_state['menu_background_image'] = img
+        utils.play_sound("menu_move")
+
+    for ev in events:
+        if ev.type == pygame.QUIT:
+            return False
+        if ev.type == pygame.JOYHATMOTION and ev.instance_id == p1_id and ev.hat == 0:
+            hx, hy = ev.value
+            if hx or hy:
+                change(hx or -hy)
+        elif ev.type == pygame.JOYBUTTONDOWN and ev.instance_id == p1_id and (is_confirm_button(ev.button) or is_back_button(ev.button)):
+            utils.play_sound("menu_select" if is_confirm_button(ev.button) else "menu_back")
+            game_state.pop('_bg_choice', None)
+            return back
+        elif ev.type == pygame.KEYDOWN and ev.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+            game_state.pop('_bg_choice', None)
+            return back
+
+    sw, sh = screen.get_size()
+    bg = game_state.get('menu_background_image')
+    if bg is not None:
+        screen.blit(bg, (0, 0))
+    else:
+        draw_screen_background(screen, game_state)
+    font_medium = game_state.get('font_medium')
+    font_small = game_state.get('font_small')
+    panel = pygame.Rect(0, 0, int(sw * 0.62), font_medium.get_height() + font_small.get_height() + 40)
+    panel.midbottom = (sw // 2, sh - 24)
+    draw_ui_panel(screen, panel)
+    choice = game_state['_bg_choice']
+    idx = keys.index(choice)
+    utils.draw_text_with_shadow(screen, f"Fond des menus :  <  {labels[choice]}  >   ({idx + 1}/{len(keys)})", font_medium,
+                                config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (panel.centerx, panel.top + 12), "midtop")
+    utils.draw_text(screen, "Gauche / Droite : changer   |   Valider ou Retour : terminer", font_small, (170, 200, 230),
+                    (panel.centerx, panel.bottom - 10), "midbottom")
+    return config.BACKGROUND_SCREEN

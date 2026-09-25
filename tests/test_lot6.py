@@ -198,5 +198,63 @@ class TestMenusFuzz(unittest.TestCase):
             self.assertEqual(gs['pause_menu_selection'], 1)
 
 
+class TestBackgrounds(unittest.TestCase):
+    def test_every_background_loads_at_any_screen_ratio(self):
+        import backgrounds
+        for key in backgrounds.BACKGROUNDS:
+            for size in ((1280, 720), (1024, 768), (1280, 1024), (800, 600)):
+                img = backgrounds.load(GAME_DIR, key, size)
+                self.assertIsNotNone(img, key)
+                self.assertEqual(img.get_size(), size)
+
+    def test_cover_never_shows_its_logo_band(self):
+        import backgrounds
+        area = backgrounds.BACKGROUNDS["cover"][2]
+        # Le bandeau du logo « CYBER SNAKE » de cover.jpg commence vers 87 % de la hauteur
+        self.assertLessEqual(area[1] + area[3], 0.86)
+
+    def test_fit_keeps_proportions(self):
+        import backgrounds
+        src = pygame.Surface((200, 100))
+        src.fill((255, 0, 0), pygame.Rect(0, 0, 100, 100))
+        out = backgrounds.fit(src, (100, 100), focus=(0.0, 0.5))
+        self.assertEqual(out.get_size(), (100, 100))
+        self.assertEqual(out.get_at((50, 50))[:3], (255, 0, 0))  # Aucune déformation, cadrage à gauche
+
+    def test_random_and_unknown_choices(self):
+        import backgrounds
+        self.assertIn(backgrounds.resolve("random"), backgrounds.BACKGROUNDS)
+        self.assertEqual(backgrounds.normalize("n'importe quoi"), backgrounds.DEFAULT)
+
+    def test_background_screen_changes_and_saves_choice(self):
+        import settings_screens
+        right = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(1, 0), instance_id=0, joy=0)
+        with MemoryOptions() as mem:
+            gs = {'base_path': GAME_DIR, 'font_small': FONTS['small'], 'font_default': FONTS['default'],
+                  'font_medium': FONTS['medium'], 'menu_background_image': None}
+            surf = pygame.Surface((800, 600))
+            settings_screens.run_background_screen([], 16, surf, gs)
+            settings_screens.run_background_screen([right], 16, surf, gs)
+            self.assertEqual(mem.data['menu_background'], 'synthwave')
+            self.assertIsNotNone(gs['menu_background_image'])
+            ok = pygame.event.Event(pygame.JOYBUTTONDOWN, button=config.BUTTON_PRIMARY_ACTION, instance_id=0, joy=0)
+            self.assertEqual(settings_screens.run_background_screen([ok], 16, surf, gs), config.OPTIONS)
+
+    def test_options_list_matches_what_is_drawn(self):
+        import logging
+        import game_states
+        errors = []
+        orig = logging.error
+        logging.error = lambda msg, *a, **k: errors.append(str(msg))
+        try:
+            with MemoryOptions():
+                gs = new_game(config.MODE_SOLO)
+                gs.update({'screen': pygame.display.get_surface(), 'menu_background_image': None})
+                game_states.run_options([], 16, pygame.display.get_surface(), gs)
+        finally:
+            logging.error = orig
+        self.assertFalse([e for e in errors if "Options" in e], errors)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -472,6 +472,7 @@ def main():
         config.RULES: settings_screens.run_rules,
         config.ROUND_SCORE: pvp_rounds.run_round_score,
         config.BUTTON_COLORS_SCREEN: settings_screens.run_button_colors,
+        config.BACKGROUND_SCREEN: settings_screens.run_background_screen,
     }
     # --- Fin Mappage États ---
 
