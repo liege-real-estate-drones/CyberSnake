@@ -667,6 +667,26 @@ def run_how_to_play(events, dt, screen, game_state):
     if _state_elapsed(game_state, 'howto', now) >= ATTRACT_HOWTO_MS:
         return config.TITLE
 
+    # Écran fixe (sauf le texte qui clignote) : composé une fois, puis recopié. Il tournait à
+    # 32-45 images/s sur la borne en le redessinant entièrement. Pas avec le fond animé.
+    bg = game_state.get('menu_background_image')
+    animated = bg is not None and bg is backgrounds._anim.get('surface')
+    cached = game_state.get('_howto_frame')
+    font = game_state.get('font_large')  # Taille du texte changée dans les Options : image refaite
+    if animated or cached is None or cached[0] is not bg or cached[2] is not font or cached[1].get_size() != screen.get_size():
+        _draw_how_to_static(screen, game_state, now)
+        if not animated:
+            game_state['_howto_frame'] = (bg, screen.copy(), font)
+    else:
+        screen.blit(cached[1], (0, 0))
+    sw, sh = screen.get_size()
+    if (now // 550) % 2 == 0:
+        utils.draw_text_with_shadow(screen, "APPUIE SUR UN BOUTON", game_state.get('font_default'), config.COLOR_TEXT_MENU,
+                                    config.COLOR_UI_SHADOW, (sw // 2, int(sh * 0.94)), "center")
+    return config.HOW_TO_PLAY
+
+
+def _draw_how_to_static(screen, game_state, now):
     font_large = game_state.get('font_large')
     font_medium = game_state.get('font_medium')
     font_default = game_state.get('font_default')
@@ -723,7 +743,4 @@ def run_how_to_play(events, dt, screen, game_state):
             txt = pygame.transform.smoothscale(txt, (avail, txt.get_height()))
         screen.blit(txt, (x + icon + 12, yy + cell_h // 2 + 2))
 
-    if (now // 550) % 2 == 0:
-        utils.draw_text_with_shadow(screen, "APPUIE SUR UN BOUTON", font_default, config.COLOR_TEXT_MENU,
-                                    config.COLOR_UI_SHADOW, (sw // 2, int(sh * 0.94)), "center")
-    return config.HOW_TO_PLAY
+
