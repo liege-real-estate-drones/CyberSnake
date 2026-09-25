@@ -737,3 +737,11 @@ JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
 VERSION = '2.4.0'
+# Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
+WHATS_NEW = [
+    "Saisie des noms : plus de « b » en trop, effacer fonctionne",
+    "Options > Boutons de la borne : le panneau de J1 et J2 dessiné",
+    "Aides : chaque bouton est dessiné à sa place sur le panneau",
+    "Hall of Fame : Bouclier puis Valider pour effacer les records",
+    "Fonds : couverture animée, et tes images dans mes_fonds",
+]

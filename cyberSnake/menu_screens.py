@@ -145,7 +145,7 @@ def run_menu(events, dt, screen, game_state):
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.JOYBUTTONDOWN:
-                if event.instance_id == p1_id and is_confirm_button(event.button):
+                if is_confirm_button(event.button) or is_back_button(event.button):  # J1 ou J2
                     game_state['show_version_popup'] = False
                     utils.play_sound("menu_select")
                     return next_state
@@ -367,19 +367,31 @@ def run_menu(events, dt, screen, game_state):
             overlay.fill((0, 0, 0, 200))
             screen.blit(overlay, (0, 0))
 
-            # Popup Box
-            popup_width, popup_height = 400, 250
-            popup_rect = pygame.Rect((config.SCREEN_WIDTH - popup_width) // 2, (config.SCREEN_HEIGHT - popup_height) // 2, popup_width, popup_height)
+            # Fenêtre : titre, version, puis les nouveautés de cette version (config.WHATS_NEW)
+            news = list(getattr(config, "WHATS_NEW", []))[:6]
+            line_h = font_small.get_linesize() + 4
+            popup_width = min(int(config.SCREEN_WIDTH * 0.8), max(440, max([font_small.size("• " + n)[0] for n in news] + [0]) + 60))
+            popup_height = font_medium.get_linesize() + font_large.get_linesize() + (line_h * len(news) + font_small.get_linesize() + 16 if news else 0) + font_small.get_linesize() + 70
+            popup_rect = pygame.Rect(0, 0, popup_width, popup_height)
+            popup_rect.center = (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2)
+            pygame.draw.rect(screen, (8, 10, 20), popup_rect, border_radius=12)  # Opaque : le menu ne transparaît pas
             draw_ui_panel(screen, popup_rect)
 
-            # Text Content
-            center_x, center_y = popup_rect.centerx, popup_rect.centery
-            utils.draw_text_with_shadow(screen, "Mise à jour réussie !", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (center_x, center_y - 60), "center")
-
-            version_text = f"Version: {getattr(config, 'VERSION', 'Inconnue')}"
-            utils.draw_text_with_shadow(screen, version_text, font_large, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (center_x, center_y), "center")
-
-            settings_screens.draw_hint(screen, f"{settings_screens.button_name('PRIMARY')} : fermer", font_small, config.COLOR_TEXT, (center_x, center_y + 80), "center")
+            center_x = popup_rect.centerx
+            y = popup_rect.top + 18
+            utils.draw_text_with_shadow(screen, "Mise à jour réussie !", font_medium, config.COLOR_SKILL_READY, config.COLOR_UI_SHADOW, (center_x, y), "midtop")
+            y += font_medium.get_linesize()
+            version_text = f"Version {getattr(config, 'VERSION', 'inconnue')}"
+            utils.draw_text_with_shadow(screen, version_text, font_large, config.COLOR_TEXT_HIGHLIGHT, config.COLOR_UI_SHADOW, (center_x, y), "midtop")
+            y += font_large.get_linesize() + 6
+            if news:
+                utils.draw_text(screen, "Nouveautés :", font_small, config.COLOR_TEXT_HIGHLIGHT, (popup_rect.left + 30, y), "topleft")
+                y += font_small.get_linesize() + 4
+                for line in news:
+                    utils.draw_text(screen, "• " + line, font_small, config.COLOR_TEXT_MENU, (popup_rect.left + 30, y), "topleft")
+                    y += line_h
+            settings_screens.draw_hint(screen, f"{settings_screens.button_name('PRIMARY')} : fermer", font_small, config.COLOR_TEXT,
+                                       (center_x, popup_rect.bottom - 22), "center")
 
     except Exception as e:
         logging.error(f"Erreur majeure lors du dessin du menu: {e}")

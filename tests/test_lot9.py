@@ -71,5 +71,58 @@ class TestRandomMapWithTheStick(unittest.TestCase):
             self.assertEqual(setup_screens._map_keys_display[gs['map_selection_index']], "Aléatoire")
 
 
+class TestUpdateAlreadyUpToDate(unittest.TestCase):
+    """« Mise à jour » ne retélécharge plus tout (et ne redémarre plus) quand rien n'a changé."""
+
+    def test_same_commit_skips_download(self):
+        import shutil
+        import tempfile
+        import urllib.request
+        import updater
+        d = tempfile.mkdtemp(prefix="cybersnake_upd_")
+        sha = "a" * 40
+        saved = (sys.argv[:], updater.latest_commit, urllib.request.urlopen)
+        try:
+            with open(os.path.join(d, updater.INSTALLED_COMMIT_FILE), "w") as f:
+                f.write(sha)
+            sys.argv = [os.path.join(d, "cybersnake.pygame")]
+            updater.latest_commit = lambda: sha
+
+            def no_download(*a, **k):
+                raise AssertionError("téléchargement inutile")
+            urllib.request.urlopen = no_download
+            gs = {}
+            updater.update_worker(gs)
+            self.assertEqual(gs.get('update_status'), 'uptodate', gs)
+        finally:
+            sys.argv, updater.latest_commit, urllib.request.urlopen = saved
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_commit_is_remembered(self):
+        import shutil
+        import tempfile
+        import updater
+        d = tempfile.mkdtemp(prefix="cybersnake_upd_")
+        try:
+            self.assertIsNone(updater.installed_commit(d))
+            updater.remember_commit(d, "b" * 40)
+            self.assertEqual(updater.installed_commit(d), "b" * 40)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+class TestWhatsNewPopup(unittest.TestCase):
+    def test_popup_lists_the_news_and_any_player_closes_it(self):
+        import game_states
+        surf = pygame.Surface((1280, 720))
+        with MemoryOptions():
+            gs = _state(show_version_popup=True)
+            self.assertTrue(config.WHATS_NEW)
+            game_states.run_menu([], 16, surf, gs)
+            self.assertTrue(gs['show_version_popup'])
+            game_states.run_menu([joy_button(config.BUTTON_PRIMARY_ACTION, inst=1)], 16, surf, gs)  # J2
+            self.assertFalse(gs['show_version_popup'])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,40 @@ USER_DATA_FILES = {
 
 
 UPDATE_MANIFEST_FILE = ".cybersnake_manifest.txt"
+# Dernier commit installé (mode zip) : si GitHub n'a rien de plus récent, on ne retélécharge pas
+INSTALLED_COMMIT_FILE = ".cybersnake_commit"
+LATEST_COMMIT_URL = "https://api.github.com/repos/liege-real-estate-drones/CyberSnake/commits/main"
+
+
+def latest_commit():
+    """SHA du dernier commit de main sur GitHub (None si inconnu : pas de réseau, limite d'API...)."""
+    try:
+        req = urllib.request.Request(LATEST_COMMIT_URL, headers={'User-Agent': 'Mozilla/5.0 (CyberSnake Game)',
+                                                                 'Accept': 'application/vnd.github.sha'})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            sha = response.read(100).decode("ascii", "replace").strip()
+        return sha if len(sha) == 40 and all(c in "0123456789abcdef" for c in sha) else None
+    except Exception as e:
+        logging.info(f"Update: dernier commit inconnu ({e})")
+        return None
+
+
+def installed_commit(install_dir):
+    try:
+        with open(os.path.join(install_dir, INSTALLED_COMMIT_FILE), "r", encoding="ascii") as f:
+            return f.read().strip() or None
+    except Exception:
+        return None
+
+
+def remember_commit(install_dir, sha):
+    if not sha:
+        return
+    try:
+        with open(os.path.join(install_dir, INSTALLED_COMMIT_FILE), "w", encoding="ascii") as f:
+            f.write(sha)
+    except Exception as e:
+        logging.warning(f"Update: commit installé non mémorisé ({e})")
 
 
 def _cleanup_obsolete_files(install_dir, installed_files):
@@ -112,7 +146,13 @@ def update_worker(game_state):
                 game_state['update_status'] = 'error'
         else:
             # Mode Zip
-            game_state['update_message'] = "Git absent. Essai Zip..."
+            game_state['update_message'] = "Recherche d'une nouvelle version"
+            latest = latest_commit()
+            if latest and latest == installed_commit(install_dir):
+                logging.info(f"Update: déjà à jour (commit {latest[:7]})")
+                game_state['update_message'] = f"Déjà à jour (version {getattr(config, 'VERSION', '?')})"
+                game_state['update_status'] = 'uptodate'
+                return
             repo_zip_urls = [
                 "https://github.com/liege-real-estate-drones/CyberSnake/archive/refs/heads/main.zip",
                 "https://github.com/liege-real-estate-drones/CyberSnake/archive/main.zip",
@@ -124,7 +164,7 @@ def update_worker(game_state):
 
             for url in repo_zip_urls:
                 try:
-                    game_state['update_message'] = f"DL: {url.split('/')[-1]}..."
+                    game_state['update_message'] = "Téléchargement de la dernière version"
                     req = urllib.request.Request(
                         url,
                         headers={'User-Agent': 'Mozilla/5.0 (CyberSnake Game)'}
@@ -202,6 +242,7 @@ def update_worker(game_state):
                     except Exception as e:
                         logging.warning(f"Update: nettoyage des anciens fichiers impossible: {e}")
 
+                    remember_commit(install_dir, latest)
                     game_state['update_message'] = "Extraction terminée !"
                     game_state['update_status'] = 'success'
                 except Exception as e:
@@ -253,7 +294,7 @@ def run_update(events, dt, screen, game_state):
     if game_state['update_status'] == 'error':
         text_color = config.COLOR_MINE
         display_text = f"Erreur: {game_state.get('update_error_msg', 'Inconnue')}"
-    elif game_state['update_status'] == 'success':
+    elif game_state['update_status'] in ('success', 'uptodate'):
         text_color = config.COLOR_SKILL_READY
 
     utils.draw_text_with_shadow(screen, display_text, font_medium, text_color, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2), "center")
@@ -282,8 +323,8 @@ def run_update(events, dt, screen, game_state):
                 game_state['update_status'] = 'error'
                 game_state['update_error_msg'] = f"Restart Fail: {e}"
 
-    elif game_state['update_status'] == 'error':
-        utils.draw_text_with_shadow(screen, "Appuyez sur une touche pour revenir.", font_medium, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.7), "center")
+    elif game_state['update_status'] in ('error', 'uptodate'):
+        utils.draw_text_with_shadow(screen, "Appuie sur un bouton pour revenir", font_medium, config.COLOR_TEXT, config.COLOR_UI_SHADOW, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.7), "center")
 
         for event in events:
             if event.type == pygame.KEYDOWN or event.type == pygame.JOYBUTTONDOWN:

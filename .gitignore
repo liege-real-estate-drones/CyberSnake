@@ -23,6 +23,7 @@ cyberSnake/progress.json
 cyberSnake/highscores.json
 cyberSnake/favorite_maps.json
 cyberSnake/.cybersnake_manifest.txt
+cyberSnake/.cybersnake_commit
 
 # Réglages du joueur (créés par le jeu, valeurs par défaut dans utils.DEFAULT_GAME_OPTIONS)
 cyberSnake/game_options.json
