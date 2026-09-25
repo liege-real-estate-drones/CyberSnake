@@ -13,6 +13,7 @@ import game_clock
 # Importe le module utils pour accéder aux fonctions utilitaires
 import utils
 import fx
+import level
 import bonuses
 import logging # Added for detailed score logging
 
@@ -235,8 +236,11 @@ class Projectile:
         return not screen_rect.colliderect(check_rect)
 
 class Mine:
-    """Représente une mine."""
-    def __init__(self, position):
+    """Représente une mine.
+
+    Une nouvelle mine « s'arme » : pendant arm_ms elle grossit en clignotant et ne fait rien
+    (avant, elle tuait dès son apparition, parfois à 3 cases devant la tête)."""
+    def __init__(self, position, arm_ms=None):
         self.position = position
         self.size = config.GRID_SIZE
         self.rect = pygame.Rect(
@@ -245,12 +249,32 @@ class Mine:
             self.size,
             self.size
         )
+        if arm_ms is None:
+            try:
+                arm_ms = level.get("mine_arm_ms")
+            except Exception:
+                arm_ms = 0
+        self.arm_ms = max(0, int(arm_ms))
+        self.armed_at = game_clock.ticks() + self.arm_ms
+
+    def is_armed(self, now=None):
+        return (game_clock.ticks() if now is None else now) >= getattr(self, 'armed_at', 0)
 
     def draw(self, surface):
-        """Dessine la mine (sprite néon, noyau qui clignote)."""
+        """Dessine la mine (sprite néon, noyau qui clignote) ; en train de s'armer : petite et translucide."""
         current_time = game_clock.ticks()
         flash_state = (current_time // config.MINE_FLASH_INTERVAL) % 2 == 0
         try:
+            if not self.is_armed(current_time):
+                left = self.armed_at - current_time
+                t = 1.0 - left / float(max(1, self.arm_ms))
+                size = max(4, int(self.size * (0.45 + 0.5 * t)))
+                sprite = fx.mine_sprite(size, (current_time // 120) % 2 == 0).copy()
+                sprite.set_alpha(int(90 + 120 * t))
+                surface.blit(sprite, sprite.get_rect(center=self.rect.center))
+                ring = int(self.size * (0.9 - 0.4 * t))
+                pygame.draw.circle(surface, (255, 90, 90), self.rect.center, max(3, ring), 1)
+                return
             sprite = fx.mine_sprite(self.size, flash_state)
             surface.blit(sprite, sprite.get_rect(center=self.rect.center))
         except (TypeError, ValueError, pygame.error) as draw_err:
@@ -1252,6 +1276,16 @@ class Snake:
     def has_ammo(self):
         return self.ammo > 0
 
+    def _hit_protection_ms(self):
+        """Protection (clignotement) après un choc encaissé : selon le niveau pour les joueurs.
+        0,1 s seulement avant : un deuxième coup juste après tuait (deux tirs, un corps longé)."""
+        if self.is_player:
+            try:
+                return int(level.get("hit_invincibility"))
+            except Exception:
+                pass
+        return config.ARMOR_ABSORB_INVINCIBILITY
+
     def handle_damage(self, current_time, killer_snake=None, is_self_collision=False, is_shrink_death=False, damage_source_pos=None, death_pos_px=None):
         if not self.alive: return False
 
@@ -1269,6 +1303,8 @@ class Snake:
                 logger.debug("SKILL shield charge absorbed damage for %s", self.name)
                 self.shield_charge_active = False # Consomme la charge
                 self.shield_charge_expiry_time = 0 # Annule l'expiration
+                if self.is_player:  # Protection après le choc, comme l'armure (le serpent clignote)
+                    self.invincible_timer = current_time + self._hit_protection_ms()
                 # Jouer un son différent si le bouclier de compétence absorbe
                 utils.play_sound("shield_absorb")  # Ou "skill_shield_absorb"
                 self._hit_flash_until = current_time + 150
@@ -1293,13 +1329,13 @@ class Snake:
                 cx, cy = self.get_head_center_px()
                 if cx is not None: utils.emit_particles(cx, cy, 15, config.COLOR_SHIELD_ABSORB, (2, 6), (400, 900), (2, 4),
                                                         0)
-                self.invincible_timer = current_time + config.ARMOR_ABSORB_INVINCIBILITY
+                self.invincible_timer = current_time + self._hit_protection_ms()
                 return True
 
             previous_armor = self.armor
             if self.armor > 0:
                 self.armor -= 1
-                self.invincible_timer = current_time + config.ARMOR_ABSORB_INVINCIBILITY
+                self.invincible_timer = current_time + self._hit_protection_ms()
                 self._hit_flash_until = current_time + 150
                 if self.is_player:
                     fx.trigger_flash((255, 60, 60), 160, 55, now=current_time)
@@ -1533,7 +1569,12 @@ class Snake:
             return max(1, config.RAPID_FIRE_COOLDOWN)
         else:
             # Use the AI's specific shoot cooldown if it's an AI
-            return config.SHOOT_COOLDOWN if self.is_player else self.shoot_cooldown
+            if self.is_player:
+                return config.SHOOT_COOLDOWN
+            try:
+                return int(self.shoot_cooldown * level.get("enemy_shot_cooldown"))  # Niveau : tirs ennemis plus rares
+            except Exception:
+                return self.shoot_cooldown
 
     def shoot(self, current_time):
         projectiles_fired = []
@@ -1555,7 +1596,7 @@ class Snake:
 
             p_color = self.projectile_color
             p_size = config.PROJECTILE_SIZE if self.is_player else config.ENEMY_PROJECTILE_SIZE
-            p_speed = config.PROJECTILE_SPEED if self.is_player else config.ENEMY_PROJECTILE_SPEED
+            p_speed = config.PROJECTILE_SPEED if self.is_player else config.ENEMY_PROJECTILE_SPEED * level.get("enemy_shot_speed")
             ammo_cost = 0 if self.multishot_active else 1
 
             can_shoot = self.multishot_active or (self.ammo >= ammo_cost)
@@ -1647,7 +1688,7 @@ class Snake:
             # Vérifier collision avec les mines
             elif not self.ghost_active: # Les fantômes passent à travers les mines
                 for mine_obj in mines_list:
-                    if mine_obj.position == next_head:
+                    if mine_obj.position == next_head and mine_obj.is_armed(current_time):
                         collided = True
                         death_type_on_dash = 'mine'
                         break

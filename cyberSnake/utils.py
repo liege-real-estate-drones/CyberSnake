@@ -64,6 +64,7 @@ DEFAULT_GAME_OPTIONS = {
     "visual_fx": "standard",
     "ui_scale": "normal",
     "hud_mode": "normal",
+    "level": "normal",  # level.py : facile, normal, difficile (menu principal)
     "menu_background": "cover",  # backgrounds.py : cover, cover_anim, perso:<image de mes_fonds/>, random
 }
 

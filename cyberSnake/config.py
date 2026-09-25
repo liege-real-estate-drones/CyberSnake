@@ -736,13 +736,13 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.5.0'
+VERSION = '2.6.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Menu : appuie deux fois sur Coin pour quitter le jeu",
-    "Seul du côté rouge (J2) : menus et parties solo au stick de J2",
-    "Carte aléatoire : gauche / droite pour en générer une nouvelle",
-    "Plus fluide en 1080p : mort, flash, fondus et menus",
-    "Mise à jour : « Déjà à jour » sans tout retélécharger",
-    "Aides : boutons dessinés sur tous les écrans",
+    "Niveau Facile / Normal / Difficile dans le menu principal",
+    "Normal : 1 armure au départ, 1 s de protection après un choc",
+    "Les mines s'arment en clignotant, jamais juste devant toi",
+    "Tir ennemi dans le corps : 2 anneaux en moins, pas la mort",
+    "Rejouer d'un appui : curseur sur OK, Player valide le nom",
+    "Boutons Coin / Player dessinés comme sur la borne",
 ]
