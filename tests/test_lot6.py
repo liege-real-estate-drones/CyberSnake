@@ -138,5 +138,65 @@ class TestSurvivalWaves(unittest.TestCase):
             self.assertFalse(gameplay._check_wave_cleared(gs, game_clock.ticks()))
 
 
+class TestMenusFuzz(unittest.TestCase):
+    """Les écrans de menu dont le code stick mort a été retiré restent pilotables à la croix."""
+
+    def test_fuzz_menu_screens(self):
+        import random as _r
+        import game_states
+        import menu_input
+        import keyboard_controls
+        rng = _r.Random(7)
+        saved = {k: getattr(config, k) for k in ("GRID_SIZE", "SCREEN_WIDTH", "SCREEN_HEIGHT", "GRID_WIDTH", "GRID_HEIGHT")}
+        translator = menu_input.MenuInputTranslator()
+        surf = pygame.display.get_surface()
+        screens_to_test = [game_states.run_menu, game_states.run_name_entry_solo, game_states.run_map_selection,
+                           game_states.run_classic_setup, game_states.run_vs_ai_setup, game_states.run_pvp_setup,
+                           game_states.run_name_entry_pvp, game_states.run_options, game_states.run_pause,
+                           game_states.run_game_over]
+        try:
+            with MemoryOptions(), FakeClock() as clock:
+                for fn in screens_to_test:
+                    gs = new_game(config.MODE_PVP)
+                    gs.update({'screen': surf, 'joystick_p1': None, 'joystick_p2': None, 'menu_background_image': None,
+                               'current_state': config.MENU, 'pvp_setup_start_time': -10 ** 9})
+                    for _ in range(250):
+                        evs = []
+                        r = rng.random()
+                        if r < 0.3:
+                            evs.append(pygame.event.Event(pygame.JOYAXISMOTION, axis=rng.randint(0, 1), instance_id=0, joy=0,
+                                                          value=rng.choice([-1.0, 1.0, 0.0])))
+                        elif r < 0.45:
+                            evs.append(pygame.event.Event(pygame.JOYBUTTONDOWN, button=rng.choice([0, 1, 1, 3]), instance_id=0, joy=0))
+                        elif r < 0.55:
+                            evs.append(pygame.event.Event(pygame.KEYDOWN, key=rng.choice([pygame.K_UP, pygame.K_DOWN, pygame.K_a]),
+                                                          mod=0, unicode="a", scancode=0))
+                        evs = keyboard_controls.translate_menu_keys(evs, 0)
+                        evs = translator.process(evs, pygame.time.get_ticks())
+                        result = fn(evs, 16, surf, gs)
+                        self.assertIsNot(result, False, fn.__name__)
+                        clock.tick(40)
+        finally:
+            for k, v in saved.items():
+                setattr(config, k, v)
+            pygame.display.set_mode((800, 600))
+
+
+    def test_hat_moves_selection_in_menu_and_pause(self):
+        import game_states
+        surf = pygame.display.get_surface()
+        down = pygame.event.Event(pygame.JOYHATMOTION, hat=0, value=(0, -1), instance_id=0, joy=0)
+        with MemoryOptions(), FakeClock() as clock:
+            gs = new_game(config.MODE_SOLO)
+            gs.update({'screen': surf, 'menu_selection_index': 0, 'menu_background_image': None})
+            clock.tick(1000)
+            game_states.run_menu([down], 16, surf, gs)
+            self.assertEqual(gs['menu_selection_index'], 1)
+            gs['pause_menu_selection'] = 0
+            clock.tick(1000)
+            game_states.run_pause([down], 16, surf, gs)
+            self.assertEqual(gs['pause_menu_selection'], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

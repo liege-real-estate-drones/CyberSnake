@@ -132,50 +132,6 @@ def run_name_entry_solo(events, dt, screen, game_state):
             continue
 
         # --- Gestion Joystick pour Navigation Clavier Virtuel ---
-        elif event.type == pygame.JOYAXISMOTION:
-            target_player_joystick_id = p1_id  # En mode solo, c'est le joystick J1
-            if event.instance_id == target_player_joystick_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-
-                moved = False
-                if axis == axis_v:  # Axe vertical
-                    value = (-value) if inv_v else value
-                    if value < -threshold:  # HAUT
-                        vk_row = (vk_row - 1 + len(VIRTUAL_KEYBOARD_CHARS)) % len(VIRTUAL_KEYBOARD_CHARS)
-                        vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold:  # BAS
-                        vk_row = (vk_row + 1) % len(VIRTUAL_KEYBOARD_CHARS)
-                        vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                        utils.play_sound("menu_move")
-                        moved = True
-                elif axis == axis_h:  # Axe horizontal
-                    value = (-value) if inv_h else value
-                    if value < -threshold:  # GAUCHE
-                        vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold:  # DROITE
-                        vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("menu_move")
-                        moved = True
-
-                if moved:
-                    last_axis_move_time = current_time
-                    input_active = True
-
-                # Sauvegarde de la position dans le clavier virtuel
-                game_state['vk_row'] = vk_row
-                game_state['vk_col'] = vk_col
-                game_state['last_axis_move_time_vk'] = last_axis_move_time
-                game_state['input_active_solo'] = input_active
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id in allowed_joysticks and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -551,25 +507,6 @@ def run_map_selection(events, dt, screen, game_state):
             return False
 
         # --- AJOUT: Gestion Joystick Navigation (Map Selection) ---
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                if axis == axis_v: # Axe vertical pour HAUT/BAS
-                    value = (-value) if inv_v else value
-                    if value < -threshold: # HAUT
-                        map_selection_index = (map_selection_index - 1 + num_maps_total) % num_maps_total
-                        game_state['map_selection_index'] = map_selection_index
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time
-                    elif value > threshold: # BAS
-                        map_selection_index = (map_selection_index + 1) % num_maps_total
-                        game_state['map_selection_index'] = map_selection_index
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -1220,41 +1157,6 @@ def run_classic_setup(events, dt, screen, game_state):
         if event.type == pygame.QUIT:
             return False
 
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-                logging.debug(f"[run_classic_setup] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
-
-                moved = False
-                if axis == axis_v:  # Vertical
-                    value = (-value) if inv_v else value
-                    if value < -threshold:
-                        selection_index = (selection_index - 1 + menu_len) % menu_len
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold:
-                        selection_index = (selection_index + 1) % menu_len
-                        utils.play_sound("menu_move")
-                        moved = True
-                elif axis == axis_h:  # Horizontal
-                    value = (-value) if inv_h else value
-                    if value < -threshold:
-                        adjust_current(-1)
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold:
-                        adjust_current(1)
-                        utils.play_sound("menu_move")
-                        moved = True
-
-                if moved:
-                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -1706,25 +1608,6 @@ def run_vs_ai_setup(events, dt, screen, game_state):
                 game_state['current_state'] = config.NAME_ENTRY_SOLO
                 return config.NAME_ENTRY_SOLO
 
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-                if axis == axis_h:  # Horizontal
-                    value = (-value) if inv_h else value
-                    if value < -threshold:  # Gauche
-                        idx = (idx - 1) % len(keys)
-                        cur = keys[idx]
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time
-                    elif value > threshold:  # Droite
-                        idx = (idx + 1) % len(keys)
-                        cur = keys[idx]
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -1939,47 +1822,6 @@ def run_pvp_setup(events, dt, screen, game_state):
             continue
             
         # --- Gestion Joystick : Navigation (axes analogiques) ---
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-                logging.debug(f"[run_pvp_setup] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
-
-                moved = False
-                if axis == axis_v: # Axe vertical pour HAUT/BAS
-                    value = (-value) if inv_v else value
-                    if value < -threshold: # HAUT
-                        pvp_setup_index = (pvp_setup_index - 1 + num_options) % num_options
-                        game_state['pvp_setup_index'] = pvp_setup_index
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold: # BAS
-                        pvp_setup_index = (pvp_setup_index + 1) % num_options
-                        game_state['pvp_setup_index'] = pvp_setup_index
-                        utils.play_sound("menu_move")
-                        moved = True
-                elif axis == axis_h: # Axe horizontal pour GAUCHE/DROITE (modifier valeur)
-                    value = (-value) if inv_h else value
-                    if 0 <= pvp_setup_index < num_options:
-                        change_func = options[pvp_setup_index][2]
-                        if change_func:
-                            try:
-                                if value < -threshold: # GAUCHE -> diminuer
-                                    change_func(-1); utils.play_sound("shoot_p1")
-                                    moved = True
-                                elif value > threshold: # DROITE -> augmenter
-                                    change_func(1); utils.play_sound("shoot_p1")
-                                    moved = True
-                            except Exception as e:
-                                logging.error(f"Erreur change_func PvP setup via axis: {e}")
-
-                if moved:
-                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -2180,51 +2022,6 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             continue
 
         # --- Gestion Joystick pour Navigation Clavier Virtuel ---
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id in allowed_joysticks and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-
-                moved = False
-                if axis == axis_v: # Axe vertical
-                    value = (-value) if inv_v else value
-                    if value < -threshold: # HAUT
-                        vk_row = (vk_row - 1) % len(VIRTUAL_KEYBOARD_CHARS)
-                        # S'assurer que la colonne est valide pour la nouvelle ligne
-                        vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold: # BAS
-                        vk_row = (vk_row + 1) % len(VIRTUAL_KEYBOARD_CHARS)
-                        # S'assurer que la colonne est valide pour la nouvelle ligne
-                        vk_col = min(vk_col, len(VIRTUAL_KEYBOARD_CHARS[vk_row]) - 1)
-                        utils.play_sound("menu_move")
-                        moved = True
-                elif axis == axis_h: # Axe horizontal
-                    value = (-value) if inv_h else value
-                    if value < -threshold: # GAUCHE
-                        vk_col = (vk_col - 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold: # DROITE
-                        vk_col = (vk_col + 1) % len(VIRTUAL_KEYBOARD_CHARS[vk_row])
-                        utils.play_sound("menu_move")
-                        moved = True
-
-                if moved:
-                    last_axis_move_time = current_time
-                    input_active = True
-                
-                # Sauvegarde de la position dans le clavier virtuel
-                game_state['vk_row_pvp'] = vk_row
-                game_state['vk_col_pvp'] = vk_col
-                game_state['last_axis_move_time_vk_pvp'] = last_axis_move_time
-                game_state['input_active_pvp'] = input_active
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id in allowed_joysticks and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:

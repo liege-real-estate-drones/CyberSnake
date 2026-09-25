@@ -172,27 +172,6 @@ def run_menu(events, dt, screen, game_state):
                 elif event.button == getattr(config, "BUTTON_BACK", 8): # Bouton Back pour quitter
                     logging.info("Joystick button 8 pressed in menu, quitting.")
                     return False # Quitte le jeu
-        elif event.type == pygame.JOYAXISMOTION:
-            # Vérifie si l'événement vient du joystick J1 et si assez de temps s'est écoulé
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = config.JOYSTICK_THRESHOLD # Utilise la valeur de config
-
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-
-                # Axe vertical pour HAUT/BAS
-                if axis == axis_v:
-                    value = (-value) if inv_v else value
-                    if value < -threshold: # HAUT
-                        menu_selection_index = (menu_selection_index - 1 + num_options) % num_options
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time # Met à jour le temps
-                    elif value > threshold: # BAS
-                        menu_selection_index = (menu_selection_index + 1) % num_options
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time # Met à jour le temps
 
         elif event.type == pygame.JOYHATMOTION:
             # Vérifie si l'événement vient du joystick J1, hat 0 et si assez de temps s'est écoulé
@@ -1212,41 +1191,6 @@ def run_options(events, dt, screen, game_state):
         if event.type == pygame.QUIT:
             return False
 
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis = event.axis
-                value = event.value
-                threshold = float(getattr(config, "JOYSTICK_THRESHOLD", 0.6))
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                axis_h = int(getattr(config, "JOY_AXIS_H", 0))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                inv_h = bool(getattr(config, "JOY_INVERT_H", False))
-                logging.debug(f"[run_options] JOYAXISMOTION: axis={axis}, value={value:.2f}, inst={event.instance_id}, p1={p1_id}, axis_v={axis_v}, axis_h={axis_h}, threshold={threshold}")
-
-                moved = False
-                if axis == axis_v:  # Vertical
-                    value = (-value) if inv_v else value
-                    if value < -threshold:
-                        selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold:
-                        selection_index = (selection_index + 1) % len(menu_items)
-                        utils.play_sound("menu_move")
-                        moved = True
-                elif axis == axis_h:  # Horizontal
-                    value = (-value) if inv_h else value
-                    if value < -threshold:
-                        adjust_current(-1)
-                        utils.play_sound("menu_move")
-                        moved = True
-                    elif value > threshold:
-                        adjust_current(1)
-                        utils.play_sound("menu_move")
-                        moved = True
-
-                if moved:
-                    last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:

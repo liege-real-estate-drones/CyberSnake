@@ -23,7 +23,6 @@ import game_objects
 logger = logging.getLogger(__name__)
 
 DEFAULT_GAME_OPTIONS = {
-    "speed": "normal",
     "growth_per_food": 1,
     "mine_density": "normal",
     "powerups": {

@@ -121,27 +121,10 @@ def run_pause(events, dt, screen, game_state):
             return _quit_to_menu()
         return config.PAUSED
 
-    threshold = getattr(config, "JOYSTICK_THRESHOLD", 0.6)
-
     for event in events:
         if event.type == pygame.QUIT:
             return False
 
-        elif event.type == pygame.JOYAXISMOTION:
-            if event.instance_id == p1_id and current_time - last_axis_move_time > axis_repeat_delay:
-                axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                if int(getattr(event, "axis", -1)) == axis_v:  # Vertical
-                    value = float(getattr(event, "value", 0.0))
-                    value = (-value) if inv_v else value
-                    if value < -threshold:
-                        selection_index = (selection_index - 1 + len(menu_items)) % len(menu_items)
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time
-                    elif value > threshold:
-                        selection_index = (selection_index + 1) % len(menu_items)
-                        utils.play_sound("menu_move")
-                        last_axis_move_time = current_time
 
         elif event.type == pygame.JOYHATMOTION:
             if event.instance_id == p1_id and event.hat == 0 and current_time - last_axis_move_time > axis_repeat_delay:
@@ -474,7 +457,7 @@ def run_game_over(events, dt, screen, game_state):
             continue
             
         # --- Gestion Joystick Game Over et Navigation Menu ---
-        elif event.type == pygame.JOYAXISMOTION or event.type == pygame.JOYHATMOTION:
+        elif event.type == pygame.JOYHATMOTION:
             # --- FIX: Restreindre les inputs au joueur concerné pour éviter les inputs fantômes (drift J2) ---
             allow_input = False
             if current_game_mode == config.MODE_PVP:
@@ -483,26 +466,8 @@ def run_game_over(events, dt, screen, game_state):
                 allow_input = True # En Solo/VsAI/Survie, seul J1 peut naviguer
 
             if allow_input and current_time - last_axis_move_time > axis_repeat_delay:
-                # Navigation haut/bas entre les options
-                if event.type == pygame.JOYAXISMOTION:
-                    axis_v = int(getattr(config, "JOY_AXIS_V", 1))
-                    inv_v = bool(getattr(config, "JOY_INVERT_V", False))
-                    if int(getattr(event, "axis", -1)) == axis_v:
-                        value = float(getattr(event, "value", 0.0))
-                        value = (-value) if inv_v else value
-                        threshold = 0.8  # Higher threshold for game over menu to prevent drift issues
-                        if value < -threshold: # Haut - option précédente
-                            gameover_menu_selection = (gameover_menu_selection - 1) % len(gameover_menu_options)
-                            utils.play_sound("menu_move")
-                            game_state['gameover_menu_selection'] = gameover_menu_selection
-                            last_axis_move_time = current_time
-                        elif value > threshold: # Bas - option suivante
-                            gameover_menu_selection = (gameover_menu_selection + 1) % len(gameover_menu_options)
-                            utils.play_sound("menu_move")
-                            game_state['gameover_menu_selection'] = gameover_menu_selection
-                            last_axis_move_time = current_time
-                # Navigation avec le hat (croix directionnelle)
-                elif event.type == pygame.JOYHATMOTION and event.hat == 0:
+                # Navigation à la croix (le stick est converti en croix dans les menus)
+                if event.hat == 0:
                     hat_x, hat_y = event.value
                     # Boutons côte à côte : gauche/droite (haut/bas fonctionnent aussi)
                     if hat_y == 0 and hat_x != 0:
