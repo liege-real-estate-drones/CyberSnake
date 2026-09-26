@@ -66,6 +66,34 @@ def _open_all():
     return devs
 
 
+def _sysfs_phys(event_path, root="/sys/class/input"):
+    """Port (« phys ») d'un périphérique lu dans /sys, sans l'ouvrir ; None si illisible."""
+    try:
+        with open(os.path.join(root, os.path.basename(event_path), "device", "phys"), "r") as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def _open_matching(slots):
+    """Ouvre seulement les périphériques branchés sur le port d'un des joueurs.
+
+    Refermer un périphérique d'entrée coûte ~30 ms au noyau de la borne : tout ouvrir
+    (20 périphériques = 0,5 s) à chaque recherche d'une manette absente bloquait
+    l'autre manette une demi-seconde sur deux."""
+    wanted = {s.phys for s in slots}
+    devs = []
+    for path in evdev.list_devices():
+        phys = _sysfs_phys(path)
+        if phys is not None and phys not in wanted:
+            continue
+        try:
+            devs.append(evdev.InputDevice(path))
+        except OSError:
+            pass
+    return devs
+
+
 def load_config(path=CONFIG_PATH):
     try:
         with open(path, "r") as f:
@@ -445,7 +473,7 @@ def cmd_run():
     model = None
     deadline = time.time() + 30
     while model is None and time.time() < deadline:
-        for dev in _open_all():
+        for dev in _open_matching(slots):
             if model is None and any(s.matches(dev) for s in slots):
                 model = dev
             else:
@@ -459,11 +487,12 @@ def cmd_run():
     model.close()
 
     last_scan = 0.0
+    first_scan = True
     while True:
         now = time.time()
         if now - last_scan > 1.0 and any(s.dev is None for s in slots):
             last_scan = now
-            for dev in _open_all():
+            for dev in _open_matching([s for s in slots if s.dev is None]):
                 slot = next((s for s in slots if s.dev is None and s.matches(dev)), None)
                 if slot is None:
                     dev.close()
@@ -473,6 +502,11 @@ def cmd_run():
                 except OSError as e:
                     log(f"J{slot.player} : impossible de capturer {dev.path} ({e})")
                     dev.close()
+            if first_scan:
+                for s in slots:
+                    if s.dev is None:
+                        log(f"J{s.player} : aucune manette sur le port {s.phys}, en attente...")
+            first_scan = False
         active = {s.dev.fd: s for s in slots if s.dev is not None}
         if not active:
             time.sleep(0.5)
