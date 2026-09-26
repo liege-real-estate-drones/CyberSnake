@@ -36,11 +36,21 @@ SOUNDS = {
     "voix_time.ogg": ("kenney_voiceover-pack-fighter", "time.ogg"),
     "voix_player_1.ogg": ("kenney_voiceover-pack-fighter", "player_1.ogg"),
     "voix_player_2.ogg": ("kenney_voiceover-pack-fighter", "player_2.ogg"),
+    # Lot 16 : fin du chrono (« 5, 4 », puis 3, 2, 1 ci-dessus) et victoire PvP sans mourir
+    "voix_4.ogg": ("kenney_voiceover-pack-fighter", "4.ogg"),
+    "voix_5.ogg": ("kenney_voiceover-pack-fighter", "5.ogg"),
+    "voix_flawless_victory.ogg": ("kenney_voiceover-pack-fighter", "flawless_victory.ogg"),
     # Effets (remplacent des sons synthétiques de tools/generate_sounds.py)
     "bouclier.ogg": ("kenney_sci-fi-sounds", "forceField_000.ogg"),
     "emp.ogg": ("kenney_sci-fi-sounds", "lowFrequency_explosion_000.ogg"),
     "kill.ogg": ("kenney_sci-fi-sounds", "explosionCrunch_000.ogg"),
     "queue_coupee.ogg": ("kenney_impact-sounds", "impactMetal_medium_000.ogg"),
+    # Lot 16 : variantes (config.SOUND_VARIANTS), une tirée au hasard à chaque fois
+    **{f"queue_coupee_{i + 1}.ogg": ("kenney_impact-sounds", f"impactMetal_medium_00{i}.ogg") for i in range(1, 5)},
+    # Armure perdue : plaque de métal (l'ancien son était 14 dB plus bas que les autres, inaudible)
+    **{f"armure_{i + 1}.ogg": ("kenney_impact-sounds", f"impactPlate_heavy_00{i}.ogg") for i in range(5)},
+    # Tir dans un mur : petit impact métallique (c'était le son « touché » d'un ennemi, le plus fort du jeu)
+    **{f"impact_mur_{i + 1}.ogg": ("kenney_impact-sounds", f"impactMetal_light_00{i}.ogg") for i in range(5)},
 }
 
 

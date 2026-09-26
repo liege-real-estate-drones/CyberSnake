@@ -40,7 +40,7 @@ def _reflect_projectile(game_state, projectile, player, current_time):
         game_state.setdefault('player_projectiles', []).append(projectile)
         cx, cy = projectile.rect.center
         fx.add_popup(cx, cy, "RENVOYÉ !", projectile.color, now=current_time)
-        utils.play_sound("shield_absorb")
+        utils.play_sound("shield_absorb", x=cx)
     except Exception:
         logging.warning("Miroir : renvoi du tir impossible", exc_info=True)
 
@@ -161,8 +161,8 @@ def _eat_food(game_state, snake_object, collected_food, current_time):
     food_data = collected_food.type_data
     food_type_key = collected_food.type
     effect = food_data.get('effect')
-    utils.play_sound("eat" if food_type_key == 'normal' else "eat_special")
     food_center_px = collected_food.get_center_pos_px()
+    utils.play_sound("eat" if food_type_key == 'normal' else "eat_special", x=food_center_px[0] if food_center_px else None)
     if food_center_px and food_center_px[0] is not None:
         utils.emit_particles(food_center_px[0], food_center_px[1], 10, config.COLOR_FOOD_EAT_PARTICLE, (1, 3), (200, 400), (1, 4), 0.05, 0.2)
 
@@ -420,7 +420,7 @@ def _enemy_shot_on_body(snake, seg_index, hit_pos_px):
         snake.shrink(lost)
     if hit_pos_px:
         utils.emit_particles(hit_pos_px[0], hit_pos_px[1], 8, config.COLOR_ARMOR_HIT, (1, 3), (200, 400), (1, 3))
-    utils.play_sound("tail_cut")
+    utils.play_sound("tail_cut", x=hit_pos_px[0] if hit_pos_px else None)
     snake._hit_flash_until = game_clock.ticks() + 120
     return True
 
@@ -436,18 +436,18 @@ def _player_action(game_state, snake, action, current_time, coop):
             # Coop : les tirs du J2 sont ceux de l'équipe (touchent mines, nids et IA)
             key = 'player_projectiles' if (snake.player_num == 1 or coop) else 'player2_projectiles'
             game_state.setdefault(key, []).extend(projectiles)
-            utils.play_sound(snake.shoot_sound)
+            snake.play_sound(snake.shoot_sound)
         return False
     if action == 'shield':
         if snake.shield_ready:
             snake.activate_shield(current_time)
         else:
-            utils.play_sound("denied")
+            snake.play_sound("denied")
         return False
     if action != 'dash':
         return False
     if not snake.dash_ready:
-        utils.play_sound("denied")  # Compétence pas encore prête
+        snake.play_sound("denied")  # Compétence pas encore prête
         return False
     walls = game_state.get('current_map_walls', [])
     mines = game_state.get('mines', [])
@@ -520,6 +520,7 @@ def reset_game(game_state):
     game_state['time_attack_done'] = False
     game_state['live_record_done'] = False
     game_state.pop('_ta_last_second', None)
+    game_state.pop('_pvp_last_second', None)
     if game_state.get('daily_challenge'):
         random.seed(progress.daily_seed())  # Même départ pour tout le monde aujourd'hui
     game_state['player_projectiles'] = []
@@ -1370,13 +1371,13 @@ def run_game(events, dt, screen, game_state):
     try:
         if ai_should_shoot and enemy_snake and enemy_snake.alive:
             new_enemy_proj = enemy_snake.shoot(current_time)
-            if new_enemy_proj: game_state['enemy_projectiles'].extend(new_enemy_proj); utils.play_sound(enemy_snake.shoot_sound)
+            if new_enemy_proj: game_state['enemy_projectiles'].extend(new_enemy_proj); enemy_snake.play_sound(enemy_snake.shoot_sound)
         for action in baby_ai_actions:
             baby_snake = action['ai_obj']
             should_shoot = action['should_shoot']
             if baby_snake and baby_snake.alive and baby_snake not in enemies_died_this_frame and should_shoot:
                 new_baby_proj = baby_snake.shoot(current_time)
-                if new_baby_proj: game_state['enemy_projectiles'].extend(new_baby_proj); utils.play_sound(baby_snake.shoot_sound)
+                if new_baby_proj: game_state['enemy_projectiles'].extend(new_baby_proj); baby_snake.play_sound(baby_snake.shoot_sound)
     except Exception as e:
         logging.error(f"Erreur lors du tir des IA: {e}", exc_info=True)
 
@@ -1562,7 +1563,7 @@ def run_game(events, dt, screen, game_state):
 
                 # Collision Mur
                 if proj_grid_pos in wall_positions:
-                    p1_rem_indices.add(i); hit_something = True; utils.emit_particles(proj_center[0], proj_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall"); continue
+                    p1_rem_indices.add(i); hit_something = True; utils.emit_particles(proj_center[0], proj_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall", x=proj_center[0]); continue
 
                 # Collision Mine Fixe
                 current_mines_copy_p1 = list(enumerate(mines))
@@ -1575,7 +1576,7 @@ def run_game(events, dt, screen, game_state):
                             if current_game_mode != config.MODE_PVP and current_game_mode != config.MODE_SURVIVAL and current_game_mode != config.MODE_CLASSIC:
                                 obj_completed, bonus = utils.check_objective_completion('destroy_mine', current_objective, 1)
                                 if obj_completed: player_snake.add_score(bonus, is_objective_bonus=True); game_state['current_objective'] = None; game_state['objective_complete_timer'] = current_time + config.OBJECTIVE_COMPLETE_DISPLAY_TIME
-                        utils.play_sound("explode_mine"); cx, cy = m.get_center_pos_px()
+                        cx, cy = m.get_center_pos_px(); utils.play_sound("explode_mine", x=cx)
                         if cx is not None: utils.emit_particles(cx, cy, 25, config.COLOR_PROJ_HIT_MINE); utils.trigger_shake(5, 250)
                         break
                 if hit_something: continue
@@ -1593,12 +1594,12 @@ def run_game(events, dt, screen, game_state):
                     current_nests_copy_p1 = list(enumerate(nests))
                     for j, nest in current_nests_copy_p1:
                         if nest.is_active and j not in nests_hit_indices_proj and p.rect.colliderect(nest.rect):
-                            p1_rem_indices.add(i); hit_something = True; utils.play_sound("hit_enemy"); utils.emit_particles(proj_center[0], proj_center[1], 5, config.COLOR_NEST_DAMAGED)
+                            p1_rem_indices.add(i); hit_something = True; utils.play_sound("nest_hit", x=proj_center[0]); utils.emit_particles(proj_center[0], proj_center[1], 5, config.COLOR_NEST_DAMAGED)
                             if nest.take_damage():
                                 nests_hit_indices_proj.add(j) # Marquer pour suppression à la fin
                                 # Nid détruit : retour visuel et sonore
                                 ncx, ncy = nest.get_center_pos_px()
-                                utils.play_sound("nest_destroyed")
+                                utils.play_sound("nest_destroyed", x=ncx)
                                 utils.emit_particles(ncx, ncy, 35, [config.COLOR_NEST_DAMAGED, (255, 170, 60), config.COLOR_WHITE], (2, 7), (500, 1100), (2, 6), 0.03)
                                 utils.trigger_shake(4, 220)
                                 fx.add_shockwave(ncx, ncy, (255, 170, 60), now=current_time)
@@ -1716,7 +1717,7 @@ def run_game(events, dt, screen, game_state):
 
                     # Collision Mur
                     if proj2_grid_pos in wall_positions:
-                        p2_rem_indices.add(j); hit_something_p2 = True; utils.emit_particles(proj2_center[0], proj2_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall"); continue
+                        p2_rem_indices.add(j); hit_something_p2 = True; utils.emit_particles(proj2_center[0], proj2_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall", x=proj2_center[0]); continue
 
                     # Collision Mine Fixe
                     current_mines_copy_p2 = list(enumerate(mines))
@@ -1726,7 +1727,7 @@ def run_game(events, dt, screen, game_state):
                             p2_rem_indices.add(j); mines_hit_indices_proj.add(k); hit_something_p2 = True
                             if player2_snake and player2_snake.alive: # P2 est le owner
                                 player2_snake.add_score(config.MINE_SCORE_VALUE); player2_snake.increment_combo(1)
-                            utils.play_sound("explode_mine"); cx, cy = m.get_center_pos_px()
+                            cx, cy = m.get_center_pos_px(); utils.play_sound("explode_mine", x=cx)
                             if cx is not None: utils.emit_particles(cx, cy, 25, config.COLOR_PROJ_HIT_MINE); utils.trigger_shake(5, 250)
                             break
                     if hit_something_p2: continue
@@ -1771,7 +1772,7 @@ def run_game(events, dt, screen, game_state):
                  hit_something_en = False
 
                  # Collision Mur
-                 if proj_en_grid_pos in wall_positions: en_rem_indices.add(l); hit_something_en = True; utils.emit_particles(proj_en_center[0], proj_en_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall"); continue
+                 if proj_en_grid_pos in wall_positions: en_rem_indices.add(l); hit_something_en = True; utils.emit_particles(proj_en_center[0], proj_en_center[1], 5, config.COLOR_PROJ_HIT_WALL); utils.play_sound("hit_wall", x=proj_en_center[0]); continue
 
                  # Collision Mine Fixe
                  current_mines_copy_en = list(enumerate(mines))
@@ -1779,7 +1780,7 @@ def run_game(events, dt, screen, game_state):
                       if m_idx not in mines_hit_indices_proj and en_proj.rect.colliderect(m.rect):
                          en_rem_indices.add(l); mines_hit_indices_proj.add(m_idx); hit_something_en = True
                          # Pas de score pour l'IA qui détruit une mine
-                         utils.play_sound("explode_mine"); cx, cy = m.get_center_pos_px()
+                         cx, cy = m.get_center_pos_px(); utils.play_sound("explode_mine", x=cx)
                          if cx is not None: utils.emit_particles(cx, cy, 25, config.COLOR_PROJ_HIT_MINE); utils.trigger_shake(4, 200) # Shake moins fort
                          break
                  if hit_something_en: continue
@@ -1923,7 +1924,7 @@ def run_game(events, dt, screen, game_state):
                             mines_collided_indices_head.add(collided_mine_idx_head)
                             mine_collided_obj = mines[collided_mine_idx_head]
                             mine_center_px_head = mine_collided_obj.get_center_pos_px()
-                            utils.play_sound("explode_mine")
+                            utils.play_sound("explode_mine", x=mine_center_px_head[0] if mine_center_px_head else None)
                             utils.trigger_shake(5 if snake_object.is_player else 4, 300)
                             if mine_center_px_head: utils.emit_particles(mine_center_px_head[0], mine_center_px_head[1], 30, config.COLOR_MINE_EXPLOSION, (2, 9), (600, 1100), (3, 7), 0.02)
                             
@@ -2034,7 +2035,7 @@ def run_game(events, dt, screen, game_state):
                                          baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
                                          new_enemy_hatch = game_objects.EnemySnake(start_pos=spawn_pos_found_hatch, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
                                          active_enemies.append(new_enemy_hatch)
-                                         utils.play_sound("shoot_enemy") # Son de spawn
+                                         new_enemy_hatch.play_sound("shoot_enemy")  # Son d'éclosion
                                          logging.debug(f"  -> Baby snake hatched by AI at {spawn_pos_found_hatch}")
                                      except Exception as e: logging.error(f"  -> ERROR spawning baby AI from AI hatch: {e}", exc_info=True)
                                  else: logging.warning(f"  -> Could not find empty spawn position near nest {nest.position} for AI hatch.")
@@ -2256,9 +2257,14 @@ def run_game(events, dt, screen, game_state):
         if (current_game_mode != config.MODE_PVP) and p1_died_this_frame: game_over = True
         elif current_game_mode == config.MODE_PVP and not game_over and PvpCondition:
             timer_ended = False
-            if pvp_condition_type in (PvpCondition.TIMER, PvpCondition.MIXED):
-                if pvp_start_time > 0 and current_time - pvp_start_time >= pvp_target_time * 1000:
+            if pvp_condition_type in (PvpCondition.TIMER, PvpCondition.MIXED) and pvp_start_time > 0:
+                left_ms = pvp_target_time * 1000 - (current_time - pvp_start_time)
+                announcer.final_countdown(game_state, left_ms, '_pvp_last_second')  # Comme le Contre-la-montre
+                if left_ms <= 0:
                     timer_ended = True
+                    game_state['boss_banner_text'] = "TEMPS ÉCOULÉ !"
+                    game_state['boss_banner_until'] = current_time + 1500
+                    announcer.say("time", game_state)
             kills_target_reached = False
             if pvp_condition_type in (PvpCondition.KILLS, PvpCondition.MIXED):
                 p1_reached_kills = player_snake and player_snake.kills >= pvp_target_kills

@@ -21,6 +21,9 @@ import logging # Added for detailed score logging
 
 logger = logging.getLogger(__name__)
 
+MULTI_KILL_WINDOW_MS = 3000  # Deux ennemis éliminés dans ce délai : « MULTI KILL ! »
+MULTI_KILL_BONUS = 25        # Points par élimination au-delà de la première
+
 # --- Classes Game Objects ---
 
 
@@ -498,7 +501,7 @@ class MovingMine:
             return False
 
         self.is_active = False
-        utils.play_sound("explode_mine")
+        utils.play_sound("explode_mine", x=self.x)
         center_pos = self.get_center_pos_px()
 
         if center_pos:
@@ -663,6 +666,8 @@ class Snake:
         self.score = 0
         self.kills = 0
         # --- FIN AJOUT ---
+        self.deaths = 0         # Morts de la partie (réapparitions comprises) : « Flawless victory » en PvP
+        self._kill_times = []   # Éliminations récentes : « Multi kill ! »
 
         self.reset(current_game_mode, self.current_walls)
 
@@ -865,6 +870,27 @@ class Snake:
         else:
             return (None, None)
 
+    def play_sound(self, name):
+        """Son émis par ce serpent, placé en stéréo à la hauteur de sa tête (J1 à gauche, J2 à droite...)."""
+        return utils.play_sound(name, x=self.get_head_center_px()[0])
+
+    def note_kill(self, current_time, pos_px):
+        """Élimination d'un ennemi par ce joueur : deux en moins de 3 s, c'est un « MULTI KILL ! » (+ bonus)."""
+        if not self.alive:
+            return False  # Tir parti avant la mort du tireur
+        times = [t for t in self._kill_times if 0 <= current_time - t <= MULTI_KILL_WINDOW_MS] + [current_time]
+        self._kill_times = times
+        if len(times) < 2:
+            return False
+        self._kill_times = []  # La série repart de zéro
+        added = self.add_score(MULTI_KILL_BONUS * (len(times) - 1), is_combo_bonus=True, popup=False)
+        try:
+            fx.add_popup(pos_px[0], pos_px[1] - 30, f"MULTI KILL ! +{added}", (255, 120, 255), now=current_time, big=True)
+        except Exception:
+            pass
+        announcer.say("multi_kill")
+        return True
+
     def turn(self, new_direction):
         if not self.alive: return
         actual_direction = new_direction
@@ -958,7 +984,7 @@ class Snake:
 
         if self.is_player and self.combo_counter > 0 and current_time >= self.combo_timer:
             if self.combo_counter >= 3:
-                utils.play_sound("combo_break")
+                self.play_sound("combo_break")
             self.combo_counter = 0
             self.combo_timer = 0
 
@@ -969,14 +995,14 @@ class Snake:
                 if current_time >= self.last_dash_time + config.SKILL_COOLDOWN_DASH:
                     self.dash_ready = True
                     self.dash_ready_time = current_time  # « Ping » du HUD
-                    utils.play_sound("skill_ready")
+                    self.play_sound("skill_ready")
 
             # Cooldown Bouclier
             if not self.shield_ready and self.last_shield_time > 0:
                 if current_time >= self.last_shield_time + config.SKILL_COOLDOWN_SHIELD:
                     self.shield_ready = True
                     self.shield_ready_time = current_time  # « Ping » du HUD
-                    utils.play_sound("skill_ready")
+                    self.play_sound("skill_ready")
 
         # --- MODIFICATION: Expiration de la CHARGE de bouclier ---
         # Désactivation Bouclier de compétence ACTIF (différent du cooldown) <- Remplacé par expiration de charge
@@ -1005,7 +1031,7 @@ class Snake:
                     self.add_armor(1)
                     self.last_armor_regen_tick_time = current_time  # Réinitialise pour le prochain intervalle
                     if self.is_player:
-                        utils.play_sound("armor_regen_tick")
+                        self.play_sound("armor_regen_tick")
                         if cx_skill_ok(self):
                             fx.add_popup(*self.get_head_center_px(), "ARMURE +1", config.COLOR_ARMOR_HIGHLIGHT)
             else:
@@ -1194,9 +1220,10 @@ class Snake:
             self.handle_damage(game_clock.ticks(), is_shrink_death=True, death_pos_px=death_pos)
             return
 
-    def add_score(self, value, is_combo_bonus=False, is_objective_bonus=False):
+    def add_score(self, value, is_combo_bonus=False, is_objective_bonus=False, popup=True):
+        """Ajoute des points (multiplicateurs compris) ; retourne les points réellement ajoutés."""
         if not self.alive or not self.is_player or value == 0:
-            return
+            return 0
 
         temp_multiplier = 2.0 if self.score_multiplier_active else 1.0
         if self.frenzy_active:  # Frénésie : points x2
@@ -1219,7 +1246,7 @@ class Snake:
 
         # Texte flottant au-dessus de la tête
         try:
-            if score_added != 0:
+            if score_added != 0 and popup:
                 hx, hy = getattr(self, '_render_head_center_px', None) or self.get_head_center_px()
                 if hx is not None:
                     if is_objective_bonus:
@@ -1240,6 +1267,7 @@ class Snake:
             combo_bonus_value = (self.combo_counter - 1) * config.COMBO_SCORE_BONUS
             if combo_bonus_value > 0:
                 self.add_score(combo_bonus_value, is_combo_bonus=True)
+        return score_added
 
     def increment_combo(self, points=1):
         if not self.alive or not self.is_player or points <= 0: return
@@ -1253,7 +1281,7 @@ class Snake:
         self.max_combo = max(getattr(self, 'max_combo', 0), self.combo_counter)
         if points > 0 and self.combo_counter > 1:
             # La note monte avec le combo : on entend la série s'allonger
-            utils.play_sound(f"combo_{min(6, max(1, self.combo_counter // 2))}")
+            self.play_sound(f"combo_{min(6, max(1, self.combo_counter // 2))}")
             if self.combo_counter >= 5 and self.combo_counter // 5 > getattr(self, '_combo_milestone', 0) and cx_skill_ok(self):
                 self._combo_milestone = self.combo_counter // 5
                 fx.add_popup(*self.get_head_center_px(), f"COMBO x{self.combo_counter} !", config.COLOR_COMBO_TEXT, big=True)
@@ -1280,7 +1308,7 @@ class Snake:
             # (On vérifie current_armor car self.armor a déjà été mis à jour)
             if self.armor <= 0 and current_armor > 0:
                 # print(f"DEBUG: Low armor warning triggered for {self.name}. New armor: {self.armor}") # Debug
-                utils.play_sound("low_armor_warning")
+                self.play_sound("low_armor_warning")
                 self.low_armor_flash_active = True
                 current_time = game_clock.ticks()
                 self.low_armor_flash_end_time = current_time + config.LOW_ARMOR_FLASH_DURATION
@@ -1327,7 +1355,7 @@ class Snake:
                 if self.is_player:  # Protection après le choc, comme l'armure (le serpent clignote)
                     self.invincible_timer = current_time + self._hit_protection_ms()
                 # Jouer un son différent si le bouclier de compétence absorbe
-                utils.play_sound("shield_absorb")  # Ou "skill_shield_absorb"
+                self.play_sound("shield_absorb")
                 self._hit_flash_until = current_time + 150
                 if self.is_player and cx_skill_ok(self):
                     fx.add_popup(*self.get_head_center_px(), "BLOQUÉ", config.COLOR_SHIELD_POWERUP)
@@ -1341,7 +1369,7 @@ class Snake:
 
                 # Vérification Bouclier POWERUP (logique existante)
             if self.shield_active:
-                utils.play_sound("shield_absorb")
+                self.play_sound("shield_absorb")
                 self._hit_flash_until = current_time + 150
                 if self.is_player and cx_skill_ok(self):
                     fx.add_popup(*self.get_head_center_px(), "BLOQUÉ", config.COLOR_SHIELD_POWERUP)
@@ -1374,7 +1402,7 @@ class Snake:
                 #     self.low_armor_flash_visible = True
                 # else:
                 #      utils.play_sound(self.hit_sound)
-                utils.play_sound(self.hit_sound) # Joue le son de hit normal quand l'armure absorbe
+                self.play_sound(self.hit_sound)  # L'armure absorbe le coup
 
                 return True
 
@@ -1382,7 +1410,7 @@ class Snake:
         self.combo_counter = 0
         self.combo_timer = 0
         self.alive = False
-        utils.play_sound(self.die_sound)
+        self.deaths = getattr(self, 'deaths', 0) + 1
 
         px, py = -1, -1
         if death_pos_px and death_pos_px[0] is not None:
@@ -1397,6 +1425,7 @@ class Snake:
                 if last_pos: px, py = last_pos[0] * config.GRID_SIZE + config.GRID_SIZE // 2, last_pos[1] * config.GRID_SIZE + config.GRID_SIZE // 2
                 else: px, py = config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT / 2
 
+        utils.play_sound(self.die_sound, x=px if px != -1 else None)
         if px != -1: utils.emit_particles(px, py, 50, self.death_colors, (2, 9), (800, 1800), (3, 8), 0.03, 0.05)
 
         # Retour visuel : flash rouge à la mort d'un joueur, "KILL!" quand un joueur élimine un serpent
@@ -1405,8 +1434,10 @@ class Snake:
                 fx.trigger_flash((255, 40, 40), 380, 120, now=current_time)
             elif killer_snake is not None and getattr(killer_snake, 'is_player', False) and px != -1:
                 fx.add_popup(px, py, "KILL !", config.COLOR_TEXT_HIGHLIGHT, big=True)
-                utils.play_sound("kill")
+                utils.play_sound("kill", x=px)
                 fx.trigger_flash((255, 255, 255), 120, 45, now=current_time)
+                if hasattr(killer_snake, 'note_kill'):
+                    killer_snake.note_kill(current_time, (px, py))
         except Exception:
             pass
 
@@ -1437,7 +1468,7 @@ class Snake:
         if cx is not None: utils.emit_particles(cx, cy, 25, [data['color'], config.COLOR_WHITE], (2, 7), (500, 1000), (3, 6), 0)
 
         if self.is_player:
-            utils.play_sound("powerup_pickup")
+            self.play_sound("powerup_pickup")
             self.increment_combo(points=2)
             self.powerups_collected = getattr(self, 'powerups_collected', 0) + 1
             if cx is not None:
@@ -1568,7 +1599,7 @@ class Snake:
             update_timer_flag = False # Cas par défaut
 
         if sound_effect:
-            utils.play_sound(sound_effect)
+            self.play_sound(sound_effect)
 
         if update_timer_flag and effect_name != 'speed_boost':
             current_end_time = 0
@@ -1659,7 +1690,7 @@ class Snake:
         logger.debug("%s activated Dash!", self.name)
         self.dash_ready = False
         self.last_dash_time = current_time
-        utils.play_sound("dash_sound")
+        self.play_sound("dash_sound")
 
         head_pos = self.get_head_position()
         if not head_pos:
@@ -1766,7 +1797,7 @@ class Snake:
         self.shield_charge_active = True  # Active la charge
         self.shield_charge_expiry_time = current_time + config.SHIELD_SKILL_DURATION  # Définit l'expiration de la charge
 
-        utils.play_sound("skill_activate")  # Ou un son spécifique "shield_up"
+        self.play_sound("skill_activate")
 
         # Effet visuel immédiat
         cx, cy = self.get_head_center_px()
@@ -2621,7 +2652,7 @@ class Snake:
     def freeze(self, current_time, duration):
         """Gèle le serpent pour une durée donnée."""
         if self.alive and not self.frozen: # Applique seulement si vivant et pas déjà gelé
-            utils.play_sound("effect_freeze")
+            self.play_sound("effect_freeze")
             self.frozen = True
             # --- MODIFICATION : Enregistre le timer directement ici ---
             expiration_time = current_time + duration
@@ -3182,7 +3213,7 @@ class EnemySnake(Snake):
             # Baby AI can only grow from normal food OR ammo food
             if type_key in ['normal', 'ammo']:
                 # self.grow() # Growth is now handled in run_game
-                utils.play_sound("eat") # Basic eat sound
+                self.play_sound("eat")
             return # Skip other effects for baby AI
 
         food_data = config.FOOD_TYPES.get(type_key)
@@ -3203,7 +3234,7 @@ class EnemySnake(Snake):
              # Add logic for P2 if needed in other modes
              if opponent and opponent.alive:
                  opponent.freeze(current_time, config.ENEMY_FREEZE_DURATION)
-                 utils.play_sound("effect_freeze") # Play sound when AI uses freeze
+                 self.play_sound("effect_freeze")  # L'IA utilise le gel
              return # Don't apply other effects or timers to self
 
         # Ghost effect with specific duration for AI
@@ -3781,8 +3812,8 @@ class PowerUp:
         self.spawn_time = game_clock.ticks()
         self.lifetime = config.POWERUP_LIFETIME
         self.objective_tag = self.data.get('objective_tag', 'powerup_generic')
-        utils.play_sound("powerup_spawn")
         cx, cy = self.rect.center
+        utils.play_sound("powerup_spawn", x=cx)
         utils.emit_particles(cx, cy, 15, [self.data['color'], config.COLOR_WHITE], (1, 3), (600, 1200), (2, 4), 0)
 
     def is_expired(self):

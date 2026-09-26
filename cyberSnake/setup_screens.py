@@ -304,13 +304,10 @@ def run_name_entry_solo(events, dt, screen, game_state):
         _draw_name(screen, game_state, 'player1_name_input', game_state['player1_name_input'], cursor_char, font_large,
                    config.SCREEN_HEIGHT * 0.35)
         
-        # Mettre à jour l'animation de la touche sélectionnée
-        if vk_row != game_state.get('last_vk_row', vk_row) or vk_col != game_state.get('last_vk_col', vk_col):
+        # La pulsation repart sur la touche choisie (le son est joué par la navigation)
+        if (vk_row, vk_col) != game_state.get('last_vk_cell'):
             game_state['key_select_time'] = current_time
-            game_state['last_vk_row'] = vk_row
-            game_state['last_vk_col'] = vk_col
-            # Ajouter effet sonore de déplacement plus doux
-            utils.play_sound("name_input_char", volume=0.3)
+            game_state['last_vk_cell'] = (vk_row, vk_col)
 
         # Mettre à jour l'effet de pression
         key_press_effect = game_state.get('key_press_effect', None)
@@ -2312,13 +2309,10 @@ def run_name_entry_pvp(events, dt, screen, game_state):
             utils.draw_text(screen, f"J1: {game_state['player1_name_input']}", font_default, 
                           config.COLOR_TEXT_MENU, (config.SCREEN_WIDTH / 2, config.SCREEN_HEIGHT * 0.45), "center")
         
-        # Mettre à jour l'animation de la touche sélectionnée
-        if vk_row != game_state.get('last_vk_row_pvp', vk_row) or vk_col != game_state.get('last_vk_col_pvp', vk_col):
+        # La pulsation repart sur la touche choisie (le son est joué par la navigation)
+        if (vk_row, vk_col) != game_state.get('last_vk_cell_pvp'):
             game_state['key_select_time_pvp'] = current_time
-            game_state['last_vk_row_pvp'] = vk_row
-            game_state['last_vk_col_pvp'] = vk_col
-            # Ajouter effet sonore de déplacement plus doux
-            utils.play_sound("name_input_char", volume=0.3)
+            game_state['last_vk_cell_pvp'] = (vk_row, vk_col)
 
         # Mettre à jour l'effet de pression
         key_press_effect_pvp = game_state.get('key_press_effect_pvp', None)

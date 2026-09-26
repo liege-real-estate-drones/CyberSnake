@@ -106,7 +106,7 @@ class BossSnake(game_objects.EnemySnake):
         self.armor = max(0, self.armor - 1)
         cx, cy = self.get_head_center_px()
         try:
-            utils.play_sound("hit_enemy")
+            utils.play_sound("hit_enemy", x=cx)
             utils.trigger_shake(6, 350)
             if cx is not None:
                 utils.emit_particles(cx, cy, 40, [BOSS_COLOR, (255, 255, 255), (255, 200, 80)], (2, 8), (400, 900), (2, 6))
@@ -221,7 +221,7 @@ def _fire_fan(game_state, boss, now):
         shots.append(game_objects.Projectile(x + math.cos(a) * g * 0.8, y + math.sin(a) * g * 0.8, (math.cos(a), math.sin(a)),
                                              config.ENEMY_PROJECTILE_SPEED * 0.8 * level.get("enemy_shot_speed"), color, config.ENEMY_PROJECTILE_SIZE + 1, boss))
     game_state.setdefault('enemy_projectiles', []).extend(shots)
-    utils.play_sound("boss_fan")
+    boss.play_sound("boss_fan")
     utils.trigger_shake(3, 180)
 
 
@@ -241,7 +241,7 @@ def _drop_mines(game_state, boss, now):
         taken.add(pos)
         dropped += 1
     if dropped:
-        utils.play_sound("mine_wave")
+        boss.play_sound("mine_wave")
         cx, cy = boss.get_head_center_px()
         if cx is not None:
             fx.add_popup(cx, cy - 20, "MINES !", (255, 90, 90), now=now)
@@ -271,7 +271,7 @@ def _start_charge(game_state, boss, now):
     boss.attack = 'charge'
     boss.attack_start = now
     boss.charging_until = now + CHARGE_WARN_MS + CHARGE_MAX_MS
-    utils.play_sound("boss_charge")
+    boss.play_sound("boss_charge")
     return True
 
 

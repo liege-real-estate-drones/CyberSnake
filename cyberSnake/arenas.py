@@ -101,7 +101,7 @@ def update(game_state, current_time):
                 s.positions[0] = dest
                 s._portal_arrival = dest
                 if getattr(s, 'is_player', False):
-                    utils.play_sound("portal")
+                    s.play_sound("portal")
                 s._prev_positions = None  # Pas d'interpolation pendant le saut
                 try:
                     g = config.GRID_SIZE

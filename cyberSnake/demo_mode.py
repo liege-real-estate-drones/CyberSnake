@@ -387,7 +387,7 @@ def run_demo(events, dt, screen, game_state):
             if shots:
                 key = 'player_projectiles' if snake is player_snake else 'player2_projectiles'
                 game_state.setdefault(key, []).extend(shots)
-                utils.play_sound(snake.shoot_sound)
+                snake.play_sound(snake.shoot_sound)
                 snake._demo_last_shot = current_time
                 snake._demo_burst += 1
 

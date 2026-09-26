@@ -4,7 +4,8 @@
 Une partie Solo sur l'Arène Vide (la même pour tout le monde : les records se comparent),
 avec ses propres records au Hall of Fame (« Chrono »). Quand le temps est écoulé, la partie
 s'arrête (« TEMPS ÉCOULÉ ! ») ; mourir avant la fin l'arrête aussi. Le compte à rebours est
-affiché en grand en haut de l'écran, et passe au rouge les 10 dernières secondes.
+affiché en grand en haut de l'écran, et passe au rouge les 10 dernières secondes (un bip chaque
+seconde, puis la voix « 5, 4, 3, 2, 1 »).
 """
 import pygame
 
@@ -33,11 +34,7 @@ def update(game_state, now):
     if not active(game_state):
         return False
     left = left_ms(game_state, now)
-    last = game_state.get('_ta_last_second')
-    second = left // 1000
-    if left > 0 and second < 10 and second != last:  # Tic des 10 dernières secondes
-        game_state['_ta_last_second'] = second
-        utils.play_sound("countdown")
+    announcer.final_countdown(game_state, left, '_ta_last_second')  # Bips des 10 dernières secondes, « 5, 4, 3, 2, 1 »
     if left <= 0 and not game_state.get('time_attack_done'):
         game_state['time_attack_done'] = True
         game_state['boss_banner_text'] = "TEMPS ÉCOULÉ !"

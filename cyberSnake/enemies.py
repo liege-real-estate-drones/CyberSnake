@@ -88,7 +88,7 @@ class KamikazeSnake(game_objects.EnemySnake):
         cx, cy = self.get_head_center_px()
         self.alive = False
         try:
-            utils.play_sound("explode_mine")
+            utils.play_sound("explode_mine", x=cx)
             utils.trigger_shake(7, 350)
             if cx is not None:
                 utils.emit_particles(cx, cy, 45, [KAMIKAZE_COLOR, (255, 230, 120), (255, 255, 255)], (2, 8), (400, 900), (2, 6))
