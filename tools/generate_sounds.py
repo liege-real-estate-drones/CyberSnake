@@ -3,6 +3,8 @@
 
 Usage : python3 tools/generate_sounds.py
 Aucune dépendance : uniquement la bibliothèque standard.
+Élimination, bouclier, EMP et queue coupée sont des sons enregistrés (Kenney.nl, lot 15) :
+voir tools/import_kenney_sounds.py.
 """
 import math
 import os
@@ -98,8 +100,6 @@ if __name__ == "__main__":
     fanfare = seq(*[tone(0.11, note(n), None, "square", 0.3, 0.005, 0.04) for n in (60, 64, 67, 72)],
                   tone(0.45, note(76), None, "square", 0.3, 0.005, 0.3))
     write("boss_defeat.wav", mix(noise(0.9, 0.6, 0.7, 0.08, seed=3), [0.0] * int(0.25 * RATE) + fanfare))
-    # Kill : zap court
-    write("kill.wav", mix(tone(0.22, 1400, 180, "square", 0.35, 0.002, 0.12), noise(0.15, 0.25, 0.12, 0.5, seed=5)))
     # Couleur débloquée / objectif : carillon
     write("unlock.wav", seq(*[tone(0.09, note(n), None, "tri", 0.45, 0.003, 0.06) for n in (72, 76, 79)],
                             tone(0.5, note(84), None, "tri", 0.45, 0.003, 0.4)))
@@ -126,12 +126,6 @@ if __name__ == "__main__":
     # --- Jeu ---
     # Dash : souffle filtré qui monte puis retombe
     write("dash.wav", mix(noise(0.28, 0.45, 0.22, 0.35, seed=7), tone(0.28, 300, 1400, "sine", 0.18, 0.01, 0.2)))
-    # Bouclier (compétence) : scintillement montant
-    write("shield_up.wav", mix(tone(0.45, 400, 1600, "tri", 0.3, 0.01, 0.25, vibrato=0.02),
-                               tone(0.45, 600, 2400, "sine", 0.12, 0.01, 0.3)))
-    # EMP : impulsion grave + zap descendant
-    write("emp_blast.wav", mix(tone(0.7, 2400, 60, "saw", 0.3, 0.002, 0.5), noise(0.7, 0.5, 0.6, 0.06, seed=11),
-                               tone(0.7, 55, 40, "sine", 0.5, 0.005, 0.5)))
     # Vague de mines mobiles : trois bips d'alerte
     write("mine_wave.wav", seq(*[tone(0.07, 1760, None, "square", 0.22, 0.002, 0.03) for _ in range(3)], gap=0.06))
     # Nouvelle vague (Survie) : sirène montante + accord
@@ -173,5 +167,3 @@ if __name__ == "__main__":
                                   noise(0.7, 0.08, 0.5, 0.6, seed=21)))
     write("frenzy_end.wav", seq(*[tone(0.07, note(n), None, "tri", 0.28, 0.002, 0.05) for n in (84, 79, 76)],
                                 tone(0.25, note(72), None, "tri", 0.28, 0.002, 0.2)))
-    # Tir ennemi dans le corps : la queue est coupée (petit « clac » et chute)
-    write("tail_cut.wav", mix(noise(0.12, 0.35, 0.1, 0.7, seed=23), tone(0.18, 900, 200, "square", 0.2, 0.001, 0.12)))

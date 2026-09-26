@@ -25,6 +25,7 @@ import fx
 import game_objects
 import level
 import announcer
+import ui_common
 
 BOSS_WAVE_INTERVAL = 5
 BOSS_COLOR = (190, 60, 255)
@@ -39,6 +40,7 @@ CHARGE_MAX_MS = 1600
 CHARGE_SPEED = 0.33          # Intervalle de déplacement multiplié pendant la charge
 STUN_MS = 1400
 FAN_SPREAD_DEG = 40
+_banner_cache = {}
 
 
 class BossSnake(game_objects.EnemySnake):
@@ -106,7 +108,7 @@ class BossSnake(game_objects.EnemySnake):
         self.armor = max(0, self.armor - 1)
         cx, cy = self.get_head_center_px()
         try:
-            utils.play_sound("hit_enemy")
+            utils.play_sound("hit_enemy", x=cx)
             utils.trigger_shake(6, 350)
             if cx is not None:
                 utils.emit_particles(cx, cy, 40, [BOSS_COLOR, (255, 255, 255), (255, 200, 80)], (2, 8), (400, 900), (2, 6))
@@ -221,7 +223,7 @@ def _fire_fan(game_state, boss, now):
         shots.append(game_objects.Projectile(x + math.cos(a) * g * 0.8, y + math.sin(a) * g * 0.8, (math.cos(a), math.sin(a)),
                                              config.ENEMY_PROJECTILE_SPEED * 0.8 * level.get("enemy_shot_speed"), color, config.ENEMY_PROJECTILE_SIZE + 1, boss))
     game_state.setdefault('enemy_projectiles', []).extend(shots)
-    utils.play_sound("boss_fan")
+    boss.play_sound("boss_fan")
     utils.trigger_shake(3, 180)
 
 
@@ -241,7 +243,7 @@ def _drop_mines(game_state, boss, now):
         taken.add(pos)
         dropped += 1
     if dropped:
-        utils.play_sound("mine_wave")
+        boss.play_sound("mine_wave")
         cx, cy = boss.get_head_center_px()
         if cx is not None:
             fx.add_popup(cx, cy - 20, "MINES !", (255, 90, 90), now=now)
@@ -271,7 +273,7 @@ def _start_charge(game_state, boss, now):
     boss.attack = 'charge'
     boss.attack_start = now
     boss.charging_until = now + CHARGE_WARN_MS + CHARGE_MAX_MS
-    utils.play_sound("boss_charge")
+    boss.play_sound("boss_charge")
     return True
 
 
@@ -364,6 +366,7 @@ def update_boss(game_state, current_time):
         fx.trigger_flash((255, 255, 255), 300, 140, now=current_time)
         fx.add_popup(hx, hy, "BOSS VAINCU !", (255, 220, 80), now=current_time, big=True)
         utils.play_sound("boss_defeat")
+        announcer.say("you_win", game_state)
     except Exception:
         pass
     for rewarded in (player, game_state.get('player2_snake') if game_state.get('coop') else None):
@@ -406,7 +409,8 @@ def _draw_telegraphs(surface, boss, now):
         pygame.draw.circle(surface, (255, 240, 180), (int(hx), int(hy)), int(g * (0.6 + 0.9 * t)), 2)
     if boss.attack == 'charge' and boss.charge_dir and now < boss.attack_start + CHARGE_WARN_MS:
         if (now // 110) % 2 == 0:
-            layer = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+            # Cases translucides dessinées directement : un calque transparent plein écran coûtait
+            # ~9 ms par image (1908 x 1080), au moment précis où le joueur doit esquiver la charge
             x, y = head
             for k in range(1, 18):
                 x = (x + boss.charge_dir[0]) % config.GRID_WIDTH
@@ -414,8 +418,7 @@ def _draw_telegraphs(surface, boss, now):
                 if (x, y) in boss.current_walls:
                     break
                 alpha = max(30, 150 - k * 7)
-                pygame.draw.rect(layer, (255, 40, 60, alpha), pygame.Rect(x * g + g // 4, y * g + g // 4, g // 2, g // 2))
-            surface.blit(layer, (0, 0))
+                ui_common.blend_rect(surface, pygame.Rect(x * g + g // 4, y * g + g // 4, g // 2, g // 2), (255, 40, 60, alpha))
         fx.draw_glow(surface, (hx, hy), (255, 40, 60), g * 2.2, 8)
     if boss.stunned_until and now < boss.stunned_until and (now // 150) % 2 == 0:
         for k in range(3):
@@ -473,16 +476,17 @@ def draw_boss_ui(surface, game_state, now, font_default, font_medium):
             remaining = until - now
             alpha = 255 if remaining > 500 else int(255 * remaining / 500)
             if (now // 180) % 2 == 0 or remaining < 1200:
-                txt = font_medium.render(text, True, (255, 230, 120))
-                glow = font_medium.render(text, True, BOSS_COLOR)
-                band = pygame.Surface((sw, txt.get_height() + 30), pygame.SRCALPHA)
-                band.fill((20, 0, 40, int(170 * alpha / 255)))
+                key = (text, id(font_medium))
+                if _banner_cache.get('key') != key:  # Textes rendus une fois par annonce
+                    _banner_cache['key'] = key
+                    _banner_cache['txt'] = font_medium.render(text, True, (255, 230, 120))
+                    _banner_cache['glow'] = font_medium.render(text, True, BOSS_COLOR)
+                txt, glow = _banner_cache['txt'], _banner_cache['glow']
                 y = int(sh * 0.30)
-                surface.blit(band, (0, y - 15))
+                ui_common.blend_rect(surface, (0, y - 15, sw, txt.get_height() + 30), (20, 0, 40, int(170 * alpha / 255)))
+                glow.set_alpha(alpha)
                 for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2)):
-                    g = glow.copy()
-                    g.set_alpha(alpha)
-                    surface.blit(g, g.get_rect(center=(sw // 2 + dx, y + txt.get_height() // 2 + dy)))
+                    surface.blit(glow, glow.get_rect(center=(sw // 2 + dx, y + txt.get_height() // 2 + dy)))
                 txt.set_alpha(alpha)
                 surface.blit(txt, txt.get_rect(center=(sw // 2, y + txt.get_height() // 2)))
         except Exception:

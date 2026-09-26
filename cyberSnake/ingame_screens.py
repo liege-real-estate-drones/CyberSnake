@@ -324,6 +324,15 @@ def run_pause(events, dt, screen, game_state):
     return config.PAUSED  # Reste en pause sauf si une action change l'état
 
 
+def _pvp_flawless(game_state, winner_num):
+    """Victoire PvP sans faute : match gagné sans perdre une manche, partie gagnée sans jamais mourir."""
+    match = pvp_rounds.match(game_state)
+    if match and match.get('winner'):
+        return match['wins'][2 - winner_num] == 0
+    winner = game_state.get('player_snake' if winner_num == 1 else 'player2_snake')
+    return winner is not None and getattr(winner, 'deaths', 1) == 0
+
+
 def run_game_over(events, dt, screen, game_state):
     """Gère l'écran de fin de partie avec un menu détaillé des résultats."""
     p1_id, p2_id = get_joystick_ids(game_state)
@@ -415,30 +424,32 @@ def run_game_over(events, dt, screen, game_state):
         except Exception as e: logging.error(f"Erreur lors de la sauvegarde du high score: {e}")
 
     winner_text = "Fin de partie"
+    winner_num = 0  # PvP : 1 ou 2 (vainqueur), 0 si égalité
     PvpCondition = getattr(config, 'PvpCondition', None)
     if current_game_mode == config.MODE_PVP and PvpCondition:
-        if pvp_reason == 'timer':
-            if p1_score > p2_score: winner_text = f"{p1_name} Gagne (Score)!"
-            elif p2_score > p1_score: winner_text = f"{p2_name} Gagne (Score)!"
-            else: winner_text = "Égalité au Score!"
+        if pvp_reason in ('timer', 'score'):
+            winner_num = 1 if p1_score > p2_score else 2 if p2_score > p1_score else 0
+            reason_label = "Score"
         elif pvp_reason == 'kills':
             p1_reached_target = player_snake and player_snake.kills >= pvp_kills_target
             p2_reached_target = player2_snake and player2_snake.kills >= pvp_kills_target
-            if p1_reached_target and not p2_reached_target: winner_text = f"{p1_name} Gagne (Kills)!"
-            elif p2_reached_target and not p1_reached_target: winner_text = f"{p2_name} Gagne (Kills)!"
+            reason_label = "Kills"
+            if p1_reached_target and not p2_reached_target: winner_num = 1
+            elif p2_reached_target and not p1_reached_target: winner_num = 2
             elif p1_reached_target and p2_reached_target:
-                 # Si les deux atteignent la cible en même temps, le score départage
-                 if p1_score >= p2_score: winner_text = f"{p1_name} Gagne (Score)!"
-                 else: winner_text = f"{p2_name} Gagne (Score)!"
-            else: winner_text = "Objectif Kills Atteint?" # Devrait pas arriver si la logique est bonne
-        elif pvp_reason == 'score':
-            if p1_score > p2_score: winner_text = f"{p1_name} Gagne (Score)!"
-            elif p2_score > p1_score: winner_text = f"{p2_name} Gagne (Score)!"
-            else: winner_text = "Égalité au Score!"
+                # Si les deux atteignent la cible en même temps, le score départage
+                winner_num, reason_label = (1 if p1_score >= p2_score else 2), "Score"
+        if winner_num:
+            winner_text = f"{(p1_name, p2_name)[winner_num - 1]} Gagne ({reason_label})!"
+        elif pvp_reason in ('timer', 'score'):
+            winner_text = "Égalité au Score!"
+        elif pvp_reason == 'kills':
+            winner_text = "Objectif Kills Atteint?"  # Devrait pas arriver si la logique est bonne
         match = pvp_rounds.match(game_state)
         if match and match.get('winner'):
             w1, w2 = match['wins']
-            winner_text = f"{(p1_name, p2_name)[match['winner'] - 1]} Gagne le match {max(w1, w2)}-{min(w1, w2)} !"
+            winner_num = match['winner']
+            winner_text = f"{(p1_name, p2_name)[winner_num - 1]} Gagne le match {max(w1, w2)}-{min(w1, w2)} !"
 
     # --- Progression (couleurs à débloquer) + Défi du jour : enregistré une seule fois ---
     if not game_state.get('progress_recorded'):
@@ -469,9 +480,12 @@ def run_game_over(events, dt, screen, game_state):
             utils.play_sound("unlock")
         else:
             utils.play_sound("game_over_sfx")
-        # Voix de l'annonceur : vainqueur en PvP, record battu, sinon « Game over »
-        if current_game_mode == config.MODE_PVP:
-            announcer.say("tie" if "galit" in str(winner_text) else "winner", game_state)
+        # Voix de l'annonceur : vainqueur en PvP (« Player 1... Winner ! »), record battu, sinon « Game over »
+        if current_game_mode == config.MODE_PVP and winner_num:
+            flawless = _pvp_flawless(game_state, winner_num)
+            announcer.say_sequence([f"player_{winner_num}", "flawless_victory" if flawless else "winner"], game_state)
+        elif current_game_mode == config.MODE_PVP:
+            announcer.say("tie" if "galit" in str(winner_text) else "game_over", game_state)
         elif is_high_score and not is_daily:
             announcer.say("winner", game_state)
         else:

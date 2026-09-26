@@ -626,12 +626,13 @@ MINE_WAVE_COUNT = 5             # Nombre de mines par vague mobile
 # --- Constantes Noms Fichiers Assets & High Score ---
 SOUND_PATHS = {
     "eat": "eat.mp3", "shoot_p1": "shoot_player.mp3", "shoot_p2": "shoot_player.mp3", "shoot_enemy": "shoot_enemy.mp3",
-    "hit_p1": "hit_player.mp3", "hit_p2": "hit_player.mp3", "hit_enemy": "hit_enemy.mp3", "die_p1": "die_player.mp3",
+    # Armure perdue (joueurs) : plaque de métal, Kenney.nl (hit_player.mp3 était 14 dB sous les autres sons)
+    "hit_p1": "sons/armure_1.ogg", "hit_p2": "sons/armure_1.ogg", "hit_enemy": "hit_enemy.mp3", "die_p1": "die_player.mp3",
     "die_p2": "die_player.mp3", "die_enemy": "die_enemy.mp3", "explode_mine": "explode_mine.mp3",
     "powerup_pickup": "powerup_pickup.mp3",
     "powerup_spawn": "powerup_spawn.mp3", "shield_absorb": "shield_absorb.mp3", "effect_poison": "effect_poison.mp3",
     "effect_speed": "effect_speed.mp3", "effect_ghost": "effect_ghost.mp3", "effect_freeze": "effect_freeze.mp3",
-    "combo_increase": "powerup_pickup.mp3", "combo_break": "combo_end.wav", "objective_complete": "objective_complete.wav",
+    "combo_break": "combo_end.wav", "objective_complete": "objective_complete.wav",
     "name_input_char": "menu_move.wav", "name_input_confirm": "menu_select.wav",
     "eat_special": "eat_special.mp3", "low_armor_warning": "low_armor.mp3",
     "skill_activate": "sons/bouclier.ogg",  # Kenney.nl (CC0), voir tools/import_kenney_sounds.py
@@ -639,14 +640,15 @@ SOUND_PATHS = {
     "boss_charge": "boss_charge.wav", "boss_phase": "boss_phase.wav", "boss_fan": "boss_fan.wav",
     "round_win": "round_win.wav",
     # Voix de l'annonceur (announcer.py ; Kenney.nl, licence CC0)
-    **{f"voice_{k}": f"sons/voix_{k}.ogg" for k in ("3", "2", "1", "fight", "begin", "game_over", "winner", "you_win", "tie",
-                                                     "prepare_yourself", "final_round", "round_1", "round_2", "round_3",
-                                                     "round_4", "combo", "multi_kill", "time", "player_1", "player_2")},
+    **{f"voice_{k}": f"sons/voix_{k}.ogg" for k in ("5", "4", "3", "2", "1", "fight", "begin", "game_over", "winner", "you_win",
+                                                     "tie", "prepare_yourself", "final_round", "round_1", "round_2", "round_3",
+                                                     "round_4", "combo", "multi_kill", "time", "player_1", "player_2",
+                                                     "flawless_victory")},
     "frenzy_start": "frenzy_start.wav", "frenzy_end": "frenzy_end.wav", "tail_cut": "sons/queue_coupee.ogg",
     # Sons synthétiques (tools/generate_sounds.py)
     "boss_spawn": "boss_spawn.wav", "boss_defeat": "boss_defeat.wav", "kill": "sons/kill.ogg",
     "unlock": "unlock.wav", "game_over_sfx": "game_over.wav", "new_record": "new_record.wav",
-    "hit_wall": "hit_enemy.mp3",
+    "hit_wall": "sons/impact_mur_1.ogg",  # Tir dans un mur : petit impact métallique (Kenney.nl)
     "menu_move": "menu_move.wav", "menu_select": "menu_select.wav", "menu_back": "menu_back.wav",
     "denied": "denied.wav", "emp_blast": "sons/emp.ogg", "mine_wave": "mine_wave.wav",
     "wave_start": "wave_start.wav", "portal": "portal.wav", "armor_regen_tick": "armor_regen.wav",
@@ -654,6 +656,15 @@ SOUND_PATHS = {
     "combo_1": "combo_1.wav", "combo_2": "combo_2.wav", "combo_3": "combo_3.wav",
     "combo_4": "combo_4.wav", "combo_5": "combo_5.wav", "combo_6": "combo_6.wav",
     "nest_hit": "hit_enemy.mp3", "nest_destroyed": "die_enemy.mp3",
+}
+# Autres prises d'un même son (utils.play_sound en tire une au hasard) : un bruit répété sans cesse
+# (impacts, armure, queue coupée) ne sonne plus comme une mitraillette.
+_ARMOR_VARIANTS = tuple(f"sons/armure_{i}.ogg" for i in range(2, 6))
+SOUND_VARIANTS = {
+    "hit_p1": _ARMOR_VARIANTS,
+    "hit_p2": _ARMOR_VARIANTS,
+    "hit_wall": tuple(f"sons/impact_mur_{i}.ogg" for i in range(2, 6)),
+    "tail_cut": tuple(f"sons/queue_coupee_{i}.ogg" for i in range(2, 6)),
 }
 MUSIC_TRACKS = {
     1: "music_track_1.mp3", 2: "music_track_2.mp3", 3: "music_track_3.mp3", 4: "music_track_4.mp3",
@@ -742,10 +753,13 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.11.0'
+VERSION = '2.12.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Voix d'annonceur : « 3, 2, 1, Fight ! », « Game over », « Winner »...",
-    "Nouveaux sons : bouclier, EMP, élimination, queue coupée",
-    "Options > Voix de l'annonceur : Oui / Non",
+    "Sons : plus rien de coupé à la mort, à l'arrivée du boss ni à la fin d'un chrono",
+    "Son stéréo : tirs et explosions à gauche ou à droite (Options > Son stéréo)",
+    "Volumes rééquilibrés : l'armure perdue s'entend, les tirs dans les murs sont discrets",
+    "Annonceur : « Multi kill ! », « Player 1... Winner ! », « 5, 4, 3, 2, 1 », boss vaincu",
+    "Survie : l'ennemi de chaque nouvelle vague apparaît toujours",
+    "Hall of Fame bien plus fluide sur la borne",
 ]

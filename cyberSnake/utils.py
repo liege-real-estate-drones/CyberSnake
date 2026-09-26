@@ -64,8 +64,9 @@ DEFAULT_GAME_OPTIONS = {
     "visual_fx": "standard",
     "ui_scale": "normal",
     "hud_mode": "normal",
-    "level": "normal",
-    "announcer": True,  # announcer.py : voix de l'annonceur (Options)  # level.py : facile, normal, difficile (menu principal)
+    "level": "normal",  # level.py : facile, normal, difficile (menu principal)
+    "announcer": True,  # announcer.py : voix de l'annonceur (Options)
+    "stereo": True,  # Sons placés à gauche / à droite selon l'endroit de l'écran (Options > Son stéréo)
     "menu_background": "cover",  # backgrounds.py : cover, cover_anim, perso:<image de mes_fonds/>, random
 }
 
@@ -332,7 +333,7 @@ def cover_scale(img, size):
 
 
 def load_assets(base_path):
-    global sounds, sound_volume
+    global sounds, sound_volume, sound_variants
     loaded_sounds = {}
     for name, path in config.SOUND_PATHS.items():
         full_path = os.path.join(base_path, path)
@@ -347,7 +348,20 @@ def load_assets(base_path):
         except Exception:
             loaded_sounds[name] = None
     sounds = loaded_sounds
+    # Variantes d'un même son (config.SOUND_VARIANTS) : tirées au hasard à chaque lecture
+    variants = {}
+    for name, extra in getattr(config, "SOUND_VARIANTS", {}).items():
+        group = [loaded_sounds[name]] if loaded_sounds.get(name) else []
+        for path in extra:
+            try:
+                group.append(pygame.mixer.Sound(os.path.join(base_path, path)))
+            except Exception:
+                logging.warning(f"Attention: variante de son illisible: {path}")
+        if len(group) > 1:
+            variants[name] = group
+    sound_variants = variants
     _apply_sound_volume_internal()
+    setup_channels()
 
     # Fond des menus choisi dans les Options (backgrounds.py : cadrage adapté à l'écran)
     import backgrounds
@@ -401,52 +415,158 @@ def load_assets(base_path):
 
     return menu_bg
 
+# Appels de pygame.mixer.music qui gardent le verrou Python en attendant le verrou audio
+# (sources de pygame 2.0 à 2.6 et pygame-ce) : si un effet se termine à ce moment-là, le jeu
+# se fige pour de bon. load, play, set_volume, fadeout, stop et get_busy relâchent ce verrou.
+_MUSIC_CALLS_HOLDING_GIL = ("pause", "unpause")
+
+
 def music_call(action, *args, **kwargs):
     """Appel sûr à pygame.mixer.music (pause, play, stop, set_volume...).
 
-    Contourne un blocage de pygame : si un effet sonore se termine pendant un appel
-    à la musique, le jeu peut se figer définitivement (verrou audio + verrou Python).
-    On coupe d'abord les effets en cours (pygame.mixer.stop libère ce verrou),
-    ce qui rend l'appel sans danger.
+    Contourne un blocage de pygame : pause() et unpause() de la musique peuvent figer le jeu
+    si un effet sonore se termine pendant l'appel (verrou audio + verrou Python). Pour ces
+    deux-là seulement, on coupe d'abord les effets (pygame.mixer.stop libère ce verrou).
+    Les autres appels ne coupent plus rien : couper tous les sons à chaque changement de
+    musique étouffait le son de mort, « Prepare yourself ! » à l'arrivée du boss, la fin du boss
+    et « Time ! » en Contre-la-montre (test de charge : 60 000 appels sans blocage).
     """
-    try:
-        if not pygame.mixer.get_init():
-            return None
-        pygame.mixer.stop()
-    except Exception:
-        pass
+    if action in _MUSIC_CALLS_HOLDING_GIL:
+        try:
+            if not pygame.mixer.get_init():
+                return None
+            pygame.mixer.stop()
+        except Exception:
+            pass
+    elif not pygame.mixer.get_init():
+        return None
     return getattr(pygame.mixer.music, action)(*args, **kwargs)
 
 
-def play_sound(name):
-    """Joue un effet sonore s'il existe et est chargé."""
-    # Accède au dict global 'sounds'
+# --- Effets sonores : canaux, variantes, anti-empilement, stéréo ---
+SOUND_CHANNELS = 16    # Le canal 0 est réservé aux voix de l'annonceur (announcer.py)
+MIN_REPEAT_MS = 45     # Le même son relancé plus vite est ignoré : deux fois le même son s'additionnent
+MAX_SAME_SOUND = 3     # Au-delà, le même son reprend le canal de sa plus ancienne lecture (repas en frénésie)
+PAN_DEPTH = 0.55       # Stéréo : un son au bord de l'écran garde 45 % de son volume de l'autre côté
+sound_variants = {}    # nom -> [Sound, ...] (config.SOUND_VARIANTS)
+stereo = True          # Options > Son stéréo (game_options.json : "stereo")
+_last_play = {}
+_last_variant = {}
+_panned_channels = set()
+_channel_sound = {}    # Canal -> (instant, nom) du dernier son lancé dessus
+_variant_rng = random.Random()  # À part : ne dérange pas le hasard du jeu (Défi du jour)
+
+
+def setup_channels():
+    """16 canaux audio, le premier réservé aux voix de l'annonceur."""
+    try:
+        if pygame.mixer.get_init():
+            pygame.mixer.set_num_channels(max(SOUND_CHANNELS, pygame.mixer.get_num_channels()))
+            pygame.mixer.set_reserved(1)
+    except pygame.error:
+        pass
+
+
+def set_stereo(enabled):
+    global stereo
+    stereo = bool(enabled)
+
+
+def stereo_balance(x):
+    """(gauche, droite) d'un son placé à x pixels de l'écran ; (1, 1) au centre ou en mono."""
+    if x is None or not stereo:
+        return 1.0, 1.0
+    try:
+        p = max(-1.0, min(1.0, float(x) / max(1, config.SCREEN_WIDTH) * 2.0 - 1.0))
+    except (TypeError, ValueError):
+        return 1.0, 1.0
+    return 1.0 - PAN_DEPTH * max(0.0, p), 1.0 - PAN_DEPTH * max(0.0, -p)
+
+
+def _pick_channel(name):
+    """Canal pour un effet, hors canal des voix (find_channel de pygame ne respecte pas la réserve).
+
+    Un canal libre, sauf si ce son joue déjà MAX_SAME_SOUND fois (on reprend sa plus ancienne lecture).
+    Tous occupés : on reprend le canal du son lancé le plus tôt, presque fini (avant, le nouveau son
+    était perdu, même un son de mort)."""
+    free, same, oldest = None, [], None
+    try:
+        for i in range(1, pygame.mixer.get_num_channels()):
+            ch = pygame.mixer.Channel(i)
+            if not ch.get_busy():
+                if free is None:
+                    free = (i, ch)
+                continue
+            started, playing = _channel_sound.get(i, (0, None))
+            if playing == name:
+                same.append((started, i, ch))
+            if oldest is None or started < oldest[0]:
+                oldest = (started, i, ch)
+    except pygame.error:
+        return None, None
+    if len(same) >= MAX_SAME_SOUND:
+        return min(same, key=lambda item: item[0])[1:]
+    if free is not None:
+        return free
+    return oldest[1:] if oldest is not None else (None, None)
+
+
+def play_sound(name, x=None):
+    """Joue un effet sonore s'il est chargé ; x : sa position à l'écran (pixels) pour la stéréo.
+
+    Retourne le canal utilisé, ou None si le son n'a pas été joué."""
     sound = sounds.get(name)
-    if sound:
-        try:
-            sound.play()
-        except pygame.error:
-            # print(f"Error playing sound {name}: {e}") # Debug
-            pass # Ignore silencieusement
+    if not sound:
+        return None
+    now = pygame.time.get_ticks()
+    last = _last_play.get(name)
+    if last is not None and 0 <= now - last < MIN_REPEAT_MS:
+        return None  # Salve du multi-tir, explosions en chaîne : un seul son
+    variants = sound_variants.get(name)
+    if variants:
+        sound = _variant_rng.choice([v for v in variants if v is not _last_variant.get(name)] or variants)
+        _last_variant[name] = sound
+    index, ch = _pick_channel(name)
+    if ch is None:
+        return None
+    try:
+        left, right = stereo_balance(x)
+        if left < 1.0 or right < 1.0:
+            ch.set_volume(left, right)
+            _panned_channels.add(index)
+        elif index in _panned_channels:
+            ch.set_volume(1.0)  # Retire le panoramique laissé par le son précédent de ce canal
+            _panned_channels.discard(index)
+        ch.play(sound)
+    except pygame.error:
+        return None
+    _last_play[name] = now
+    _channel_sound[index] = (now, name)
+    return ch
+
 
 def _apply_sound_volume_internal():
     global sound_volume, sounds
     base_volumes = {name: 0.9 for name in sounds}
     base_volumes.update({
-        "eat":0.85, "eat_special":0.9, "shoot_p1":0.6, "shoot_p2":0.6,
-        "hit_p1":0.9, "hit_p2":0.9, "hit_enemy":0.8, "explode_mine":1.0,
+        "eat":0.85, "eat_special":0.9, "shoot_p1":0.5, "shoot_p2":0.5,
+        "hit_p1":1.0, "hit_p2":1.0, "hit_enemy":0.6, "explode_mine":1.0,
         "powerup_pickup":0.9, "dash_sound":0.8, "skill_ready":0.45,
+        # Impacts fréquents et secondaires plus bas : le tir dans un mur était le son le plus fort du jeu
+        "hit_wall":0.4, "nest_hit":0.5,
         # Sons d'interface plus discrets que les sons de jeu
         "menu_move":0.45, "menu_select":0.7, "menu_back":0.65, "denied":0.6, "countdown":0.7,
         "combo_1":0.5, "combo_2":0.5, "combo_3":0.5, "combo_4":0.55, "combo_5":0.55, "combo_6":0.6,
     })
+    base_volumes.update({name: 1.0 for name in sounds if name.startswith("voice_")})  # Voix au-dessus des effets
     for name, sound in sounds.items():
         if sound:
-            try:
-                vol = min(1.0, base_volumes.get(name,0.9)*sound_volume)
-                sound.set_volume(vol)
-            except Exception:
-                pass
+            vol = min(1.0, base_volumes.get(name, 0.9) * sound_volume)
+            for s in sound_variants.get(name) or [sound]:
+                try:
+                    s.set_volume(vol)
+                except Exception:
+                    pass
 
 def update_sound_volume(change):
     """Met à jour le volume global des effets sonores et l'applique."""

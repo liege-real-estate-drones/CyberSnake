@@ -62,6 +62,7 @@ try:
     import settings_screens
     import panel
     import pvp_rounds
+    import announcer
     logging.info("Modules personnalisés importés avec succès.")
 except ImportError as e:
     logging.critical(f"FATAL: Erreur lors de l'import des modules du jeu: {e}", exc_info=True)
@@ -302,6 +303,7 @@ def main():
         try:
             utils.set_music_volume(opts.get("music_volume", utils.music_volume))
             utils.set_sound_volume(opts.get("sound_volume", utils.sound_volume))
+            utils.set_stereo(opts.get("stereo", True))
             track = int(opts.get("music_track", 0) or 0)
             if track:
                 utils.select_and_load_music(track, base_path_assets, persist=False)
@@ -695,6 +697,7 @@ def main():
         if running:
             try:
                 music.update(game_state)  # Piste selon l'écran (menus / jeu / boss), fondu en pause
+                announcer.update()  # Voix suivante d'une annonce en plusieurs voix (« Player 1... Winner ! »)
             except Exception:
                 logging.warning("Musique : mise à jour impossible", exc_info=True)
             fx.apply_crt(screen)  # Effet écran d'arcade (option)

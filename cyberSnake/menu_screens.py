@@ -466,6 +466,7 @@ def run_options(events, dt, screen, game_state):
          or 'pending_screen_shake' not in game_state
          or 'pending_show_fps' not in game_state
          or 'pending_announcer' not in game_state
+         or 'pending_stereo' not in game_state
          or 'pending_visual_fx' not in game_state
          or 'pending_hud_mode' not in game_state
          or 'pending_ui_scale' not in game_state
@@ -501,6 +502,7 @@ def run_options(events, dt, screen, game_state):
         pending_screen_shake = bool(opts.get("screen_shake", getattr(config, "SCREEN_SHAKE_ENABLED", True)))
         pending_show_fps = bool(opts.get("show_fps", getattr(config, "SHOW_FPS", False)))
         pending_announcer = bool(opts.get("announcer", True))
+        pending_stereo = bool(opts.get("stereo", True))
         pending_visual_fx = str(opts.get("visual_fx", getattr(config, "VISUAL_FX", "standard"))).strip().lower()
         pending_hud_mode = str(opts.get("hud_mode", getattr(config, "HUD_MODE", "normal"))).strip().lower()
         if pending_hud_mode not in ("normal", "minimal"):
@@ -532,6 +534,7 @@ def run_options(events, dt, screen, game_state):
         game_state['pending_screen_shake'] = pending_screen_shake
         game_state['pending_show_fps'] = pending_show_fps
         game_state['pending_announcer'] = pending_announcer
+        game_state['pending_stereo'] = pending_stereo
         game_state['pending_visual_fx'] = pending_visual_fx
         game_state['pending_hud_mode'] = pending_hud_mode
         game_state['pending_ui_scale'] = pending_ui_scale
@@ -565,6 +568,7 @@ def run_options(events, dt, screen, game_state):
     pending_screen_shake = bool(game_state.get('pending_screen_shake', getattr(config, "SCREEN_SHAKE_ENABLED", True)))
     pending_show_fps = bool(game_state.get('pending_show_fps', getattr(config, "SHOW_FPS", False)))
     pending_announcer = bool(game_state.get('pending_announcer', True))
+    pending_stereo = bool(game_state.get('pending_stereo', True))
     pending_visual_fx = str(game_state.get('pending_visual_fx', getattr(config, "VISUAL_FX", "standard"))).strip().lower()
     if pending_visual_fx not in config.VISUAL_FX_PRESETS:
         pending_visual_fx = "standard"
@@ -773,6 +777,7 @@ def run_options(events, dt, screen, game_state):
         ("Volume musique", music_volume_display),
         ("Volume effets", sound_volume_display),
         ("Voix de l'annonceur", "Oui" if pending_announcer else "Non"),
+        ("Son stéréo", "Oui" if pending_stereo else "Non"),
         ("Contrôles", ""),
         ("Boutons de la borne", ""),
         ("Fond des menus", ""),
@@ -800,12 +805,13 @@ def run_options(events, dt, screen, game_state):
     IDX_MUSIC_VOL = 16
     IDX_SOUND_VOL = 17
     IDX_ANNOUNCER = 18
-    IDX_CONTROLS = 19
-    IDX_BUTTONS = 20
-    IDX_BACKGROUND = 21
-    IDX_RESET = 22
-    IDX_APPLY = 23
-    IDX_BACK = 24
+    IDX_STEREO = 19
+    IDX_CONTROLS = 20
+    IDX_BUTTONS = 21
+    IDX_BACKGROUND = 22
+    IDX_RESET = 23
+    IDX_APPLY = 24
+    IDX_BACK = 25
 
     def cycle_visual_fx(delta):
         nonlocal pending_visual_fx
@@ -985,6 +991,7 @@ def run_options(events, dt, screen, game_state):
         opts["screen_shake"] = bool(pending_screen_shake)
         opts["show_fps"] = bool(pending_show_fps)
         opts["announcer"] = bool(pending_announcer)
+        opts["stereo"] = bool(pending_stereo)
         opts["visual_fx"] = str(pending_visual_fx)
         opts["hud_mode"] = str(pending_hud_mode)
         opts["ui_scale"] = str(pending_ui_scale)
@@ -1045,6 +1052,7 @@ def run_options(events, dt, screen, game_state):
         try:
             utils.set_music_volume(pending_music_volume)
             utils.set_sound_volume(pending_sound_volume)
+            utils.set_stereo(pending_stereo)
         except Exception:
             pass
         try:
@@ -1101,7 +1109,7 @@ def run_options(events, dt, screen, game_state):
         nonlocal pending_show_grid, pending_grid_size
         nonlocal pending_snake_style_p1, pending_snake_style_p2, pending_snake_color_p1, pending_snake_color_p2
         nonlocal pending_wall_style, pending_wall_style_random_choice, pending_classic_arena, pending_game_speed, pending_ai_difficulty, pending_particle_density
-        nonlocal pending_screen_shake, pending_show_fps, pending_announcer, pending_visual_fx, pending_hud_mode, pending_ui_scale, pending_music_volume, pending_sound_volume
+        nonlocal pending_screen_shake, pending_show_fps, pending_announcer, pending_stereo, pending_visual_fx, pending_hud_mode, pending_ui_scale, pending_music_volume, pending_sound_volume
 
         defaults = getattr(utils, "DEFAULT_GAME_OPTIONS", {}) if hasattr(utils, "DEFAULT_GAME_OPTIONS") else {}
 
@@ -1142,6 +1150,7 @@ def run_options(events, dt, screen, game_state):
         pending_screen_shake = bool(defaults.get("screen_shake", True))
         pending_show_fps = bool(defaults.get("show_fps", False))
         pending_announcer = bool(defaults.get("announcer", True))
+        pending_stereo = bool(defaults.get("stereo", True))
         pending_visual_fx = str(defaults.get("visual_fx", "standard"))
         pending_hud_mode = str(defaults.get("hud_mode", "normal")).strip().lower()
         if pending_hud_mode not in ("normal", "minimal"):
@@ -1163,7 +1172,7 @@ def run_options(events, dt, screen, game_state):
         pending_sound_volume = max(0.0, min(1.0, pending_sound_volume))
 
     def adjust_current(delta):
-        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_announcer, pending_visual_fx, pending_ai_difficulty, pending_wall_style
+        nonlocal pending_show_grid, pending_screen_shake, pending_show_fps, pending_announcer, pending_stereo, pending_visual_fx, pending_ai_difficulty, pending_wall_style
 
         if selection_index == IDX_SHOW_GRID:
             pending_show_grid = not pending_show_grid
@@ -1197,6 +1206,8 @@ def run_options(events, dt, screen, game_state):
             pending_show_fps = not pending_show_fps
         elif selection_index == IDX_ANNOUNCER:
             pending_announcer = not pending_announcer
+        elif selection_index == IDX_STEREO:
+            pending_stereo = not pending_stereo
         elif selection_index == IDX_VISUAL_FX:
             cycle_visual_fx(delta)
         elif selection_index == IDX_MUSIC_VOL:
@@ -1335,6 +1346,7 @@ def run_options(events, dt, screen, game_state):
     game_state['pending_screen_shake'] = pending_screen_shake
     game_state['pending_show_fps'] = pending_show_fps
     game_state['pending_announcer'] = pending_announcer
+    game_state['pending_stereo'] = pending_stereo
     game_state['pending_visual_fx'] = pending_visual_fx
     game_state['pending_hud_mode'] = pending_hud_mode
     game_state['pending_ui_scale'] = pending_ui_scale
@@ -1416,6 +1428,7 @@ def run_options(events, dt, screen, game_state):
             ("Volume musique", music_volume_display),
             ("Volume effets", sound_volume_display),
             ("Voix de l'annonceur", "Oui" if pending_announcer else "Non"),
+            ("Son stéréo", "Oui" if pending_stereo else "Non"),
             ("Contrôles", ""),
             ("Boutons de la borne", ""),
             ("Fond des menus", ""),
@@ -1857,6 +1870,7 @@ def run_options(events, dt, screen, game_state):
         game_state.pop('pending_screen_shake', None)
         game_state.pop('pending_show_fps', None)
         game_state.pop('pending_announcer', None)
+        game_state.pop('pending_stereo', None)
         game_state.pop('pending_visual_fx', None)
         game_state.pop('pending_hud_mode', None)
         game_state.pop('pending_ui_scale', None)

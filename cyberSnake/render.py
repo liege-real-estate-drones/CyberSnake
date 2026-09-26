@@ -78,7 +78,7 @@ def _draw_minimal_hud(surface, game_state, current_time, font_small, font_defaul
                 pvp_target_time = _safe_int(game_state.get('pvp_target_time', 0), 0)
                 elapsed_ms = int(current_time) - int(pvp_start_time) if pvp_start_time > 0 else 0
                 left_ms = max(0, int(pvp_target_time) * 1000 - elapsed_ms)
-                status = f"Temps: {_format_mmss(left_ms // 1000)}"
+                status = f"Temps: {_format_mmss((left_ms + 999) // 1000)}"  # Même arrondi que les voix « 5, 4, 3... »
             else:
                 pvp_target_kills = _safe_int(game_state.get('pvp_target_kills', getattr(config, 'PVP_DEFAULT_KILLS', 0)), 0)
                 status = f"Objectif: {pvp_target_kills} kills"
@@ -462,13 +462,15 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
             match = pvp_rounds.match(game_state)
             if match:
                 parts.append(f"Manche {match['round']}  ({match['wins'][0]} - {match['wins'][1]})")
+            bottom_color = config.COLOR_TIMER_TEXT
             if PvpCondition is not None and pvp_condition_type in (PvpCondition.TIMER, PvpCondition.MIXED):
                 elapsed_ms = current_time - pvp_start_time if pvp_start_time > 0 else 0
                 time_left_ms = max(0, (pvp_target_time * 1000) - elapsed_ms)
-                total_seconds_left = time_left_ms // 1000
+                total_seconds_left = (time_left_ms + 999) // 1000  # Même arrondi que les voix « 5, 4, 3... »
                 parts.append(f"Temps: {total_seconds_left // 60:02d}:{total_seconds_left % 60:02d}")
+                if total_seconds_left <= 10:
+                    bottom_color = (255, 90, 90)  # 10 dernières secondes, comme le Contre-la-montre
             bottom_text = "   |   ".join(parts)
-            bottom_color = config.COLOR_TIMER_TEXT
 
         if bottom_text:
             temp_text_surf = font_default.render(bottom_text, True, bottom_color)
