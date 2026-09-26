@@ -753,10 +753,13 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.11.0'
+VERSION = '2.12.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Voix d'annonceur : « 3, 2, 1, Fight ! », « Game over », « Winner »...",
-    "Nouveaux sons : bouclier, EMP, élimination, queue coupée",
-    "Options > Voix de l'annonceur : Oui / Non",
+    "Sons : plus rien de coupé à la mort, à l'arrivée du boss ni à la fin d'un chrono",
+    "Son stéréo : tirs et explosions à gauche ou à droite (Options > Son stéréo)",
+    "Volumes rééquilibrés : l'armure perdue s'entend, les tirs dans les murs sont discrets",
+    "Annonceur : « Multi kill ! », « Player 1... Winner ! », « 5, 4, 3, 2, 1 », boss vaincu",
+    "Survie : l'ennemi de chaque nouvelle vague apparaît toujours",
+    "Hall of Fame bien plus fluide sur la borne",
 ]
