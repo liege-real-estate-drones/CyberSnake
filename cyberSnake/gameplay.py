@@ -366,6 +366,8 @@ def _check_wave_cleared(game_state, current_time):
     start = int(game_state.get('survival_wave_start_time', 0) or 0)
     if wave <= 0 or game_state.get('wave_cleared') == wave or current_time - start < WAVE_CLEAR_MIN_MS:
         return False
+    if boss_mod.victory_showing(game_state, current_time):
+        return False
     if any(e is not None and e.alive for e in game_state.get('active_enemies', [])):
         return False
     if any(n.is_active for n in game_state.get('nests', [])):
@@ -377,13 +379,31 @@ def _check_wave_cleared(game_state, current_time):
     for snake in (game_state.get('player_snake'), game_state.get('player2_snake') if game_state.get('coop') else None):
         if snake is not None and snake.alive:
             snake.add_score(bonus)
-    next_start = current_time - config.SURVIVAL_WAVE_DURATION + WAVE_CLEAR_NEXT_MS
+    next_start = current_time - boss_mod.wave_duration(game_state) + WAVE_CLEAR_NEXT_MS
     game_state['survival_wave_start_time'] = min(start, next_start)
     game_state['boss_banner_text'] = f"VAGUE {wave} NETTOYÉE !  +{bonus}"
     game_state['boss_banner_until'] = current_time + 2200
     utils.play_sound("objective_complete")
     logging.info(f"Survie : vague {wave} nettoyée, prime {bonus}")
     return True
+
+
+def _survival_ammo_reward(game_state, shooter, amount, pos_px, now):
+    """Survie : un nid détruit ou un ennemi abattu rapporte des munitions au tireur.
+    Avant, seuls les packs tombés au hasard (et souvent avalés par l'IA) en donnaient."""
+    if game_state.get('current_game_mode') != config.MODE_SURVIVAL or shooter is None or not shooter.alive or amount <= 0:
+        return
+    shooter.add_ammo(amount)
+    if pos_px and pos_px[0] is not None:
+        fx.add_popup(pos_px[0], pos_px[1], f"+{amount} MUNITIONS", config.COLOR_AMMO_TEXT, now=now)
+
+
+def _ammo_pack_needed(game_state, foods):
+    """Survie : un joueur est presque à sec et aucun pack n'est à l'écran -> la prochaine nourriture en est un."""
+    if game_state.get('current_game_mode') != config.MODE_SURVIVAL or any(f.type == 'ammo' for f in foods):
+        return False
+    return any(s is not None and s.alive and s.ammo < config.SURVIVAL_LOW_AMMO
+               for s in (game_state.get('player_snake'), game_state.get('player2_snake')))
 
 
 def _enter_pause(game_state):
@@ -529,6 +549,8 @@ def reset_game(game_state):
     game_state['game_start_time'] = current_time_reset
     game_state.pop('game_end_time', None)
     game_state['boss'] = None
+    game_state['boss_wave'] = None
+    game_state['boss_victory_until'] = 0
     game_state['boss_banner_until'] = 0
     frenzy.reset(game_state, current_time_reset)
     game_state['progress_recorded'] = False
@@ -685,6 +707,8 @@ def reset_game(game_state):
     if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SOLO:
         start_ammo_p1 = 10
         logging.info(f"Mode {current_game_mode.name} détecté, J1 commence avec {start_ammo_p1} munitions.")
+    elif current_game_mode == config.MODE_SURVIVAL:
+        start_ammo_p1 = config.SURVIVAL_START_AMMO  # Les deux joueurs en coop
     # --- FIN NOUVEAU ---
     try:
         game_state['player_snake'] = game_objects.Snake(
@@ -1027,17 +1051,22 @@ def run_game(events, dt, screen, game_state):
         elif current_game_mode == config.MODE_SURVIVAL:
             if _check_wave_cleared(game_state, current_time):
                 survival_wave_start_time = game_state['survival_wave_start_time']
-            if survival_wave > 0 and current_time >= survival_wave_start_time + config.SURVIVAL_WAVE_DURATION:
+            if survival_wave > 0 and current_time >= survival_wave_start_time + boss_mod.wave_duration(game_state) \
+                    and not boss_mod.victory_showing(game_state, current_time):
                 survival_wave += 1; game_state['survival_wave'] = survival_wave
                 game_state['survival_wave_start_time'] = current_time
-                # Annonce de la vague (remplacée par celle du boss si un boss apparaît)
-                bonus_armor_wave = (survival_wave - 1) % config.SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL == 0
-                game_state['boss_banner_text'] = f"VAGUE {survival_wave}" + ("  —  +1 ARMURE" if bonus_armor_wave else "")
+                # Annonce de la vague (remplacée par celle du boss si un boss apparaît).
+                # +1 armure en même temps que le boss (vagues 5, 10...) : elle arrivait à la vague d'après
+                bonus_armor_wave = survival_wave % config.SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL == 0
+                suffix = "  —  +1 ARMURE" if bonus_armor_wave else ("  —  BOSS À LA VAGUE SUIVANTE" if boss_mod.boss_next(game_state) else "")
+                game_state['boss_banner_text'] = f"VAGUE {survival_wave}{suffix}"
                 game_state['boss_banner_until'] = current_time + 2000
                 utils.play_sound("wave_start")
                 try:
-                    boss_mod.maybe_spawn_boss(game_state, current_time, survival_wave)
-                    enemies.spawn_wave_enemies(game_state, current_time, survival_wave)
+                    if boss_mod.maybe_spawn_boss(game_state, current_time, survival_wave) and bonus_armor_wave:
+                        game_state['boss_banner_text'] += "  +1 ARMURE"
+                    if not boss_mod.in_boss_fight(game_state):  # La vague du boss n'amène personne d'autre
+                        enemies.spawn_wave_enemies(game_state, current_time, survival_wave)
                     active_enemies = game_state.get('active_enemies', active_enemies)
                 except Exception as e:
                     logging.error(f"Erreur apparition boss: {e}", exc_info=True)
@@ -1046,14 +1075,15 @@ def run_game(events, dt, screen, game_state):
                 game_state['current_survival_interval_factor'] = current_survival_interval_factor
                 logging.info(f"Starting Wave {survival_wave} (Interval factor: {current_survival_interval_factor:.2f})")
 
-                if survival_wave > 1 and bonus_armor_wave:
+                if bonus_armor_wave:
                     for rewarded in (player_snake, player2_snake if coop else None):  # Coop : les deux joueurs
                         if rewarded and rewarded.alive:
                             rewarded.add_armor(1)
                     utils.play_sound("objective_complete")
-                    logging.info(f"Wave {survival_wave - 1} complete! +1 Armor.")
+                    logging.info(f"Vague {survival_wave} : +1 armure.")
 
-                target_nest_count = min(survival_wave, config.MAX_NESTS_SURVIVAL)
+                reinforcements = not boss_mod.in_boss_fight(game_state)
+                target_nest_count = min(survival_wave, config.MAX_NESTS_SURVIVAL) if reinforcements else 0
                 current_active_nest_count = sum(1 for n in nests if n.is_active)
                 nests_to_spawn_this_wave = max(0, target_nest_count - current_active_nest_count)
 
@@ -1068,7 +1098,7 @@ def run_game(events, dt, screen, game_state):
                             except Exception as e: logging.error(f"    Error spawning Nest: {e}", exc_info=True)
                     if spawned_count > 0: game_state['last_nest_spawn_time'] = current_time
 
-                if survival_wave >= 2:
+                if survival_wave >= 2 and reinforcements:
                     logging.debug(f"  Spawning 1 new baby AI for Wave {survival_wave}...")
                     occupied_for_new_ai = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
                     spawn_pos_ai = _spawn_spot_away_from_players(game_state, occupied_for_new_ai, 8)
@@ -1446,7 +1476,9 @@ def run_game(events, dt, screen, game_state):
                     spawn_pos = utils.get_random_empty_position_in_bounds(current_occupied, spawn_bounds)
                 else:
                     spawn_pos = utils.get_random_empty_position(current_occupied)
-                if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
+                if spawn_pos:
+                    food_type = 'ammo' if _ammo_pack_needed(game_state, foods) else utils.choose_food_type(current_game_mode, current_objective)
+                    foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
 
             # Mines arrivées en fin de vie (niveaux Facile / Normal) : petite bouffée de fumée et disparition
             expired = [m for m in mines if getattr(m, 'expires_at', None) is not None and m.is_expired(current_time)]
@@ -1518,7 +1550,9 @@ def run_game(events, dt, screen, game_state):
 
             if current_game_mode == config.MODE_SURVIVAL:
                 mine_wave_interval_adjusted = config.MINE_WAVE_INTERVAL * spawn_factor
-                if current_time - last_mine_wave_spawn_time > mine_wave_interval_adjusted:
+                if boss_mod.in_boss_fight(game_state):
+                    game_state['last_mine_wave_spawn_time'] = current_time  # Pas de mines mobiles pendant le duel
+                elif current_time - last_mine_wave_spawn_time > mine_wave_interval_adjusted:
                     game_state['last_mine_wave_spawn_time'] = current_time
                     wave_targets = [s for s in (player_snake, player2_snake if coop else None) if s and s.alive]
                     player_pos_target = random.choice(wave_targets).get_head_position() if wave_targets else (config.GRID_WIDTH // 2, config.GRID_HEIGHT // 2)
@@ -1617,6 +1651,7 @@ def run_game(events, dt, screen, game_state):
                                 fx.add_popup(ncx, ncy - 10, f"NID DÉTRUIT +{config.NEST_DESTROY_SCORE}", (255, 190, 90), now=current_time, big=True)
                                 shooter = p.owner_snake if getattr(p.owner_snake, 'is_player', False) else player_snake
                                 if shooter and shooter.alive: shooter.add_score(config.NEST_DESTROY_SCORE); shooter.increment_combo(2)
+                                _survival_ammo_reward(game_state, shooter, config.SURVIVAL_NEST_AMMO, (ncx, ncy + 18), current_time)
                             break
                     if hit_something: continue
 
@@ -1698,6 +1733,8 @@ def run_game(events, dt, screen, game_state):
                                      else: # Baby died
                                          if shooter and shooter.alive: shooter.add_score(config.ENEMY_KILL_SCORE // 2); shooter.increment_combo(1)
                                          if shooter: shooter.kills += 1  # Statistique de fin de partie
+                                         if not getattr(baby_snake_obj, 'is_boss', False):  # Le boss a sa propre récompense
+                                             _survival_ammo_reward(game_state, shooter, config.SURVIVAL_KILL_AMMO, p.rect.center, current_time)
                                          if baby_snake_obj not in enemies_died_this_frame: enemies_died_this_frame.append(baby_snake_obj)
                                      break # Sort de la boucle des segments bébé
                         if hit_something: break # Sort de la boucle des bébés pour ce projectile
@@ -1910,7 +1947,10 @@ def run_game(events, dt, screen, game_state):
                 # --- Collecte Nourriture & Powerups (logique partagée avec le Dash) ---
                 for i in range(len(foods) - 1, -1, -1):
                     if head_pos == foods[i].position:
-                        _eat_food(game_state, snake_object, foods.pop(i), current_time)
+                        # Survie : l'IA passe sur les packs de munitions sans les prendre (ils ne lui
+                        # donnaient rien et elle en avalait un tiers à la moitié, au détriment du joueur)
+                        if not (snake_object.is_ai and foods[i].type == 'ammo' and current_game_mode == config.MODE_SURVIVAL):
+                            _eat_food(game_state, snake_object, foods.pop(i), current_time)
                         break
                 for i in range(len(powerups) - 1, -1, -1):
                     pu = powerups[i]

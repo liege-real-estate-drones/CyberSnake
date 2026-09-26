@@ -24,6 +24,12 @@ TURRET_COLOR = (255, 230, 60)
 MINER_COLOR = (120, 255, 90)
 MINE_DROP_INTERVAL_MS = 4500
 MAX_SPECIAL_ENEMIES = 6
+SPAWN_MIN_DIST = 10          # Cases entre un ennemi spécial qui apparaît et chaque joueur
+SPAWN_INVINCIBLE_MS = 1200
+# Le kamikaze va 1,4 fois plus vite que le joueur : apparu à 10 cases et invincible 1,2 s, il explosait
+# sur lui avant de pouvoir être abattu. Plus loin et vite touchable, on a le temps de se retourner et tirer.
+KAMIKAZE_SPAWN_MIN_DIST = 18
+KAMIKAZE_INVINCIBLE_MS = 400
 
 
 def _wrap_dist(a, b):
@@ -192,6 +198,8 @@ def spawn_wave_enemies(game_state, current_time, wave):
 
     players = _alive_players(game_state.get('player_snake'), game_state.get('player2_snake'))
     for cls in to_spawn[:MAX_SPECIAL_ENEMIES - len(special)]:
+        kamikaze = cls is KamikazeSnake
+        min_dist = KAMIKAZE_SPAWN_MIN_DIST if kamikaze else SPAWN_MIN_DIST
         occupied = utils.get_all_occupied_positions(
             game_state.get('player_snake'), game_state.get('player2_snake'), game_state.get('enemy_snake'),
             game_state.get('mines', []), game_state.get('foods', []), game_state.get('powerups', []),
@@ -200,14 +208,14 @@ def spawn_wave_enemies(game_state, current_time, wave):
         pos = None
         for _ in range(40):
             cand = utils.get_random_empty_position(occupied)
-            if cand and all(_wrap_dist(cand, p.get_head_position()) >= 10 for p in players):
+            if cand and all(_wrap_dist(cand, p.get_head_position()) >= min_dist for p in players):
                 pos = cand
                 break
         if not pos:
             continue
         try:
             enemy = cls(pos, game_state.get('current_game_mode'), game_state.get('current_map_walls', []))
-            enemy.invincible_timer = current_time + 1200
+            enemy.invincible_timer = current_time + (KAMIKAZE_INVINCIBLE_MS if kamikaze else SPAWN_INVINCIBLE_MS)
             enemies.append(enemy)
             cx, cy = enemy.get_head_center_px()
             if cx is not None:

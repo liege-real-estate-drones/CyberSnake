@@ -95,10 +95,10 @@ def _draw_minimal_hud(surface, game_state, current_time, font_small, font_defaul
         time_left_ms = 0
         if survival_wave > 0 and survival_wave_start_time > 0:
             try:
-                time_left_ms = max(0, (survival_wave_start_time + int(config.SURVIVAL_WAVE_DURATION)) - int(current_time))
+                time_left_ms = max(0, (survival_wave_start_time + int(boss_mod.wave_duration(game_state))) - int(current_time))
             except Exception:
                 time_left_ms = 0
-        title = f"Survie - Vague {survival_wave} ({time_left_ms/1000:.1f}s)"
+        title = f"Survie - Vague {survival_wave} ({time_left_ms/1000:.1f}s)" + (" - boss ensuite" if boss_mod.boss_next(game_state) else "")
         lines.append(f"Score: {p1_score}" + (f" | Kills: {p1_kills}" if p1_kills else ""))
         lines.append(f"Arm: {p1_armor} | Amm: {p1_ammo}")
 
@@ -436,9 +436,11 @@ def _draw_game_elements_inner(target_surface, game_state, current_time=None):
         if current_game_mode == config.MODE_SURVIVAL:
             time_left_ms = 0
             if survival_wave > 0 and survival_wave_start_time > 0:
-                time_left_ms = max(0, (survival_wave_start_time + config.SURVIVAL_WAVE_DURATION) - current_time)
+                time_left_ms = max(0, (survival_wave_start_time + boss_mod.wave_duration(game_state)) - current_time)
             time_left_sec = time_left_ms / 1000.0
             bottom_text = f"Vague: {survival_wave} ({time_left_sec:.1f}s)"  # Ajoute le timer
+            if boss_mod.boss_next(game_state):
+                bottom_text += "  —  BOSS À LA PROCHAINE VAGUE"
             bottom_color = config.COLOR_WAVE_TEXT
         elif current_game_mode != config.MODE_PVP:  
             if objective_complete_timer > 0 and current_time < objective_complete_timer:

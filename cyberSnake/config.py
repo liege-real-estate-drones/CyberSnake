@@ -592,7 +592,11 @@ SURVIVAL_INITIAL_INTERVAL_FACTOR = 1.0
 SURVIVAL_INTERVAL_REDUCTION_PER_WAVE = 0.05
 SURVIVAL_MIN_INTERVAL_FACTOR = 0.3
 SURVIVAL_WAVE_DURATION = 20000 # Durée d'une vague avant la suivante
-SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL = 5 # Toutes les X vagues complétées, +1 armure
+SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL = 5 # +1 armure au début des vagues 5, 10, 15... (avec le boss, plus juste après lui)
+SURVIVAL_START_AMMO = 10        # Munitions de départ (0 avant : on attendait qu'un pack apparaisse pour toucher le 1er nid)
+SURVIVAL_NEST_AMMO = 5          # Munitions gagnées en détruisant un nid (il en coûte 3)
+SURVIVAL_KILL_AMMO = 3          # Munitions gagnées en abattant un ennemi (hors boss, qui a sa propre récompense)
+SURVIVAL_LOW_AMMO = 5           # Sous ce seuil, sans pack à l'écran, la prochaine nourriture est un pack de munitions
 
 
 # --- Constantes Nids (Modes Survie & Vs AI) ---
@@ -753,13 +757,13 @@ JOY_AXIS_H = 1
 JOY_AXIS_V = 0
 JOY_INVERT_H = True
 JOY_INVERT_V = False
-VERSION = '2.12.0'
+VERSION = '2.13.0'
 # Nouveautés de la version, affichées une fois après une mise à jour (fenêtre « Mise à jour réussie »)
 WHATS_NEW = [
-    "Sons : plus rien de coupé à la mort, à l'arrivée du boss ni à la fin d'un chrono",
-    "Son stéréo : tirs et explosions à gauche ou à droite (Options > Son stéréo)",
-    "Volumes rééquilibrés : l'armure perdue s'entend, les tirs dans les murs sont discrets",
-    "Annonceur : « Multi kill ! », « Player 1... Winner ! », « 5, 4, 3, 2, 1 », boss vaincu",
-    "Survie : l'ennemi de chaque nouvelle vague apparaît toujours",
-    "Hall of Fame bien plus fluide sur la borne",
+    "Survie : départ avec 10 munitions",
+    "Survie : un nid détruit rapporte 5 munitions, un ennemi abattu 3",
+    "Survie : les ennemis ne mangent plus tes packs de munitions",
+    "Survie : presque à sec, la prochaine nourriture est un pack de munitions",
+    "Boss : annoncé à l'avance, il arrive seul (+1 armure pour toi), sa vague dure 45 s",
+    "Kamikaze : apparaît plus loin, on a le temps de l'abattre",
 ]

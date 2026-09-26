@@ -12,6 +12,9 @@ Il a trois attaques, toujours annoncées avant d'être lancées :
   S'il percute un mur ou une mine, il est étourdi et perd une armure.
 À mi-vie, il passe en phase 2 : plus rapide, plus agressif, attaques plus rapprochées.
 La barre de vie est découpée en segments (un par coup encaissable), avec la limite de phase.
+
+Il est annoncé pendant la vague d'avant. À son arrivée, les autres ennemis s'enfuient et sa vague
+dure 45 s sans renforts ni mines mobiles : un duel.
 """
 import logging
 import math
@@ -28,6 +31,7 @@ import announcer
 import ui_common
 
 BOSS_WAVE_INTERVAL = 5
+BOSS_WAVE_DURATION_MS = 45000  # Sa vague dure plus longtemps (20 s sinon) : le temps d'un duel sans renforts
 BOSS_COLOR = (190, 60, 255)
 BOSS_RAGE_COLOR = (255, 40, 120)
 BOSS_BANNER_MS = 2800
@@ -139,6 +143,57 @@ def _nearest_player(game_state, head):
                + abs(_wrap_delta(head[1], p.get_head_position()[1], config.GRID_HEIGHT)))
 
 
+def _is_boss_wave(game_state):
+    wave = game_state.get('boss_wave')
+    return wave is not None and wave == game_state.get('survival_wave')
+
+
+def in_boss_fight(game_state):
+    """Le boss arrivé au début de la vague en cours est en vie : pas de renforts pendant ce duel."""
+    boss = game_state.get('boss')
+    return boss is not None and boss.alive and _is_boss_wave(game_state)
+
+
+def wave_duration(game_state):
+    """Durée de la vague de Survie en cours : plus longue quand un boss est arrivé à son début
+    (une fois le boss vaincu, la vague nettoyée passe à la suivante au bout de 3 s)."""
+    return BOSS_WAVE_DURATION_MS if _is_boss_wave(game_state) else config.SURVIVAL_WAVE_DURATION
+
+
+def boss_next(game_state):
+    """Le boss arrive à la vague suivante : annoncé pendant toute la vague, pour s'y préparer."""
+    wave = int(game_state.get('survival_wave', 0) or 0)
+    current = game_state.get('boss')
+    return wave > 0 and (wave + 1) % BOSS_WAVE_INTERVAL == 0 and not (current is not None and current.alive)
+
+
+def victory_showing(game_state, now):
+    """« BOSS VAINCU ! » est affiché : la vague attend (sinon « VAGUE N NETTOYÉE » le remplaçait aussitôt)."""
+    return now < int(game_state.get('boss_victory_until', 0) or 0)
+
+
+def _clear_arena(game_state):
+    """Arrivée du boss : les autres ennemis s'enfuient, nids, mines mobiles et tirs ennemis disparaissent.
+    Il arrivait avec le kamikaze de la vague, les nids qui éclosaient au même moment et les ennemis
+    restants : sur la borne, la partie se terminait souvent quelques secondes après son arrivée.
+    Listes vidées sur place : run_game garde des références locales vers elles."""
+    fled = [e for e in game_state.get('active_enemies', []) if e is not None and e.alive]
+    for e in fled:
+        cx, cy = e.get_head_center_px()
+        if cx is not None:
+            utils.emit_particles(cx, cy, 14, [e.color, (255, 255, 255)], (1, 4), (300, 700), (2, 5))
+        e.alive = False
+    g = config.GRID_SIZE
+    nests = [n for n in game_state.get('nests', []) if n.is_active]
+    for n in nests:
+        utils.emit_particles(n.position[0] * g + g // 2, n.position[1] * g + g // 2, 10, [(255, 170, 60), (255, 255, 255)], (1, 3), (300, 600), (2, 4))
+    for key in ('active_enemies', 'nests', 'moving_mines', 'enemy_projectiles'):
+        if game_state.get(key):
+            game_state[key].clear()
+    if fled or nests:
+        logging.info(f"Boss : {len(fled)} ennemi(s) et {len(nests)} nid(s) quittent l'arène.")
+
+
 def maybe_spawn_boss(game_state, current_time, wave):
     """À appeler au début de chaque vague. Fait apparaître un boss toutes les 5 vagues."""
     if wave <= 0 or wave % BOSS_WAVE_INTERVAL != 0:
@@ -184,8 +239,10 @@ def maybe_spawn_boss(game_state, current_time, wave):
     except Exception:
         pass
 
+    _clear_arena(game_state)
     game_state.setdefault('active_enemies', []).append(boss)
     game_state['boss'] = boss
+    game_state['boss_wave'] = wave
     game_state['boss_tier'] = tier
     game_state['boss_banner_text'] = f"!! BOSS - VAGUE {wave} !!"
     game_state['boss_banner_until'] = current_time + BOSS_BANNER_MS
@@ -378,6 +435,7 @@ def update_boss(game_state, current_time):
             except Exception:
                 logging.warning("Boss: récompense non appliquée", exc_info=True)
     game_state['boss_banner_text'] = "BOSS VAINCU ! +2 ARMURE +20 MUNITIONS"
+    game_state['boss_victory_until'] = current_time + BOSS_BANNER_MS
     if game_state.get('demo_mode'):
         game_state['boss_banner_until'] = current_time + BOSS_BANNER_MS
         return  # Démo : l'IA joue seule, rien n'est compté dans la progression du joueur
