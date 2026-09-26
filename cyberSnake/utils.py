@@ -401,20 +401,31 @@ def load_assets(base_path):
 
     return menu_bg
 
+# Appels de pygame.mixer.music qui gardent le verrou Python en attendant le verrou audio
+# (sources de pygame 2.0 à 2.6 et pygame-ce) : si un effet se termine à ce moment-là, le jeu
+# se fige pour de bon. load, play, set_volume, fadeout, stop et get_busy relâchent ce verrou.
+_MUSIC_CALLS_HOLDING_GIL = ("pause", "unpause")
+
+
 def music_call(action, *args, **kwargs):
     """Appel sûr à pygame.mixer.music (pause, play, stop, set_volume...).
 
-    Contourne un blocage de pygame : si un effet sonore se termine pendant un appel
-    à la musique, le jeu peut se figer définitivement (verrou audio + verrou Python).
-    On coupe d'abord les effets en cours (pygame.mixer.stop libère ce verrou),
-    ce qui rend l'appel sans danger.
+    Contourne un blocage de pygame : pause() et unpause() de la musique peuvent figer le jeu
+    si un effet sonore se termine pendant l'appel (verrou audio + verrou Python). Pour ces
+    deux-là seulement, on coupe d'abord les effets (pygame.mixer.stop libère ce verrou).
+    Les autres appels ne coupent plus rien : couper tous les sons à chaque changement de
+    musique étouffait le son de mort, « Prepare yourself ! » à l'arrivée du boss, la fin du boss
+    et « Time ! » en Contre-la-montre (test de charge : 60 000 appels sans blocage).
     """
-    try:
-        if not pygame.mixer.get_init():
-            return None
-        pygame.mixer.stop()
-    except Exception:
-        pass
+    if action in _MUSIC_CALLS_HOLDING_GIL:
+        try:
+            if not pygame.mixer.get_init():
+                return None
+            pygame.mixer.stop()
+        except Exception:
+            pass
+    elif not pygame.mixer.get_init():
+        return None
     return getattr(pygame.mixer.music, action)(*args, **kwargs)
 
 
