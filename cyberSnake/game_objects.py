@@ -3351,6 +3351,7 @@ class EnemySnake(Snake):
                     # --- Ajout : Ignorer 'armor_plate_food' pour l'IA ---
                     if f.type == 'armor_plate_food': continue
                     # --- Fin Ajout ---
+                    if f.type == 'ammo' and self.game_mode == config.MODE_SURVIVAL: continue  # Elle ne les mange pas (gameplay)
                     if f.type == 'poison' and self.length <= config.ENEMY_INITIAL_SIZE + 1: continue
 
                     f_pos = f.position
@@ -3372,8 +3373,8 @@ class EnemySnake(Snake):
             # Baby AI without bonus capability only targets normal food OR ammo food for growth
             best_food_pos, best_food_val = None, -1
             for f in foods_list:
-                # --- MODIFICATION: Baby AI targets normal AND ammo ---
-                if f.type in ['normal', 'ammo']:
+                # --- MODIFICATION: Baby AI targets normal AND ammo (pas les munitions en Survie : elle ne les mange pas) ---
+                if f.type == 'normal' or (f.type == 'ammo' and self.game_mode != config.MODE_SURVIVAL):
                 # --- FIN MODIFICATION ---
                     f_pos = f.position
                     dx = abs(head[0] - f_pos[0]); dy = abs(head[1] - f_pos[1])

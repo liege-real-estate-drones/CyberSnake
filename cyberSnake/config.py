@@ -592,7 +592,11 @@ SURVIVAL_INITIAL_INTERVAL_FACTOR = 1.0
 SURVIVAL_INTERVAL_REDUCTION_PER_WAVE = 0.05
 SURVIVAL_MIN_INTERVAL_FACTOR = 0.3
 SURVIVAL_WAVE_DURATION = 20000 # Durée d'une vague avant la suivante
-SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL = 5 # Toutes les X vagues complétées, +1 armure
+SURVIVAL_ARMOR_BONUS_WAVE_INTERVAL = 5 # +1 armure au début des vagues 5, 10, 15... (avec le boss, plus juste après lui)
+SURVIVAL_START_AMMO = 10        # Munitions de départ (0 avant : on attendait qu'un pack apparaisse pour toucher le 1er nid)
+SURVIVAL_NEST_AMMO = 5          # Munitions gagnées en détruisant un nid (il en coûte 3)
+SURVIVAL_KILL_AMMO = 3          # Munitions gagnées en abattant un ennemi (hors boss, qui a sa propre récompense)
+SURVIVAL_LOW_AMMO = 5           # Sous ce seuil, sans pack à l'écran, la prochaine nourriture est un pack de munitions
 
 
 # --- Constantes Nids (Modes Survie & Vs AI) ---

@@ -386,6 +386,24 @@ def _check_wave_cleared(game_state, current_time):
     return True
 
 
+def _survival_ammo_reward(game_state, shooter, amount, pos_px, now):
+    """Survie : un nid détruit ou un ennemi abattu rapporte des munitions au tireur.
+    Avant, seuls les packs tombés au hasard (et souvent avalés par l'IA) en donnaient."""
+    if game_state.get('current_game_mode') != config.MODE_SURVIVAL or shooter is None or not shooter.alive or amount <= 0:
+        return
+    shooter.add_ammo(amount)
+    if pos_px and pos_px[0] is not None:
+        fx.add_popup(pos_px[0], pos_px[1], f"+{amount} MUNITIONS", config.COLOR_AMMO_TEXT, now=now)
+
+
+def _ammo_pack_needed(game_state, foods):
+    """Survie : un joueur est presque à sec et aucun pack n'est à l'écran -> la prochaine nourriture en est un."""
+    if game_state.get('current_game_mode') != config.MODE_SURVIVAL or any(f.type == 'ammo' for f in foods):
+        return False
+    return any(s is not None and s.alive and s.ammo < config.SURVIVAL_LOW_AMMO
+               for s in (game_state.get('player_snake'), game_state.get('player2_snake')))
+
+
 def _enter_pause(game_state):
     game_state['previous_state'] = config.PLAYING
     game_state['pause_opened_at'] = pygame.time.get_ticks()
@@ -685,6 +703,8 @@ def reset_game(game_state):
     if current_game_mode == config.MODE_VS_AI or current_game_mode == config.MODE_SOLO:
         start_ammo_p1 = 10
         logging.info(f"Mode {current_game_mode.name} détecté, J1 commence avec {start_ammo_p1} munitions.")
+    elif current_game_mode == config.MODE_SURVIVAL:
+        start_ammo_p1 = config.SURVIVAL_START_AMMO  # Les deux joueurs en coop
     # --- FIN NOUVEAU ---
     try:
         game_state['player_snake'] = game_objects.Snake(
@@ -1446,7 +1466,9 @@ def run_game(events, dt, screen, game_state):
                     spawn_pos = utils.get_random_empty_position_in_bounds(current_occupied, spawn_bounds)
                 else:
                     spawn_pos = utils.get_random_empty_position(current_occupied)
-                if spawn_pos: food_type = utils.choose_food_type(current_game_mode, current_objective); foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
+                if spawn_pos:
+                    food_type = 'ammo' if _ammo_pack_needed(game_state, foods) else utils.choose_food_type(current_game_mode, current_objective)
+                    foods.append(game_objects.Food(spawn_pos, food_type)); game_state['last_food_spawn_time'] = current_time; current_occupied.add(spawn_pos)
 
             # Mines arrivées en fin de vie (niveaux Facile / Normal) : petite bouffée de fumée et disparition
             expired = [m for m in mines if getattr(m, 'expires_at', None) is not None and m.is_expired(current_time)]
@@ -1617,6 +1639,7 @@ def run_game(events, dt, screen, game_state):
                                 fx.add_popup(ncx, ncy - 10, f"NID DÉTRUIT +{config.NEST_DESTROY_SCORE}", (255, 190, 90), now=current_time, big=True)
                                 shooter = p.owner_snake if getattr(p.owner_snake, 'is_player', False) else player_snake
                                 if shooter and shooter.alive: shooter.add_score(config.NEST_DESTROY_SCORE); shooter.increment_combo(2)
+                                _survival_ammo_reward(game_state, shooter, config.SURVIVAL_NEST_AMMO, (ncx, ncy + 18), current_time)
                             break
                     if hit_something: continue
 
@@ -1698,6 +1721,8 @@ def run_game(events, dt, screen, game_state):
                                      else: # Baby died
                                          if shooter and shooter.alive: shooter.add_score(config.ENEMY_KILL_SCORE // 2); shooter.increment_combo(1)
                                          if shooter: shooter.kills += 1  # Statistique de fin de partie
+                                         if not getattr(baby_snake_obj, 'is_boss', False):  # Le boss a sa propre récompense
+                                             _survival_ammo_reward(game_state, shooter, config.SURVIVAL_KILL_AMMO, p.rect.center, current_time)
                                          if baby_snake_obj not in enemies_died_this_frame: enemies_died_this_frame.append(baby_snake_obj)
                                      break # Sort de la boucle des segments bébé
                         if hit_something: break # Sort de la boucle des bébés pour ce projectile
@@ -1910,7 +1935,10 @@ def run_game(events, dt, screen, game_state):
                 # --- Collecte Nourriture & Powerups (logique partagée avec le Dash) ---
                 for i in range(len(foods) - 1, -1, -1):
                     if head_pos == foods[i].position:
-                        _eat_food(game_state, snake_object, foods.pop(i), current_time)
+                        # Survie : l'IA passe sur les packs de munitions sans les prendre (ils ne lui
+                        # donnaient rien et elle en avalait un tiers à la moitié, au détriment du joueur)
+                        if not (snake_object.is_ai and foods[i].type == 'ammo' and current_game_mode == config.MODE_SURVIVAL):
+                            _eat_food(game_state, snake_object, foods.pop(i), current_time)
                         break
                 for i in range(len(powerups) - 1, -1, -1):
                     pu = powerups[i]
