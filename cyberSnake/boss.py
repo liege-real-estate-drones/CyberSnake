@@ -366,6 +366,7 @@ def update_boss(game_state, current_time):
         fx.trigger_flash((255, 255, 255), 300, 140, now=current_time)
         fx.add_popup(hx, hy, "BOSS VAINCU !", (255, 220, 80), now=current_time, big=True)
         utils.play_sound("boss_defeat")
+        announcer.say("you_win", game_state)
     except Exception:
         pass
     for rewarded in (player, game_state.get('player2_snake') if game_state.get('coop') else None):

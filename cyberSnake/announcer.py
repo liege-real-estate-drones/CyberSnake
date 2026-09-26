@@ -2,10 +2,10 @@
 """Voix de l'annonceur (sons Kenney.nl, licence CC0 : cyberSnake/sons/voix_*.ogg).
 
 « 3, 2, 1 » et « Fight ! » / « Begin ! » au départ, « Round 2 » / « Final round » en PvP,
-« Prepare yourself ! » à l'arrivée d'un boss, « Combo ! », « Multi kill ! » (deux ennemis en moins
-de 3 s), « 5, 4, 3, 2, 1, Time ! » à la fin d'un chrono (Contre-la-montre, PvP au temps),
-« Winner » / « Game over » / « It's a tie » à la fin, et en PvP le vainqueur : « Player 1... Winner ! »
-(ou « Flawless victory ! » s'il n'est jamais mort).
+« Prepare yourself ! » à l'arrivée d'un boss et « You win ! » à sa défaite, « Combo ! »,
+« Multi kill ! » (deux ennemis en moins de 3 s), « 5, 4, 3, 2, 1, Time ! » à la fin d'un chrono
+(Contre-la-montre, PvP au temps), « Winner » / « Game over » / « It's a tie » à la fin, et en PvP
+le vainqueur : « Player 1... Winner ! » (ou « Flawless victory ! » s'il n'est jamais mort).
 
 Les voix ont leur propre canal audio : elles ne coupent jamais les effets du jeu (et une voix
 remplace la précédente). Muettes pendant la démo de la borne ; désactivables dans les options
