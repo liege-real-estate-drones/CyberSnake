@@ -328,6 +328,24 @@ def safe_respawn_spot(game_state, snake, opponent):
     return best
 
 
+SPAWN_TRIES = 40
+
+
+def _spawn_spot_away_from_players(game_state, occupied, min_dist):
+    """Case libre à au moins min_dist cases de la tête de chaque joueur en vie (Survie : nids et
+    ennemi d'une nouvelle vague). Un seul tirage au hasard ne suffisait pas : trop près du joueur,
+    l'ennemi de la vague n'apparaissait pas du tout (4 fois en 20 minutes dans le journal de la borne)."""
+    heads = [s.get_head_position() for s in (game_state.get('player_snake'), game_state.get('player2_snake'))
+             if s is not None and s.alive and s.positions]
+    for _ in range(SPAWN_TRIES):
+        pos = utils.get_random_empty_position(occupied)
+        if pos is None:
+            return None
+        if all(_wrap_dist(pos, h) >= min_dist for h in heads):
+            return pos
+    return None
+
+
 def _place_respawn(game_state, snake, opponent):
     spot = safe_respawn_spot(game_state, snake, opponent)
     if spot:
@@ -1044,31 +1062,24 @@ def run_game(events, dt, screen, game_state):
                     occupied_for_new_nests = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
                     spawned_count = 0
                     for _ in range(nests_to_spawn_this_wave):
-                        spawn_pos = utils.get_random_empty_position(occupied_for_new_nests)
+                        spawn_pos = _spawn_spot_away_from_players(game_state, occupied_for_new_nests, 5)
                         if spawn_pos:
-                             player_head = player_snake.get_head_position() if player_snake and player_snake.alive else None
-                             too_close_player = player_head and abs(spawn_pos[0] - player_head[0]) + abs(spawn_pos[1] - player_head[1]) < 5
-                             if not too_close_player:
-                                 try: nests.append(game_objects.Nest(spawn_pos)); occupied_for_new_nests.add(spawn_pos); spawned_count += 1; logging.debug(f"    Nest created at {spawn_pos}")
-                                 except Exception as e: logging.error(f"    Error spawning Nest: {e}", exc_info=True)
+                            try: nests.append(game_objects.Nest(spawn_pos)); occupied_for_new_nests.add(spawn_pos); spawned_count += 1; logging.debug(f"    Nest created at {spawn_pos}")
+                            except Exception as e: logging.error(f"    Error spawning Nest: {e}", exc_info=True)
                     if spawned_count > 0: game_state['last_nest_spawn_time'] = current_time
 
                 if survival_wave >= 2:
                     logging.debug(f"  Spawning 1 new baby AI for Wave {survival_wave}...")
                     occupied_for_new_ai = utils.get_all_occupied_positions(player_snake, player2_snake, enemy_snake, mines, foods, powerups, current_map_walls, nests, moving_mines, active_enemies)
-                    spawn_pos_ai = utils.get_random_empty_position(occupied_for_new_ai)
+                    spawn_pos_ai = _spawn_spot_away_from_players(game_state, occupied_for_new_ai, 8)
                     if spawn_pos_ai:
-                         player_head = player_snake.get_head_position() if player_snake and player_snake.alive else None
-                         too_close_player = player_head and abs(spawn_pos_ai[0] - player_head[0]) + abs(spawn_pos_ai[1] - player_head[1]) < 8
-                         if not too_close_player:
-                             try:
-                                 baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
-                                 new_enemy_wave = game_objects.EnemySnake(start_pos=spawn_pos_ai, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
-                                 active_enemies.append(new_enemy_wave)
-                                 logging.debug(f"    Baby AI for wave {survival_wave} spawned at {spawn_pos_ai}")
-                             except Exception as e: logging.error(f"    Error spawning wave AI: {e}", exc_info=True)
-                         else: logging.warning(f"    Could not find safe spawn position for wave AI (too close to player).")
-                    else: logging.warning(f"    Could not find ANY empty position for wave AI.")
+                        try:
+                            baby_armor = config.BABY_AI_START_ARMOR; baby_ammo = config.BABY_AI_START_AMMO
+                            new_enemy_wave = game_objects.EnemySnake(start_pos=spawn_pos_ai, current_game_mode=current_game_mode, walls=current_map_walls, start_armor=baby_armor, start_ammo=baby_ammo, can_get_bonuses=True, is_baby=True)
+                            active_enemies.append(new_enemy_wave)
+                            logging.debug(f"    Baby AI for wave {survival_wave} spawned at {spawn_pos_ai}")
+                        except Exception as e: logging.error(f"    Error spawning wave AI: {e}", exc_info=True)
+                    else: logging.warning("Survie : aucune case libre loin des joueurs pour l'ennemi de la vague.")
     except Exception as e:
         logging.error(f"Erreur mise à jour objectif/vague: {e}", exc_info=True)
 
@@ -1679,9 +1690,9 @@ def run_game(events, dt, screen, game_state):
                                  seg_rect_baby = pygame.Rect(seg_pos_baby[0]*config.GRID_SIZE, seg_pos_baby[1]*config.GRID_SIZE, config.GRID_SIZE, config.GRID_SIZE)
                                  if p.rect.colliderect(seg_rect_baby):
                                      p1_rem_indices.add(i); hit_something = True
-                                     survived_baby = baby_snake_obj.handle_damage(current_time, player_snake, damage_source_pos=p.rect.center)
                                      # Survie à deux : les tirs du J2 sont dans cette liste, le crédit va au tireur
                                      shooter = p.owner_snake if getattr(p.owner_snake, 'is_player', False) else player_snake
+                                     survived_baby = baby_snake_obj.handle_damage(current_time, shooter, damage_source_pos=p.rect.center)
                                      if survived_baby:
                                          if shooter and shooter.alive: shooter.add_score(config.ENEMY_HIT_SCORE // 2); shooter.increment_combo(1)
                                      else: # Baby died
@@ -2082,7 +2093,7 @@ def run_game(events, dt, screen, game_state):
                     if head_a == head_b:
                         # Process only if neither is already marked dead *in this specific collision check phase*
                         if snake_a not in newly_dead_from_body_head and snake_b not in newly_dead_from_body_head:
-                             logging.info(f"Head-on collision (Post-Move): {snake_a.name} vs {snake_b.name}")
+                             logging.debug(f"Head-on collision (Post-Move): {snake_a.name} vs {snake_b.name}")  # À chaque image du contact
                              if center_a_px: utils.emit_particles(center_a_px[0], center_a_px[1], 15, [snake_a.color, snake_b.color]); utils.trigger_shake(3, 200)
 
                              # Call handle_damage but rely on the loop below to set game_state death time
@@ -2096,7 +2107,7 @@ def run_game(events, dt, screen, game_state):
                     # A's head hits B's body
                     elif head_a in snake_b.positions[1:]:
                         if snake_a not in newly_dead_from_body_head: # Process only if A isn't already marked dead
-                             logging.info(f"Collision (Post-Move): {snake_a.name} hit {snake_b.name}'s body.")
+                             logging.debug(f"Collision (Post-Move): {snake_a.name} hit {snake_b.name}'s body.")
                              survived_a_hb = snake_a.handle_damage(current_time, snake_b, damage_source_pos=center_b_px)
                              if not survived_a_hb:
                                  newly_dead_from_body_head.add(snake_a)
@@ -2112,7 +2123,7 @@ def run_game(events, dt, screen, game_state):
                     # B's head hits A's body
                     elif head_b in snake_a.positions[1:]:
                         if snake_b not in newly_dead_from_body_head: # Process only if B isn't already marked dead
-                             logging.info(f"Collision (Post-Move): {snake_b.name} hit {snake_a.name}'s body.")
+                             logging.debug(f"Collision (Post-Move): {snake_b.name} hit {snake_a.name}'s body.")
                              survived_b_ha = snake_b.handle_damage(current_time, snake_a, damage_source_pos=center_a_px)
                              if not survived_b_ha:
                                  newly_dead_from_body_head.add(snake_b)
